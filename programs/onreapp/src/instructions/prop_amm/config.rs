@@ -1,6 +1,8 @@
 use crate::constants::{seeds, MAX_BASIS_POINTS};
+use crate::instructions::Offer;
 use crate::state::State;
 use anchor_lang::prelude::*;
+use anchor_spl::token_interface::Mint;
 
 pub const DEFAULT_CURVE_PEG_HAIRCUT_BPS: u16 = 700;
 pub const CURVE_EXPONENT_SCALE: u32 = 10_000;
@@ -15,7 +17,11 @@ pub const DEFAULT_WALL_SENSITIVITY_SCALED: u32 = 20_000;
 
 #[account]
 #[derive(InitSpace)]
-pub struct PropAmmState {
+pub struct PropAmmPairState {
+    pub offer: Pubkey,
+    pub asset_mint: Pubkey,
+    pub onyc_mint: Pubkey,
+    pub enabled: bool,
     pub curve_peg_haircut_bps: u16,
     pub curve_exponent_scaled: u32,
     pub min_cadence_exponent_scaled: u32,
@@ -33,6 +39,11 @@ pub struct PropAmmState {
 
 #[event]
 pub struct PropAmmConfiguredEvent {
+    pub offer: Pubkey,
+    pub asset_mint: Pubkey,
+    pub onyc_mint: Pubkey,
+    pub old_enabled: bool,
+    pub new_enabled: bool,
     pub old_curve_peg_haircut_bps: u16,
     pub new_curve_peg_haircut_bps: u16,
     pub old_curve_exponent_scaled: u32,
@@ -56,16 +67,28 @@ pub struct ConfigurePropAmm<'info> {
         bump = state.bump,
         has_one = boss @ crate::OnreError::InvalidBoss
     )]
-    pub state: Account<'info, State>,
+    pub state: Box<Account<'info, State>>,
+
+    #[account(
+        seeds = [
+            seeds::OFFER,
+            asset_mint.key().as_ref(),
+            state.onyc_mint.as_ref()
+        ],
+        bump = offer.load()?.bump
+    )]
+    pub offer: AccountLoader<'info, Offer>,
+
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         init_if_needed,
         payer = boss,
-        space = 8 + PropAmmState::INIT_SPACE,
-        seeds = [seeds::PROP_AMM_STATE],
+        space = 8 + PropAmmPairState::INIT_SPACE,
+        seeds = [seeds::PROP_AMM_PAIR_STATE, offer.key().as_ref()],
         bump
     )]
-    pub prop_amm_state: Account<'info, PropAmmState>,
+    pub prop_amm_pair_state: Box<Account<'info, PropAmmPairState>>,
 
     #[account(mut)]
     pub boss: Signer<'info>,
@@ -75,6 +98,7 @@ pub struct ConfigurePropAmm<'info> {
 
 pub fn configure_prop_amm(
     ctx: Context<ConfigurePropAmm>,
+    enabled: bool,
     curve_peg_haircut_bps: u16,
     curve_exponent_scaled: u32,
     min_cadence_exponent_scaled: u32,
@@ -112,28 +136,50 @@ pub fn configure_prop_amm(
     require!(epoch_duration_seconds > 0, crate::OnreError::InvalidAmount);
     require!(wall_sensitivity_scaled > 0, crate::OnreError::InvalidAmount);
 
-    let prop_amm_state = &mut ctx.accounts.prop_amm_state;
-    let old_curve_peg_haircut_bps = prop_amm_state.curve_peg_haircut_bps;
-    let old_curve_exponent_scaled = prop_amm_state.curve_exponent_scaled;
-    let old_min_cadence_exponent_scaled = prop_amm_state.min_cadence_exponent_scaled;
-    let old_cadence_threshold = prop_amm_state.cadence_threshold;
-    let old_cadence_sensitivity_scaled = prop_amm_state.cadence_sensitivity_scaled;
-    let old_epoch_duration_seconds = prop_amm_state.epoch_duration_seconds;
-    let old_wall_sensitivity_scaled = prop_amm_state.wall_sensitivity_scaled;
+    let offer = ctx.accounts.offer.load()?;
+    require_keys_eq!(
+        offer.token_in_mint,
+        ctx.accounts.asset_mint.key(),
+        crate::OnreError::InvalidTokenInMint
+    );
+    require_keys_eq!(
+        offer.token_out_mint,
+        ctx.accounts.state.onyc_mint,
+        crate::OnreError::InvalidTokenOutMint
+    );
 
-    prop_amm_state.curve_peg_haircut_bps = curve_peg_haircut_bps;
-    prop_amm_state.curve_exponent_scaled = curve_exponent_scaled;
-    prop_amm_state.min_cadence_exponent_scaled = min_cadence_exponent_scaled;
-    prop_amm_state.cadence_threshold = cadence_threshold;
-    prop_amm_state.cadence_sensitivity_scaled = cadence_sensitivity_scaled;
-    prop_amm_state.epoch_duration_seconds = epoch_duration_seconds;
-    prop_amm_state.wall_sensitivity_scaled = wall_sensitivity_scaled;
-    if prop_amm_state.epoch_start == 0 {
-        prop_amm_state.epoch_start = Clock::get()?.unix_timestamp;
+    let prop_amm_pair_state = &mut ctx.accounts.prop_amm_pair_state;
+    let old_enabled = prop_amm_pair_state.enabled;
+    let old_curve_peg_haircut_bps = prop_amm_pair_state.curve_peg_haircut_bps;
+    let old_curve_exponent_scaled = prop_amm_pair_state.curve_exponent_scaled;
+    let old_min_cadence_exponent_scaled = prop_amm_pair_state.min_cadence_exponent_scaled;
+    let old_cadence_threshold = prop_amm_pair_state.cadence_threshold;
+    let old_cadence_sensitivity_scaled = prop_amm_pair_state.cadence_sensitivity_scaled;
+    let old_epoch_duration_seconds = prop_amm_pair_state.epoch_duration_seconds;
+    let old_wall_sensitivity_scaled = prop_amm_pair_state.wall_sensitivity_scaled;
+
+    prop_amm_pair_state.offer = ctx.accounts.offer.key();
+    prop_amm_pair_state.asset_mint = ctx.accounts.asset_mint.key();
+    prop_amm_pair_state.onyc_mint = ctx.accounts.state.onyc_mint;
+    prop_amm_pair_state.enabled = enabled;
+    prop_amm_pair_state.curve_peg_haircut_bps = curve_peg_haircut_bps;
+    prop_amm_pair_state.curve_exponent_scaled = curve_exponent_scaled;
+    prop_amm_pair_state.min_cadence_exponent_scaled = min_cadence_exponent_scaled;
+    prop_amm_pair_state.cadence_threshold = cadence_threshold;
+    prop_amm_pair_state.cadence_sensitivity_scaled = cadence_sensitivity_scaled;
+    prop_amm_pair_state.epoch_duration_seconds = epoch_duration_seconds;
+    prop_amm_pair_state.wall_sensitivity_scaled = wall_sensitivity_scaled;
+    if prop_amm_pair_state.epoch_start == 0 {
+        prop_amm_pair_state.epoch_start = Clock::get()?.unix_timestamp;
     }
-    prop_amm_state.bump = ctx.bumps.prop_amm_state;
+    prop_amm_pair_state.bump = ctx.bumps.prop_amm_pair_state;
 
     emit!(PropAmmConfiguredEvent {
+        offer: ctx.accounts.offer.key(),
+        asset_mint: ctx.accounts.asset_mint.key(),
+        onyc_mint: ctx.accounts.state.onyc_mint,
+        old_enabled,
+        new_enabled: enabled,
         old_curve_peg_haircut_bps,
         new_curve_peg_haircut_bps: curve_peg_haircut_bps,
         old_curve_exponent_scaled,
@@ -153,9 +199,13 @@ pub fn configure_prop_amm(
     Ok(())
 }
 
-impl Default for PropAmmState {
+impl Default for PropAmmPairState {
     fn default() -> Self {
         Self {
+            offer: Pubkey::default(),
+            asset_mint: Pubkey::default(),
+            onyc_mint: Pubkey::default(),
+            enabled: false,
             curve_peg_haircut_bps: DEFAULT_CURVE_PEG_HAIRCUT_BPS,
             curve_exponent_scaled: DEFAULT_CURVE_EXPONENT_SCALED,
             min_cadence_exponent_scaled: DEFAULT_MIN_CADENCE_EXPONENT_SCALED,

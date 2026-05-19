@@ -10,7 +10,7 @@ use anchor_lang::{prelude::*, Accounts, AnchorDeserialize, AnchorSerialize};
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 use super::config::{
-    PropAmmState, CURVE_EXPONENT_SCALE, CURVE_EXPONENT_STEP, DEFAULT_CADENCE_THRESHOLD,
+    PropAmmPairState, CURVE_EXPONENT_SCALE, CURVE_EXPONENT_STEP, DEFAULT_CADENCE_THRESHOLD,
     DEFAULT_MIN_CADENCE_EXPONENT_SCALED, WALL_SENSITIVITY_SCALE,
 };
 
@@ -48,6 +48,12 @@ pub struct QuoteSwapBuy<'info> {
     pub offer: AccountLoader<'info, Offer>,
 
     #[account(
+        seeds = [seeds::PROP_AMM_PAIR_STATE, offer.key().as_ref()],
+        bump = prop_amm_pair_state.bump
+    )]
+    pub prop_amm_pair_state: Account<'info, PropAmmPairState>,
+
+    #[account(
         seeds = [seeds::STATE],
         bump = state.bump,
         constraint = state.is_killed == false @ crate::OnreError::KillSwitchActivated
@@ -63,10 +69,10 @@ pub struct QuoteSwapSell<'info> {
     pub offer: AccountLoader<'info, Offer>,
 
     #[account(
-        seeds = [seeds::PROP_AMM_STATE],
-        bump = prop_amm_state.bump
+        seeds = [seeds::PROP_AMM_PAIR_STATE, offer.key().as_ref()],
+        bump = prop_amm_pair_state.bump
     )]
-    pub prop_amm_state: Account<'info, PropAmmState>,
+    pub prop_amm_pair_state: Account<'info, PropAmmPairState>,
 
     #[account(
         seeds = [
@@ -142,6 +148,36 @@ pub(crate) fn validate_canonical_offer(
     Ok(side)
 }
 
+pub(crate) fn validate_prop_amm_pair_state(
+    state: &State,
+    prop_amm_pair_state: &PropAmmPairState,
+    offer_key: Pubkey,
+    token_in_mint: Pubkey,
+    token_out_mint: Pubkey,
+) -> Result<SwapSide> {
+    let (side, asset_mint) = resolve_swap_side(state, token_in_mint, token_out_mint)?;
+    require_keys_eq!(
+        prop_amm_pair_state.offer,
+        offer_key,
+        crate::OnreError::InvalidPropAmmPairState
+    );
+    require_keys_eq!(
+        prop_amm_pair_state.asset_mint,
+        asset_mint,
+        crate::OnreError::InvalidPropAmmPairState
+    );
+    require_keys_eq!(
+        prop_amm_pair_state.onyc_mint,
+        state.onyc_mint,
+        crate::OnreError::InvalidPropAmmPairState
+    );
+    require!(
+        prop_amm_pair_state.enabled,
+        crate::OnreError::PropAmmPairDisabled
+    );
+    Ok(side)
+}
+
 pub(crate) struct RedemptionOfferConfig {
     pub fee_basis_points: u16,
     pub vault_target_bps: u16,
@@ -207,14 +243,14 @@ pub(crate) fn apply_hard_wall_liquidity_factor(
     token_out_amount: u64,
     actual_liquidity: u64,
     hard_wall_reserve: u64,
-    prop_amm_state: &PropAmmState,
+    prop_amm_pair_state: &PropAmmPairState,
 ) -> Result<u64> {
     let now = Clock::get()?.unix_timestamp;
     apply_hard_wall_liquidity_factor_at_time(
         token_out_amount,
         actual_liquidity,
         hard_wall_reserve,
-        prop_amm_state,
+        prop_amm_pair_state,
         now,
     )
 }
@@ -223,7 +259,7 @@ pub fn apply_hard_wall_liquidity_factor_at_time(
     token_out_amount: u64,
     actual_liquidity: u64,
     hard_wall_reserve: u64,
-    prop_amm_state: &PropAmmState,
+    prop_amm_pair_state: &PropAmmPairState,
     now: i64,
 ) -> Result<u64> {
     require!(actual_liquidity > 0, crate::OnreError::InsufficientBalance);
@@ -236,7 +272,7 @@ pub fn apply_hard_wall_liquidity_factor_at_time(
         token_out_amount,
         actual_liquidity,
         hard_wall_reserve,
-        prop_amm_state,
+        prop_amm_pair_state,
         now,
     )?;
 
@@ -247,8 +283,8 @@ pub fn apply_hard_wall_liquidity_factor_at_time(
         .ok_or(crate::OnreError::DivByZero)?;
     let haircut = redemption_haircut_scaled(
         utilization_scaled,
-        prop_amm_state.curve_peg_haircut_bps,
-        effective_curve_exponent_scaled(prop_amm_state, now)?,
+        prop_amm_pair_state.curve_peg_haircut_bps,
+        effective_curve_exponent_scaled(prop_amm_pair_state, now)?,
     )?;
     let liquidity_factor = HARD_WALL_SCALE.saturating_sub(haircut);
     let dampened_amount = (token_out_amount as u128)
@@ -264,52 +300,55 @@ pub fn apply_hard_wall_liquidity_factor_at_time(
     Ok(dampened_amount as u64)
 }
 
-pub fn roll_prop_amm_volume_tracker(prop_amm_state: &mut PropAmmState, now: i64) -> Result<()> {
-    let epoch_duration = prop_amm_state.epoch_duration_seconds;
+pub fn roll_prop_amm_volume_tracker(
+    prop_amm_pair_state: &mut PropAmmPairState,
+    now: i64,
+) -> Result<()> {
+    let epoch_duration = prop_amm_pair_state.epoch_duration_seconds;
     require!(epoch_duration > 0, crate::OnreError::InvalidAmount);
 
-    if prop_amm_state.epoch_start == 0 || now < prop_amm_state.epoch_start {
-        prop_amm_state.epoch_start = now;
-        prop_amm_state.prev_net_sell_value_stable = 0;
-        prop_amm_state.curr_sell_value_stable = 0;
-        prop_amm_state.curr_buy_value_stable = 0;
-        prop_amm_state.curr_sell_trade_count = 0;
+    if prop_amm_pair_state.epoch_start == 0 || now < prop_amm_pair_state.epoch_start {
+        prop_amm_pair_state.epoch_start = now;
+        prop_amm_pair_state.prev_net_sell_value_stable = 0;
+        prop_amm_pair_state.curr_sell_value_stable = 0;
+        prop_amm_pair_state.curr_buy_value_stable = 0;
+        prop_amm_pair_state.curr_sell_trade_count = 0;
         return Ok(());
     }
 
     let elapsed = now
-        .checked_sub(prop_amm_state.epoch_start)
+        .checked_sub(prop_amm_pair_state.epoch_start)
         .ok_or(crate::OnreError::ArithmeticUnderflow)?;
     if elapsed >= epoch_duration.saturating_mul(2) {
-        prop_amm_state.prev_net_sell_value_stable = 0;
-        prop_amm_state.curr_sell_value_stable = 0;
-        prop_amm_state.curr_buy_value_stable = 0;
-        prop_amm_state.curr_sell_trade_count = 0;
-        prop_amm_state.epoch_start = now;
+        prop_amm_pair_state.prev_net_sell_value_stable = 0;
+        prop_amm_pair_state.curr_sell_value_stable = 0;
+        prop_amm_pair_state.curr_buy_value_stable = 0;
+        prop_amm_pair_state.curr_sell_trade_count = 0;
+        prop_amm_pair_state.epoch_start = now;
     } else if elapsed >= epoch_duration {
-        prop_amm_state.prev_net_sell_value_stable = prop_amm_state
+        prop_amm_pair_state.prev_net_sell_value_stable = prop_amm_pair_state
             .curr_sell_value_stable
-            .saturating_sub(prop_amm_state.curr_buy_value_stable);
-        prop_amm_state.curr_sell_value_stable = 0;
-        prop_amm_state.curr_buy_value_stable = 0;
-        prop_amm_state.curr_sell_trade_count = 0;
-        prop_amm_state.epoch_start = now;
+            .saturating_sub(prop_amm_pair_state.curr_buy_value_stable);
+        prop_amm_pair_state.curr_sell_value_stable = 0;
+        prop_amm_pair_state.curr_buy_value_stable = 0;
+        prop_amm_pair_state.curr_sell_trade_count = 0;
+        prop_amm_pair_state.epoch_start = now;
     }
 
     Ok(())
 }
 
 pub fn record_prop_amm_sell(
-    prop_amm_state: &mut PropAmmState,
+    prop_amm_pair_state: &mut PropAmmPairState,
     sell_value_stable: u64,
     now: i64,
 ) -> Result<()> {
-    roll_prop_amm_volume_tracker(prop_amm_state, now)?;
-    prop_amm_state.curr_sell_value_stable = prop_amm_state
+    roll_prop_amm_volume_tracker(prop_amm_pair_state, now)?;
+    prop_amm_pair_state.curr_sell_value_stable = prop_amm_pair_state
         .curr_sell_value_stable
         .checked_add(sell_value_stable)
         .ok_or(crate::OnreError::MathOverflow)?;
-    prop_amm_state.curr_sell_trade_count = prop_amm_state
+    prop_amm_pair_state.curr_sell_trade_count = prop_amm_pair_state
         .curr_sell_trade_count
         .checked_add(1)
         .ok_or(crate::OnreError::MathOverflow)?;
@@ -317,12 +356,12 @@ pub fn record_prop_amm_sell(
 }
 
 pub fn record_prop_amm_buy(
-    prop_amm_state: &mut PropAmmState,
+    prop_amm_pair_state: &mut PropAmmPairState,
     buy_value_stable: u64,
     now: i64,
 ) -> Result<()> {
-    roll_prop_amm_volume_tracker(prop_amm_state, now)?;
-    prop_amm_state.curr_buy_value_stable = prop_amm_state
+    roll_prop_amm_volume_tracker(prop_amm_pair_state, now)?;
+    prop_amm_pair_state.curr_buy_value_stable = prop_amm_pair_state
         .curr_buy_value_stable
         .checked_add(buy_value_stable)
         .ok_or(crate::OnreError::MathOverflow)?;
@@ -330,22 +369,22 @@ pub fn record_prop_amm_buy(
 }
 
 pub fn preview_effective_sell_volume(
-    prop_amm_state: &PropAmmState,
+    prop_amm_pair_state: &PropAmmPairState,
     current_sell_value_stable: u64,
     now: i64,
 ) -> Result<u64> {
-    let epoch_duration = prop_amm_state.epoch_duration_seconds;
+    let epoch_duration = prop_amm_pair_state.epoch_duration_seconds;
     require!(epoch_duration > 0, crate::OnreError::InvalidAmount);
 
-    let current_net = prop_amm_state
+    let current_net = prop_amm_pair_state
         .curr_sell_value_stable
-        .saturating_sub(prop_amm_state.curr_buy_value_stable);
+        .saturating_sub(prop_amm_pair_state.curr_buy_value_stable);
     let (prev_net, curr_net, elapsed) =
-        if prop_amm_state.epoch_start == 0 || now < prop_amm_state.epoch_start {
+        if prop_amm_pair_state.epoch_start == 0 || now < prop_amm_pair_state.epoch_start {
             (0_u64, 0_u64, 0_i64)
         } else {
             let elapsed = now
-                .checked_sub(prop_amm_state.epoch_start)
+                .checked_sub(prop_amm_pair_state.epoch_start)
                 .ok_or(crate::OnreError::ArithmeticUnderflow)?;
             if elapsed >= epoch_duration.saturating_mul(2) {
                 (0, 0, 0)
@@ -353,7 +392,7 @@ pub fn preview_effective_sell_volume(
                 (current_net, 0, 0)
             } else {
                 (
-                    prop_amm_state.prev_net_sell_value_stable,
+                    prop_amm_pair_state.prev_net_sell_value_stable,
                     current_net,
                     elapsed,
                 )
@@ -410,14 +449,14 @@ pub fn dynamic_wall_liquidity(
     current_sell_value_stable: u64,
     actual_liquidity: u64,
     hard_wall_reserve: u64,
-    prop_amm_state: &PropAmmState,
+    prop_amm_pair_state: &PropAmmPairState,
 ) -> Result<u64> {
     let now = Clock::get()?.unix_timestamp;
     dynamic_wall_liquidity_at_time(
         current_sell_value_stable,
         actual_liquidity,
         hard_wall_reserve,
-        prop_amm_state,
+        prop_amm_pair_state,
         now,
     )
 }
@@ -426,19 +465,19 @@ pub fn dynamic_wall_liquidity_at_time(
     current_sell_value_stable: u64,
     actual_liquidity: u64,
     hard_wall_reserve: u64,
-    prop_amm_state: &PropAmmState,
+    prop_amm_pair_state: &PropAmmPairState,
     now: i64,
 ) -> Result<u64> {
-    if prop_amm_state.wall_sensitivity_scaled == 0 {
+    if prop_amm_pair_state.wall_sensitivity_scaled == 0 {
         return Ok(actual_liquidity.min(hard_wall_reserve));
     }
 
     let effective_sell_volume =
-        preview_effective_sell_volume(prop_amm_state, current_sell_value_stable, now)?;
+        preview_effective_sell_volume(prop_amm_pair_state, current_sell_value_stable, now)?;
     let wall_position = dynamic_wall_position(
         actual_liquidity,
         effective_sell_volume,
-        prop_amm_state.wall_sensitivity_scaled,
+        prop_amm_pair_state.wall_sensitivity_scaled,
     )?;
     Ok(wall_position)
 }
@@ -450,7 +489,7 @@ pub fn apply_hard_wall_reserve_curve_with_params(
     curve_peg_haircut_bps: u16,
     curve_exponent_scaled: u32,
 ) -> Result<u64> {
-    let prop_amm_state = PropAmmState {
+    let prop_amm_pair_state = PropAmmPairState {
         curve_peg_haircut_bps,
         curve_exponent_scaled,
         min_cadence_exponent_scaled: DEFAULT_MIN_CADENCE_EXPONENT_SCALED,
@@ -464,13 +503,14 @@ pub fn apply_hard_wall_reserve_curve_with_params(
         curr_sell_trade_count: 0,
         epoch_start: Clock::get().map(|clock| clock.unix_timestamp).unwrap_or(0),
         bump: 0,
+        ..Default::default()
     };
     apply_hard_wall_liquidity_factor_at_time(
         token_out_amount,
         actual_liquidity,
         hard_wall_reserve,
-        &prop_amm_state,
-        prop_amm_state.epoch_start,
+        &prop_amm_pair_state,
+        prop_amm_pair_state.epoch_start,
     )
 }
 
@@ -544,12 +584,15 @@ fn utilization_power_scaled(u: u128, exponent_scaled: u32) -> Result<u128> {
     Ok(value)
 }
 
-pub fn effective_curve_exponent_scaled(prop_amm_state: &PropAmmState, now: i64) -> Result<u32> {
-    let threshold = prop_amm_state.cadence_threshold;
+pub fn effective_curve_exponent_scaled(
+    prop_amm_pair_state: &PropAmmPairState,
+    now: i64,
+) -> Result<u32> {
+    let threshold = prop_amm_pair_state.cadence_threshold;
     require!(threshold > 0, crate::OnreError::InvalidAmount);
 
-    let quote_trade_count = preview_current_sell_trade_count(prop_amm_state, now)?;
-    let raw_reduction = (prop_amm_state.cadence_sensitivity_scaled as u128)
+    let quote_trade_count = preview_current_sell_trade_count(prop_amm_pair_state, now)?;
+    let raw_reduction = (prop_amm_pair_state.cadence_sensitivity_scaled as u128)
         .checked_mul(quote_trade_count as u128)
         .ok_or(crate::OnreError::MathOverflow)?
         .checked_div(threshold as u128)
@@ -560,26 +603,29 @@ pub fn effective_curve_exponent_scaled(prop_amm_state: &PropAmmState, now: i64) 
         reduction <= u32::MAX as u128,
         crate::OnreError::MathOverflow
     );
-    Ok(prop_amm_state
+    Ok(prop_amm_pair_state
         .curve_exponent_scaled
         .saturating_sub(reduction as u32)
-        .max(prop_amm_state.min_cadence_exponent_scaled))
+        .max(prop_amm_pair_state.min_cadence_exponent_scaled))
 }
 
-fn preview_current_sell_trade_count(prop_amm_state: &PropAmmState, now: i64) -> Result<u32> {
-    let epoch_duration = prop_amm_state.epoch_duration_seconds;
+fn preview_current_sell_trade_count(
+    prop_amm_pair_state: &PropAmmPairState,
+    now: i64,
+) -> Result<u32> {
+    let epoch_duration = prop_amm_pair_state.epoch_duration_seconds;
     require!(epoch_duration > 0, crate::OnreError::InvalidAmount);
 
-    if prop_amm_state.epoch_start == 0 || now < prop_amm_state.epoch_start {
+    if prop_amm_pair_state.epoch_start == 0 || now < prop_amm_pair_state.epoch_start {
         return Ok(0);
     }
     let elapsed = now
-        .checked_sub(prop_amm_state.epoch_start)
+        .checked_sub(prop_amm_pair_state.epoch_start)
         .ok_or(crate::OnreError::ArithmeticUnderflow)?;
     if elapsed >= epoch_duration {
         return Ok(0);
     }
-    Ok(prop_amm_state.curr_sell_trade_count)
+    Ok(prop_amm_pair_state.curr_sell_trade_count)
 }
 
 fn tenth_root_scaled(value: u128) -> u128 {
@@ -621,6 +667,7 @@ pub fn build_swap_buy_quote(
     state: &State,
     offer_key: Pubkey,
     offer: &Offer,
+    prop_amm_pair_state: &PropAmmPairState,
     token_in_amount: u64,
     token_in_mint: &InterfaceAccount<Mint>,
     token_out_mint: &InterfaceAccount<Mint>,
@@ -636,6 +683,17 @@ pub fn build_swap_buy_quote(
         token_out_mint.key(),
     )?;
     require!(side == SwapSide::Buy, crate::OnreError::InvalidSwapPair);
+    let pair_side = validate_prop_amm_pair_state(
+        state,
+        prop_amm_pair_state,
+        offer_key,
+        token_in_mint.key(),
+        token_out_mint.key(),
+    )?;
+    require!(
+        pair_side == SwapSide::Buy,
+        crate::OnreError::InvalidSwapPair
+    );
 
     let result = process_offer_core(offer, token_in_amount, token_in_mint, token_out_mint).map(
         |result| SwapQuoteComputation {
@@ -665,7 +723,7 @@ pub fn build_swap_sell_quote(
     state: &State,
     offer_key: Pubkey,
     offer: &Offer,
-    prop_amm_state: &PropAmmState,
+    prop_amm_pair_state: &PropAmmPairState,
     actual_liquidity: u64,
     hard_wall_reserve: u64,
     redemption_fee_basis_points: u16,
@@ -684,6 +742,17 @@ pub fn build_swap_sell_quote(
         token_out_mint.key(),
     )?;
     require!(side == SwapSide::Sell, crate::OnreError::InvalidSwapPair);
+    let pair_side = validate_prop_amm_pair_state(
+        state,
+        prop_amm_pair_state,
+        offer_key,
+        token_in_mint.key(),
+        token_out_mint.key(),
+    )?;
+    require!(
+        pair_side == SwapSide::Sell,
+        crate::OnreError::InvalidSwapPair
+    );
 
     let mut result = process_redemption_core(
         offer,
@@ -702,7 +771,7 @@ pub fn build_swap_sell_quote(
         result.token_out_amount,
         actual_liquidity,
         hard_wall_reserve,
-        prop_amm_state,
+        prop_amm_pair_state,
     )?;
 
     Ok(SwapQuote {
@@ -726,6 +795,7 @@ pub fn quote_swap_buy(ctx: Context<QuoteSwapBuy>, token_in_amount: u64) -> Resul
         &ctx.accounts.state,
         ctx.accounts.offer.key(),
         &offer,
+        &ctx.accounts.prop_amm_pair_state,
         token_in_amount,
         &ctx.accounts.token_in_mint,
         &ctx.accounts.token_out_mint,
@@ -776,7 +846,7 @@ pub fn quote_swap_sell(ctx: Context<QuoteSwapSell>, token_in_amount: u64) -> Res
         &ctx.accounts.state,
         ctx.accounts.offer.key(),
         &offer,
-        &ctx.accounts.prop_amm_state,
+        &ctx.accounts.prop_amm_pair_state,
         ctx.accounts.redemption_vault_token_out_account.amount,
         hard_wall_reserve,
         redemption_config.fee_basis_points,

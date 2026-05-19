@@ -31,12 +31,12 @@ use anchor_spl::{
     token_interface::{Mint, TokenInterface},
 };
 
-use super::config::PropAmmState;
+use super::config::PropAmmPairState;
 use super::quote::{
     apply_hard_wall_liquidity_factor, hard_wall_reserve_from_tvl, record_prop_amm_sell,
     redemption_offer_config,
 };
-use super::quote::{validate_canonical_offer, SwapSide};
+use super::quote::{validate_canonical_offer, validate_prop_amm_pair_state, SwapSide};
 
 #[derive(Accounts)]
 pub struct OpenSwapSell<'info> {
@@ -44,10 +44,10 @@ pub struct OpenSwapSell<'info> {
 
     #[account(
         mut,
-        seeds = [crate::constants::seeds::PROP_AMM_STATE],
-        bump = prop_amm_state.bump
+        seeds = [crate::constants::seeds::PROP_AMM_PAIR_STATE, offer.key().as_ref()],
+        bump = prop_amm_pair_state.bump
     )]
-    pub prop_amm_state: Account<'info, PropAmmState>,
+    pub prop_amm_pair_state: Account<'info, PropAmmPairState>,
 
     #[account(
         seeds = [
@@ -158,6 +158,17 @@ pub fn open_swap_sell<'info>(
         ctx.accounts.token_out_mint.key(),
     )?;
     require!(side == SwapSide::Sell, crate::OnreError::InvalidSwapPair);
+    let pair_side = validate_prop_amm_pair_state(
+        &ctx.accounts.state,
+        &ctx.accounts.prop_amm_pair_state,
+        ctx.accounts.offer.key(),
+        ctx.accounts.token_in_mint.key(),
+        ctx.accounts.token_out_mint.key(),
+    )?;
+    require!(
+        pair_side == SwapSide::Sell,
+        crate::OnreError::InvalidSwapPair
+    );
 
     execute_open_swap_sell(ctx, token_in_amount, minimum_out, approval_message)
 }
@@ -326,14 +337,14 @@ fn execute_open_swap_sell<'info>(
         result.token_out_amount,
         redemption_vault_token_out_account.amount,
         hard_wall_reserve,
-        &ctx.accounts.prop_amm_state,
+        &ctx.accounts.prop_amm_pair_state,
     )?;
     require!(
         result.token_out_amount >= minimum_out,
         crate::OnreError::MinimumOutNotMet
     );
     record_prop_amm_sell(
-        &mut ctx.accounts.prop_amm_state,
+        &mut ctx.accounts.prop_amm_pair_state,
         raw_sell_value_stable,
         Clock::get()?.unix_timestamp,
     )?;

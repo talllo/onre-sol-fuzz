@@ -11,6 +11,8 @@ The important distinction is that buys and sells use different mechanics:
 - Buy: normal offer pricing is used. The only Prop AMM change is where incoming stablecoins are routed.
 - Sell: normal redemption pricing is used first, then the hard-wall reserve curve converts the raw sell value into the actual stablecoin output.
 
+Prop AMM configuration and pressure tracking are per canonical offer pair. A pair is enabled by its `PropAmmPairState` PDA, derived from the canonical `asset -> ONYC` offer.
+
 ## Variables
 
 | Symbol | Code variable | Meaning |
@@ -226,7 +228,7 @@ raw > L
 
 The dynamic wall is a pricing input, not a hard execution cap. If `raw` is at or below the actual vault balance, the order can execute even when `raw` is greater than the pressure-adjusted wall. In that case the haircut can reach or exceed `1`, the liquidity factor saturates at `0`, and `out` becomes `0`. The sell still has to satisfy `minimum_out`, so a zero-output sell only succeeds when the caller explicitly allows `minimum_out = 0`.
 
-This is still an endpoint formula, so it is not mathematically split-proof. The dynamic wall makes splitting materially worse because every sell adds global pressure and shrinks the wall for subsequent sells.
+This is still an endpoint formula, so it is not mathematically split-proof. The dynamic wall makes splitting materially worse because every sell adds pair-local pressure and shrinks the wall for subsequent sells on the same pair.
 
 ## Effective Liquidity
 
@@ -420,7 +422,7 @@ effective_liquidity = dynamic_wall_position(current_vault, effective_sell_volume
 out = raw * f(raw / effective_liquidity)
 ```
 
-That means each smaller order receives a smaller utilization and therefore a smaller haircut. However, each sell also increases global net sell pressure, so later split orders see a smaller wall.
+That means each smaller order receives a smaller utilization and therefore a smaller haircut. However, each sell also increases pair-local net sell pressure, so later split orders on the same pair see a smaller wall.
 
 The test `test_dynamic_wall_accumulates_sell_pressure_and_buys_relieve_it` documents that sell pressure worsens later sell quotes and ONyc buys relieve current-epoch pressure.
 
@@ -429,6 +431,7 @@ The test `test_dynamic_wall_accumulates_sell_pressure_and_buys_relieve_it` docum
 Normal Prop AMM configuration requires:
 
 ```text
+PropAmmPairState.enabled == true for swaps and quotes
 redemption_offer.vault_target_bps <= 10,000
 curve_peg_haircut_bps <= 10,000
 curve_exponent_scaled in [1,000, 100,000], in 1,000 increments

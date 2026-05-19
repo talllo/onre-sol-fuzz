@@ -166,12 +166,17 @@ pub fn build_configure_max_supply_ix(boss: &Pubkey, max_supply: u64) -> Instruct
 
 pub fn build_configure_prop_amm_ix(
     boss: &Pubkey,
+    asset_mint: &Pubkey,
+    onyc_mint: &Pubkey,
+    enabled: bool,
     curve_peg_haircut_bps: u16,
     curve_exponent_scaled: u32,
 ) -> Instruction {
     let (state_pda, _) = find_state_pda();
-    let (prop_amm_state_pda, _) = find_prop_amm_state_pda();
+    let (offer_pda, _) = find_offer_pda(asset_mint, onyc_mint);
+    let (prop_amm_pair_state_pda, _) = find_prop_amm_pair_state_pda(&offer_pda);
     let mut data = ix_discriminator("configure_prop_amm").to_vec();
+    data.push(if enabled { 1 } else { 0 });
     data.extend_from_slice(&curve_peg_haircut_bps.to_le_bytes());
     data.extend_from_slice(&curve_exponent_scaled.to_le_bytes());
     data.extend_from_slice(&1_000_u32.to_le_bytes());
@@ -183,7 +188,9 @@ pub fn build_configure_prop_amm_ix(
         program_id: PROGRAM_ID,
         accounts: vec![
             AccountMeta::new_readonly(state_pda, false),
-            AccountMeta::new(prop_amm_state_pda, false),
+            AccountMeta::new_readonly(offer_pda, false),
+            AccountMeta::new_readonly(*asset_mint, false),
+            AccountMeta::new(prop_amm_pair_state_pda, false),
             AccountMeta::new(*boss, true),
             AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
         ],

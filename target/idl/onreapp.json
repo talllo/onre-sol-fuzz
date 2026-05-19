@@ -1279,7 +1279,36 @@
           }
         },
         {
-          "name": "prop_amm_state",
+          "name": "offer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_mint"
+              },
+              {
+                "kind": "account",
+                "path": "state.onyc_mint",
+                "account": "State"
+              }
+            ]
+          }
+        },
+        {
+          "name": "asset_mint"
+        },
+        {
+          "name": "prop_amm_pair_state",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1295,12 +1324,15 @@
                   109,
                   109,
                   95,
-                  115,
-                  116,
+                  112,
                   97,
-                  116,
-                  101
+                  105,
+                  114
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
               }
             ]
           }
@@ -1319,6 +1351,10 @@
         }
       ],
       "args": [
+        {
+          "name": "enabled",
+          "type": "bool"
+        },
         {
           "name": "curve_peg_haircut_bps",
           "type": "u16"
@@ -4960,7 +4996,7 @@
           "name": "offer"
         },
         {
-          "name": "prop_amm_state",
+          "name": "prop_amm_pair_state",
           "writable": true,
           "pda": {
             "seeds": [
@@ -4976,12 +5012,15 @@
                   109,
                   109,
                   95,
-                  115,
-                  116,
+                  112,
                   97,
-                  116,
-                  101
+                  105,
+                  114
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
               }
             ]
           }
@@ -5203,7 +5242,7 @@
           "name": "offer"
         },
         {
-          "name": "prop_amm_state",
+          "name": "prop_amm_pair_state",
           "writable": true,
           "pda": {
             "seeds": [
@@ -5219,12 +5258,15 @@
                   109,
                   109,
                   95,
-                  115,
-                  116,
+                  112,
                   97,
-                  116,
-                  101
+                  105,
+                  114
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
               }
             ]
           }
@@ -5534,6 +5576,35 @@
           "name": "offer"
         },
         {
+          "name": "prop_amm_pair_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  112,
+                  97,
+                  105,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
+              }
+            ]
+          }
+        },
+        {
           "name": "state",
           "pda": {
             "seeds": [
@@ -5581,7 +5652,7 @@
           "name": "offer"
         },
         {
-          "name": "prop_amm_state",
+          "name": "prop_amm_pair_state",
           "pda": {
             "seeds": [
               {
@@ -5596,12 +5667,15 @@
                   109,
                   109,
                   95,
-                  115,
-                  116,
+                  112,
                   97,
-                  116,
-                  101
+                  105,
+                  114
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
               }
             ]
           }
@@ -10406,16 +10480,16 @@
       ]
     },
     {
-      "name": "PropAmmState",
+      "name": "PropAmmPairState",
       "discriminator": [
-        199,
         83,
-        38,
-        74,
-        186,
-        240,
-        58,
-        139
+        138,
+        171,
+        182,
+        7,
+        98,
+        212,
+        149
       ]
     },
     {
@@ -11821,36 +11895,46 @@
     },
     {
       "code": 6126,
+      "name": "InvalidPropAmmPairState",
+      "msg": "Invalid Prop AMM Pair State"
+    },
+    {
+      "code": 6127,
+      "name": "PropAmmPairDisabled",
+      "msg": "Prop AMM Pair Disabled"
+    },
+    {
+      "code": 6128,
       "name": "InvalidTargetNav",
       "msg": "Invalid Target Nav"
     },
     {
-      "code": 6127,
+      "code": 6129,
       "name": "InvalidAssetAdjustmentAmount",
       "msg": "Invalid Asset Adjustment Amount"
     },
     {
-      "code": 6128,
+      "code": 6130,
       "name": "NoBurnNeeded",
       "msg": "No Burn Needed"
     },
     {
-      "code": 6129,
+      "code": 6131,
       "name": "InsufficientCacheBalance",
       "msg": "Insufficient Cache Balance"
     },
     {
-      "code": 6130,
+      "code": 6132,
       "name": "InsufficientFeeBalance",
       "msg": "Insufficient Fee Balance"
     },
     {
-      "code": 6131,
+      "code": 6133,
       "name": "InvalidFeeRecipient",
       "msg": "Invalid Fee Recipient"
     },
     {
-      "code": 6132,
+      "code": 6134,
       "name": "InvalidBurnTarget",
       "msg": "Invalid Burn Target"
     }
@@ -13782,6 +13866,26 @@
         "kind": "struct",
         "fields": [
           {
+            "name": "offer",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "onyc_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "new_enabled",
+            "type": "bool"
+          },
+          {
             "name": "old_curve_peg_haircut_bps",
             "type": "u16"
           },
@@ -13841,10 +13945,26 @@
       }
     },
     {
-      "name": "PropAmmState",
+      "name": "PropAmmPairState",
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "offer",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "onyc_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "enabled",
+            "type": "bool"
+          },
           {
             "name": "curve_peg_haircut_bps",
             "type": "u16"

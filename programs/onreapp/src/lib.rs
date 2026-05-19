@@ -503,6 +503,7 @@ pub mod onreapp {
 
     pub fn configure_prop_amm(
         ctx: Context<ConfigurePropAmm>,
+        enabled: bool,
         curve_peg_haircut_bps: u16,
         curve_exponent_scaled: u32,
         min_cadence_exponent_scaled: u32,
@@ -513,6 +514,7 @@ pub mod onreapp {
     ) -> Result<()> {
         prop_amm::configure_prop_amm(
             ctx,
+            enabled,
             curve_peg_haircut_bps,
             curve_exponent_scaled,
             min_cadence_exponent_scaled,

@@ -1285,7 +1285,36 @@ export type Onreapp = {
           }
         },
         {
-          "name": "propAmmState",
+          "name": "offer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "assetMint"
+              },
+              {
+                "kind": "account",
+                "path": "state.onyc_mint",
+                "account": "state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "assetMint"
+        },
+        {
+          "name": "propAmmPairState",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1301,12 +1330,15 @@ export type Onreapp = {
                   109,
                   109,
                   95,
-                  115,
-                  116,
+                  112,
                   97,
-                  116,
-                  101
+                  105,
+                  114
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
               }
             ]
           }
@@ -1325,6 +1357,10 @@ export type Onreapp = {
         }
       ],
       "args": [
+        {
+          "name": "enabled",
+          "type": "bool"
+        },
         {
           "name": "curvePegHaircutBps",
           "type": "u16"
@@ -4966,7 +5002,7 @@ export type Onreapp = {
           "name": "offer"
         },
         {
-          "name": "propAmmState",
+          "name": "propAmmPairState",
           "writable": true,
           "pda": {
             "seeds": [
@@ -4982,12 +5018,15 @@ export type Onreapp = {
                   109,
                   109,
                   95,
-                  115,
-                  116,
+                  112,
                   97,
-                  116,
-                  101
+                  105,
+                  114
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
               }
             ]
           }
@@ -5209,7 +5248,7 @@ export type Onreapp = {
           "name": "offer"
         },
         {
-          "name": "propAmmState",
+          "name": "propAmmPairState",
           "writable": true,
           "pda": {
             "seeds": [
@@ -5225,12 +5264,15 @@ export type Onreapp = {
                   109,
                   109,
                   95,
-                  115,
-                  116,
+                  112,
                   97,
-                  116,
-                  101
+                  105,
+                  114
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
               }
             ]
           }
@@ -5540,6 +5582,35 @@ export type Onreapp = {
           "name": "offer"
         },
         {
+          "name": "propAmmPairState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  112,
+                  97,
+                  105,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
+              }
+            ]
+          }
+        },
+        {
           "name": "state",
           "pda": {
             "seeds": [
@@ -5587,7 +5658,7 @@ export type Onreapp = {
           "name": "offer"
         },
         {
-          "name": "propAmmState",
+          "name": "propAmmPairState",
           "pda": {
             "seeds": [
               {
@@ -5602,12 +5673,15 @@ export type Onreapp = {
                   109,
                   109,
                   95,
-                  115,
-                  116,
+                  112,
                   97,
-                  116,
-                  101
+                  105,
+                  114
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
               }
             ]
           }
@@ -10412,16 +10486,16 @@ export type Onreapp = {
       ]
     },
     {
-      "name": "propAmmState",
+      "name": "propAmmPairState",
       "discriminator": [
-        199,
         83,
-        38,
-        74,
-        186,
-        240,
-        58,
-        139
+        138,
+        171,
+        182,
+        7,
+        98,
+        212,
+        149
       ]
     },
     {
@@ -11827,36 +11901,46 @@ export type Onreapp = {
     },
     {
       "code": 6126,
+      "name": "invalidPropAmmPairState",
+      "msg": "Invalid Prop AMM Pair State"
+    },
+    {
+      "code": 6127,
+      "name": "propAmmPairDisabled",
+      "msg": "Prop AMM Pair Disabled"
+    },
+    {
+      "code": 6128,
       "name": "invalidTargetNav",
       "msg": "Invalid Target Nav"
     },
     {
-      "code": 6127,
+      "code": 6129,
       "name": "invalidAssetAdjustmentAmount",
       "msg": "Invalid Asset Adjustment Amount"
     },
     {
-      "code": 6128,
+      "code": 6130,
       "name": "noBurnNeeded",
       "msg": "No Burn Needed"
     },
     {
-      "code": 6129,
+      "code": 6131,
       "name": "insufficientCacheBalance",
       "msg": "Insufficient Cache Balance"
     },
     {
-      "code": 6130,
+      "code": 6132,
       "name": "insufficientFeeBalance",
       "msg": "Insufficient Fee Balance"
     },
     {
-      "code": 6131,
+      "code": 6133,
       "name": "invalidFeeRecipient",
       "msg": "Invalid Fee Recipient"
     },
     {
-      "code": 6132,
+      "code": 6134,
       "name": "invalidBurnTarget",
       "msg": "Invalid Burn Target"
     }
@@ -13788,6 +13872,26 @@ export type Onreapp = {
         "kind": "struct",
         "fields": [
           {
+            "name": "offer",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "onycMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "oldEnabled",
+            "type": "bool"
+          },
+          {
+            "name": "newEnabled",
+            "type": "bool"
+          },
+          {
             "name": "oldCurvePegHaircutBps",
             "type": "u16"
           },
@@ -13847,10 +13951,26 @@ export type Onreapp = {
       }
     },
     {
-      "name": "propAmmState",
+      "name": "propAmmPairState",
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "offer",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "onycMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "enabled",
+            "type": "bool"
+          },
           {
             "name": "curvePegHaircutBps",
             "type": "u16"

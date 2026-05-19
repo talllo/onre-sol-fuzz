@@ -27,8 +27,10 @@ use anchor_spl::{
     token_interface::{Mint, TokenInterface},
 };
 
-use super::config::PropAmmState;
-use super::quote::{record_prop_amm_buy, validate_canonical_offer, SwapSide};
+use super::config::PropAmmPairState;
+use super::quote::{
+    record_prop_amm_buy, validate_canonical_offer, validate_prop_amm_pair_state, SwapSide,
+};
 
 #[derive(Accounts)]
 pub struct OpenSwapBuy<'info> {
@@ -36,10 +38,10 @@ pub struct OpenSwapBuy<'info> {
 
     #[account(
         mut,
-        seeds = [crate::constants::seeds::PROP_AMM_STATE],
-        bump = prop_amm_state.bump
+        seeds = [crate::constants::seeds::PROP_AMM_PAIR_STATE, offer.key().as_ref()],
+        bump = prop_amm_pair_state.bump
     )]
-    pub prop_amm_state: Account<'info, PropAmmState>,
+    pub prop_amm_pair_state: Account<'info, PropAmmPairState>,
 
     /// CHECK: Redemption offer PDA for the opposite offer direction; may be uninitialized.
     pub redemption_offer: UncheckedAccount<'info>,
@@ -154,6 +156,17 @@ pub fn open_swap_buy<'info>(
         ctx.accounts.token_out_mint.key(),
     )?;
     require!(side == SwapSide::Buy, crate::OnreError::InvalidSwapPair);
+    let pair_side = validate_prop_amm_pair_state(
+        &ctx.accounts.state,
+        &ctx.accounts.prop_amm_pair_state,
+        ctx.accounts.offer.key(),
+        ctx.accounts.token_in_mint.key(),
+        ctx.accounts.token_out_mint.key(),
+    )?;
+    require!(
+        pair_side == SwapSide::Buy,
+        crate::OnreError::InvalidSwapPair
+    );
 
     execute_open_swap_buy(ctx, token_in_amount, minimum_out, approval_message)
 }
@@ -391,7 +404,7 @@ fn execute_open_swap_buy<'info>(
     }
 
     record_prop_amm_buy(
-        &mut ctx.accounts.prop_amm_state,
+        &mut ctx.accounts.prop_amm_pair_state,
         result.token_in_net_amount,
         Clock::get()?.unix_timestamp,
     )?;

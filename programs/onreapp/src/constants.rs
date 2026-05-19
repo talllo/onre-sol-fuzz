@@ -65,8 +65,8 @@ pub mod seeds {
     /// Seed suffix for prop AMM net proceeds vault authority
     pub const PROP_AMM_PROCEEDS_VAULT: &[u8] = b"prop_amm_proceeds";
 
-    /// Seed for the Prop AMM configuration state PDA
-    pub const PROP_AMM_STATE: &[u8] = b"prop_amm_state";
+    /// Seed for per-offer Prop AMM pair state PDAs
+    pub const PROP_AMM_PAIR_STATE: &[u8] = b"prop_amm_pair";
 }
 
 /// Maximum number of pricing vectors allowed per offer

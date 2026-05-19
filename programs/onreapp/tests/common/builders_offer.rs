@@ -494,7 +494,6 @@ pub fn build_quote_swap_ix(
     token_in_amount: u64,
 ) -> Instruction {
     let (state_pda, _) = find_state_pda();
-    let (prop_amm_state_pda, _) = find_prop_amm_state_pda();
     let is_sell = token_in_mint == onyc_mint;
     let canonical_token_in = if token_in_mint == onyc_mint {
         token_out_mint
@@ -507,6 +506,7 @@ pub fn build_quote_swap_ix(
         token_in_mint
     };
     let (offer_pda, _) = find_offer_pda(canonical_token_in, canonical_token_out);
+    let (prop_amm_pair_state_pda, _) = find_prop_amm_pair_state_pda(&offer_pda);
     let mut data = ix_discriminator(if is_sell {
         "quote_swap_sell"
     } else {
@@ -524,7 +524,7 @@ pub fn build_quote_swap_ix(
             token_out_mint,
             &TOKEN_PROGRAM_ID,
         );
-        accounts.push(AccountMeta::new_readonly(prop_amm_state_pda, false));
+        accounts.push(AccountMeta::new_readonly(prop_amm_pair_state_pda, false));
         accounts.push(AccountMeta::new_readonly(redemption_offer_pda, false));
         accounts.push(AccountMeta::new_readonly(state_pda, false));
         accounts.push(AccountMeta::new_readonly(
@@ -541,6 +541,7 @@ pub fn build_quote_swap_ix(
         accounts.push(AccountMeta::new_readonly(market_stats_pda, false));
     } else {
         accounts.extend([
+            AccountMeta::new_readonly(prop_amm_pair_state_pda, false),
             AccountMeta::new_readonly(state_pda, false),
             AccountMeta::new_readonly(*token_in_mint, false),
             AccountMeta::new_readonly(*token_out_mint, false),
@@ -566,7 +567,6 @@ pub fn build_open_swap_buy_ix(
     token_out_program: &Pubkey,
 ) -> Instruction {
     let (state_pda, _) = find_state_pda();
-    let (prop_amm_state_pda, _) = find_prop_amm_state_pda();
     let canonical_token_in = if token_in_mint == onyc_mint {
         token_out_mint
     } else {
@@ -578,6 +578,7 @@ pub fn build_open_swap_buy_ix(
         token_in_mint
     };
     let (offer_pda, _) = find_offer_pda(canonical_token_in, canonical_token_out);
+    let (prop_amm_pair_state_pda, _) = find_prop_amm_pair_state_pda(&offer_pda);
     let (redemption_offer_pda, _) = find_redemption_offer_pda(token_out_mint, token_in_mint);
     let (offer_vault_authority_pda, _) = find_offer_vault_authority_pda();
     let (redemption_vault_authority_pda, _) = find_redemption_vault_authority_pda();
@@ -649,7 +650,7 @@ pub fn build_open_swap_buy_ix(
         program_id: PROGRAM_ID,
         accounts: vec![
             AccountMeta::new(offer_pda, false),
-            AccountMeta::new(prop_amm_state_pda, false),
+            AccountMeta::new(prop_amm_pair_state_pda, false),
             AccountMeta::new_readonly(redemption_offer_pda, false),
             AccountMeta::new_readonly(state_pda, false),
             AccountMeta::new_readonly(offer_vault_authority_pda, false),
@@ -700,7 +701,6 @@ pub fn build_open_swap_sell_ix(
     token_out_program: &Pubkey,
 ) -> Instruction {
     let (state_pda, _) = find_state_pda();
-    let (prop_amm_state_pda, _) = find_prop_amm_state_pda();
     let canonical_token_in = if token_in_mint == onyc_mint {
         token_out_mint
     } else {
@@ -712,6 +712,7 @@ pub fn build_open_swap_sell_ix(
         token_in_mint
     };
     let (offer_pda, _) = find_offer_pda(canonical_token_in, canonical_token_out);
+    let (prop_amm_pair_state_pda, _) = find_prop_amm_pair_state_pda(&offer_pda);
     let (redemption_offer_pda, _) = find_redemption_offer_pda(token_in_mint, token_out_mint);
     let (offer_vault_authority_pda, _) = find_offer_vault_authority_pda();
     let (redemption_vault_authority_pda, _) = find_redemption_vault_authority_pda();
@@ -769,7 +770,7 @@ pub fn build_open_swap_sell_ix(
         program_id: PROGRAM_ID,
         accounts: vec![
             AccountMeta::new(offer_pda, false),
-            AccountMeta::new(prop_amm_state_pda, false),
+            AccountMeta::new(prop_amm_pair_state_pda, false),
             AccountMeta::new_readonly(redemption_offer_pda, false),
             AccountMeta::new_readonly(state_pda, false),
             AccountMeta::new_readonly(offer_vault_authority_pda, false),

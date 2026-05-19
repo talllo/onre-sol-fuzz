@@ -5,9 +5,10 @@ use common::*;
 use onreapp::instructions::prop_amm::{
     apply_hard_wall_liquidity_factor_at_time, apply_hard_wall_reserve_curve_with_params,
     dynamic_wall_position, effective_curve_exponent_scaled, preview_effective_sell_volume,
-    PropAmmState, SwapQuote,
+    PropAmmPairState, SwapQuote,
 };
 use onreapp::state::ConfigurableVaultKind;
+use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
@@ -42,7 +43,7 @@ fn setup_prop_amm() -> PropAmmCtx {
     let (offer_pda, _) = find_offer_pda(&usdc_mint, &onyc_mint);
     let ix = build_set_main_offer_ix(&boss, &offer_pda);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
-    let ix = build_configure_prop_amm_ix(&boss, 700, 25_000);
+    let ix = build_configure_prop_amm_ix(&boss, &usdc_mint, &onyc_mint, true, 700, 25_000);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
     let (vault_authority, _) = find_offer_vault_authority_pda();
@@ -123,7 +124,7 @@ fn test_hard_wall_curve_ignores_surplus_above_target_reserve() {
 
 #[test]
 fn test_hard_wall_curve_allows_zero_output_at_actual_vault_limit() {
-    let state = PropAmmState {
+    let state = PropAmmPairState {
         curve_peg_haircut_bps: 700,
         curve_exponent_scaled: 25_000,
         min_cadence_exponent_scaled: 1_000,
@@ -137,6 +138,7 @@ fn test_hard_wall_curve_allows_zero_output_at_actual_vault_limit() {
         curr_sell_trade_count: 0,
         epoch_start: 1,
         bump: 0,
+        ..Default::default()
     };
     let output =
         apply_hard_wall_liquidity_factor_at_time(10_000_000, 10_000_000, 10_000_000, &state, 1)
@@ -155,7 +157,7 @@ fn test_hard_wall_curve_rejects_raw_value_above_actual_vault() {
 
 #[test]
 fn test_dynamic_wall_preview_includes_current_sell_and_buy_relief() {
-    let state = PropAmmState {
+    let state = PropAmmPairState {
         curve_peg_haircut_bps: 700,
         curve_exponent_scaled: 25_000,
         min_cadence_exponent_scaled: 1_000,
@@ -169,6 +171,7 @@ fn test_dynamic_wall_preview_includes_current_sell_and_buy_relief() {
         curr_sell_trade_count: 0,
         epoch_start: 1_000,
         bump: 0,
+        ..Default::default()
     };
 
     let effective = preview_effective_sell_volume(&state, 200, 44_200).unwrap();
@@ -193,7 +196,7 @@ fn test_dynamic_wall_position_uses_effective_sell_pressure() {
 
 #[test]
 fn test_cadence_lowers_effective_curve_exponent() {
-    let state = PropAmmState {
+    let state = PropAmmPairState {
         curve_peg_haircut_bps: 7_000,
         curve_exponent_scaled: 25_000,
         min_cadence_exponent_scaled: 1_000,
@@ -207,6 +210,7 @@ fn test_cadence_lowers_effective_curve_exponent() {
         curr_sell_trade_count: 0,
         epoch_start: 1,
         bump: 0,
+        ..Default::default()
     };
     let mut high_cadence = state.clone();
     high_cadence.curr_sell_trade_count = 49;
@@ -226,7 +230,7 @@ fn test_cadence_lowers_effective_curve_exponent() {
 
 #[test]
 fn test_cadence_penalizes_small_split_sells() {
-    let state = PropAmmState {
+    let state = PropAmmPairState {
         curve_peg_haircut_bps: 7_000,
         curve_exponent_scaled: 25_000,
         min_cadence_exponent_scaled: 1_000,
@@ -240,6 +244,7 @@ fn test_cadence_penalizes_small_split_sells() {
         curr_sell_trade_count: 0,
         epoch_start: 1,
         bump: 0,
+        ..Default::default()
     };
     let mut high_cadence = state.clone();
     high_cadence.curr_sell_trade_count = 49;
@@ -378,6 +383,53 @@ fn test_dynamic_wall_accumulates_sell_pressure_and_buys_relieve_it() {
     let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
     let relieved_quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
     assert_eq!(relieved_quote.token_out_amount, 1_982_322_822);
+}
+
+#[test]
+fn test_prop_amm_pair_must_be_enabled() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+
+    let ix = build_configure_prop_amm_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint, false, 700, 25_000);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.usdc_mint, &ctx.onyc_mint, 1_000_000);
+    let result = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]);
+    assert!(
+        result.is_err(),
+        "disabled Prop AMM pair should reject quotes"
+    );
+}
+
+#[test]
+fn test_prop_amm_rejects_pair_state_for_different_offer() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    let eurc_mint = create_mint(&mut ctx.svm, &ctx.payer, 6, &boss);
+
+    let ix = build_make_offer_ix(
+        &boss,
+        &eurc_mint,
+        &ctx.onyc_mint,
+        0,
+        false,
+        true,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    let ix = build_configure_prop_amm_ix(&boss, &eurc_mint, &ctx.onyc_mint, true, 1_200, 20_000);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let (usdc_offer_pda, _) = find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint);
+    let (usdc_pair_state_pda, _) = find_prop_amm_pair_state_pda(&usdc_offer_pda);
+    let mut ix = build_quote_swap_ix(&ctx.onyc_mint, &eurc_mint, &ctx.onyc_mint, 1_000_000);
+    ix.accounts[1] = AccountMeta::new_readonly(usdc_pair_state_pda, false);
+
+    let result = send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]);
+    assert!(
+        result.is_err(),
+        "Prop AMM should reject a pair-state PDA derived from another offer"
+    );
 }
 
 #[test]

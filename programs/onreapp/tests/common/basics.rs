@@ -29,7 +29,7 @@ pub const MINT_AUTHORITY_SEED: &[u8] = b"mint_authority";
 pub const MARKET_STATS_SEED: &[u8] = b"market_stats";
 pub const CIRCULATING_SUPPLY_EXCLUDED_ACCOUNTS_SEED: &[u8] = b"circ_supply_excl_accounts";
 pub const CIRCULATING_SUPPLY_EXCLUDED_BALANCE_SEED: &[u8] = b"circ_supply_excl_balance";
-pub const PROP_AMM_STATE_SEED: &[u8] = b"prop_amm_state";
+pub const PROP_AMM_PAIR_STATE_SEED: &[u8] = b"prop_amm_pair";
 pub const BUFFER_STATE_SEED: &[u8] = b"buffer_state";
 pub const RESERVE_VAULT_AUTHORITY_SEED: &[u8] = b"reserve_vault_authority";
 pub const MANAGEMENT_FEE_VAULT_SEED: &[u8] = b"management_fee";
@@ -162,8 +162,8 @@ pub fn find_circulating_supply_excluded_balance_pda() -> (Pubkey, u8) {
     Pubkey::find_program_address(&[CIRCULATING_SUPPLY_EXCLUDED_BALANCE_SEED], &PROGRAM_ID)
 }
 
-pub fn find_prop_amm_state_pda() -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[PROP_AMM_STATE_SEED], &PROGRAM_ID)
+pub fn find_prop_amm_pair_state_pda(offer: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[PROP_AMM_PAIR_STATE_SEED, offer.as_ref()], &PROGRAM_ID)
 }
 
 pub fn find_buffer_state_pda() -> (Pubkey, u8) {

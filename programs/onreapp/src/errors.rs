@@ -254,6 +254,10 @@ pub enum OnreError {
     MinimumOutNotMet,
     #[msg("Invalid Swap Pair")]
     InvalidSwapPair,
+    #[msg("Invalid Prop AMM Pair State")]
+    InvalidPropAmmPairState,
+    #[msg("Prop AMM Pair Disabled")]
+    PropAmmPairDisabled,
     #[msg("Invalid Target Nav")]
     InvalidTargetNav,
     #[msg("Invalid Asset Adjustment Amount")]
