@@ -7,6 +7,7 @@ pub mod offer;
 pub mod prop_amm;
 pub mod redemption;
 pub mod state_operations;
+pub mod targeted_disable;
 pub mod vault_operations;
 
 pub use buffer::*;

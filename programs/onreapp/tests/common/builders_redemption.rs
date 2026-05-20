@@ -216,25 +216,56 @@ pub fn build_fulfill_redemption_request_ix(
     }
 }
 
+fn build_redemption_offer_admin_ix(
+    discriminator: &str,
+    signer: &Pubkey,
+    token_in_mint: &Pubkey,
+    token_out_mint: &Pubkey,
+    data_suffix: &[u8],
+) -> Instruction {
+    let (state_pda, _) = find_state_pda();
+    let (redemption_offer_pda, _) = find_redemption_offer_pda(token_in_mint, token_out_mint);
+    let mut data = ix_discriminator(discriminator).to_vec();
+    data.extend_from_slice(data_suffix);
+    Instruction {
+        program_id: PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(redemption_offer_pda, false),
+            AccountMeta::new_readonly(state_pda, false),
+            AccountMeta::new_readonly(*signer, true),
+        ],
+        data,
+    }
+}
+
 pub fn build_update_redemption_offer_fee_ix(
     boss: &Pubkey,
     token_in_mint: &Pubkey,
     token_out_mint: &Pubkey,
     new_fee_basis_points: u16,
 ) -> Instruction {
-    let (state_pda, _) = find_state_pda();
-    let (redemption_offer_pda, _) = find_redemption_offer_pda(token_in_mint, token_out_mint);
-    let mut data = ix_discriminator("update_redemption_offer_fee").to_vec();
-    data.extend_from_slice(&new_fee_basis_points.to_le_bytes());
-    Instruction {
-        program_id: PROGRAM_ID,
-        accounts: vec![
-            AccountMeta::new(redemption_offer_pda, false),
-            AccountMeta::new_readonly(state_pda, false),
-            AccountMeta::new_readonly(*boss, true),
-        ],
-        data,
-    }
+    build_redemption_offer_admin_ix(
+        "update_redemption_offer_fee",
+        boss,
+        token_in_mint,
+        token_out_mint,
+        &new_fee_basis_points.to_le_bytes(),
+    )
+}
+
+pub fn build_set_redemption_offer_disabled_ix(
+    signer: &Pubkey,
+    token_in_mint: &Pubkey,
+    token_out_mint: &Pubkey,
+    disabled: bool,
+) -> Instruction {
+    build_redemption_offer_admin_ix(
+        "set_redemption_offer_disabled",
+        signer,
+        token_in_mint,
+        token_out_mint,
+        &[if disabled { 1 } else { 0 }],
+    )
 }
 
 pub fn build_update_redemption_offer_vault_target_ix(
@@ -243,17 +274,11 @@ pub fn build_update_redemption_offer_vault_target_ix(
     token_out_mint: &Pubkey,
     new_vault_target_bps: u16,
 ) -> Instruction {
-    let (state_pda, _) = find_state_pda();
-    let (redemption_offer_pda, _) = find_redemption_offer_pda(token_in_mint, token_out_mint);
-    let mut data = ix_discriminator("update_redemption_offer_vault_target").to_vec();
-    data.extend_from_slice(&new_vault_target_bps.to_le_bytes());
-    Instruction {
-        program_id: PROGRAM_ID,
-        accounts: vec![
-            AccountMeta::new(redemption_offer_pda, false),
-            AccountMeta::new_readonly(state_pda, false),
-            AccountMeta::new_readonly(*boss, true),
-        ],
-        data,
-    }
+    build_redemption_offer_admin_ix(
+        "update_redemption_offer_vault_target",
+        boss,
+        token_in_mint,
+        token_out_mint,
+        &new_vault_target_bps.to_le_bytes(),
+    )
 }

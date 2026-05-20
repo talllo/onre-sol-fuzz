@@ -1,10 +1,11 @@
 use crate::constants::seeds;
 use crate::instructions::market_info::read_market_stats_account;
 use crate::instructions::offer::process_offer_core;
-use crate::instructions::redemption::{process_redemption_core, RedemptionOffer};
+use crate::instructions::redemption::{
+    load_optional_checked_redemption_offer, process_redemption_core,
+};
 use crate::instructions::Offer;
 use crate::state::State;
-use crate::utils::load_optional_pda_account;
 use anchor_lang::solana_program::program::set_return_data;
 use anchor_lang::{prelude::*, Accounts, AnchorDeserialize, AnchorSerialize};
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
@@ -178,6 +179,32 @@ pub(crate) fn validate_prop_amm_pair_state(
     Ok(side)
 }
 
+pub(crate) fn validate_prop_amm_pair_for_side(
+    program_id: &Pubkey,
+    state: &State,
+    prop_amm_pair_state: &PropAmmPairState,
+    offer_key: Pubkey,
+    token_in_mint: Pubkey,
+    token_out_mint: Pubkey,
+    expected_side: SwapSide,
+) -> Result<()> {
+    let side =
+        validate_canonical_offer(program_id, state, offer_key, token_in_mint, token_out_mint)?;
+    require!(side == expected_side, crate::OnreError::InvalidSwapPair);
+    let pair_side = validate_prop_amm_pair_state(
+        state,
+        prop_amm_pair_state,
+        offer_key,
+        token_in_mint,
+        token_out_mint,
+    )?;
+    require!(
+        pair_side == expected_side,
+        crate::OnreError::InvalidSwapPair
+    );
+    Ok(())
+}
+
 pub(crate) struct RedemptionOfferConfig {
     pub fee_basis_points: u16,
     pub vault_target_bps: u16,
@@ -190,25 +217,12 @@ pub(crate) fn redemption_offer_config(
     token_in_mint: Pubkey,
     token_out_mint: Pubkey,
 ) -> Result<RedemptionOfferConfig> {
-    let (expected_redemption_offer, _) = Pubkey::find_program_address(
-        &[
-            seeds::REDEMPTION_OFFER,
-            token_in_mint.as_ref(),
-            token_out_mint.as_ref(),
-        ],
+    let Some(redemption_offer) = load_optional_checked_redemption_offer(
         program_id,
-    );
-    require_keys_eq!(
-        redemption_offer_account.key(),
-        expected_redemption_offer,
-        crate::OnreError::InvalidRedemptionOffer
-    );
-
-    let Some(redemption_offer) = load_optional_pda_account::<RedemptionOffer>(
-        &redemption_offer_account.to_account_info(),
-        program_id,
-        crate::OnreError::InvalidRedemptionOfferOwner.into(),
-        crate::OnreError::InvalidRedemptionOfferData.into(),
+        redemption_offer_account,
+        offer_key,
+        token_in_mint,
+        token_out_mint,
     )?
     else {
         return Ok(RedemptionOfferConfig {
@@ -216,22 +230,7 @@ pub(crate) fn redemption_offer_config(
             vault_target_bps: 0,
         });
     };
-
-    require_keys_eq!(
-        redemption_offer.offer,
-        offer_key,
-        crate::OnreError::InvalidRedemptionOffer
-    );
-    require_keys_eq!(
-        redemption_offer.token_in_mint,
-        token_in_mint,
-        crate::OnreError::InvalidRedemptionOffer
-    );
-    require_keys_eq!(
-        redemption_offer.token_out_mint,
-        token_out_mint,
-        crate::OnreError::InvalidRedemptionOffer
-    );
+    redemption_offer.require_enabled()?;
 
     Ok(RedemptionOfferConfig {
         fee_basis_points: redemption_offer.fee_basis_points,
@@ -675,25 +674,15 @@ pub fn build_swap_buy_quote(
     let quoted_at = Clock::get()?.unix_timestamp;
     offer.require_enabled()?;
 
-    let side = validate_canonical_offer(
+    validate_prop_amm_pair_for_side(
         program_id,
-        state,
-        offer_key,
-        token_in_mint.key(),
-        token_out_mint.key(),
-    )?;
-    require!(side == SwapSide::Buy, crate::OnreError::InvalidSwapPair);
-    let pair_side = validate_prop_amm_pair_state(
         state,
         prop_amm_pair_state,
         offer_key,
         token_in_mint.key(),
         token_out_mint.key(),
+        SwapSide::Buy,
     )?;
-    require!(
-        pair_side == SwapSide::Buy,
-        crate::OnreError::InvalidSwapPair
-    );
 
     let result = process_offer_core(offer, token_in_amount, token_in_mint, token_out_mint).map(
         |result| SwapQuoteComputation {
@@ -734,25 +723,15 @@ pub fn build_swap_sell_quote(
     let quoted_at = Clock::get()?.unix_timestamp;
     offer.require_enabled()?;
 
-    let side = validate_canonical_offer(
+    validate_prop_amm_pair_for_side(
         program_id,
-        state,
-        offer_key,
-        token_in_mint.key(),
-        token_out_mint.key(),
-    )?;
-    require!(side == SwapSide::Sell, crate::OnreError::InvalidSwapPair);
-    let pair_side = validate_prop_amm_pair_state(
         state,
         prop_amm_pair_state,
         offer_key,
         token_in_mint.key(),
         token_out_mint.key(),
+        SwapSide::Sell,
     )?;
-    require!(
-        pair_side == SwapSide::Sell,
-        crate::OnreError::InvalidSwapPair
-    );
 
     let mut result = process_redemption_core(
         offer,

@@ -66,6 +66,20 @@ impl Offer {
         require!(!self.is_disabled(), crate::OnreError::OfferDisabled);
         Ok(())
     }
+
+    pub fn require_mints(&self, token_in_mint: Pubkey, token_out_mint: Pubkey) -> Result<()> {
+        require_keys_eq!(
+            self.token_in_mint,
+            token_in_mint,
+            crate::OnreError::InvalidTokenInMint
+        );
+        require_keys_eq!(
+            self.token_out_mint,
+            token_out_mint,
+            crate::OnreError::InvalidTokenOutMint
+        );
+        Ok(())
+    }
 }
 
 /// Time-based pricing vector with APR-driven compound growth

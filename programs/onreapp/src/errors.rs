@@ -228,6 +228,8 @@ pub enum OnreError {
     InvalidAmount,
     #[msg("Offer Disabled")]
     OfferDisabled,
+    #[msg("Redemption Offer Disabled")]
+    RedemptionOfferDisabled,
     #[msg("Unauthorized To Disable Offer")]
     UnauthorizedToDisableOffer,
     #[msg("Only Boss Can Enable Offer")]

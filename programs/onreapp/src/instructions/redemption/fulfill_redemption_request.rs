@@ -394,6 +394,7 @@ fn load_redemption_offer<'info>(
         redemption_offer.token_out_mint,
         crate::OnreError::InvalidTokenOutMint
     );
+    redemption_offer.require_enabled()?;
 
     Ok(redemption_offer)
 }

@@ -271,6 +271,7 @@ pub struct RedemptionOfferData {
     pub fee_basis_points: u16,
     pub vault_target_bps: u16,
     pub request_counter: u64,
+    pub disabled: u8,
     pub bump: u8,
 }
 
@@ -299,6 +300,8 @@ pub fn read_redemption_offer(
     offset += 2;
     let request_counter = u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
     offset += 8;
+    let disabled = data[offset];
+    offset += 1;
     let bump = data[offset];
     RedemptionOfferData {
         offer,
@@ -309,6 +312,7 @@ pub fn read_redemption_offer(
         fee_basis_points,
         vault_target_bps,
         request_counter,
+        disabled,
         bump,
     }
 }

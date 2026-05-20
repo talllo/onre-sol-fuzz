@@ -1,12 +1,12 @@
-use crate::constants::{seeds, MAX_BASIS_POINTS};
+use crate::constants::MAX_BASIS_POINTS;
 use crate::instructions::market_info::read_market_stats_account;
-use crate::instructions::redemption::RedemptionOffer;
+use crate::instructions::redemption::load_optional_checked_redemption_offer;
 use crate::instructions::{Offer, OfferVector};
 use crate::state::State;
 use crate::utils::approver::approver_utils;
 use crate::utils::{
-    calculate_fees, calculate_token_out_amount, load_optional_pda_account, mul_div_round_u128,
-    pow_fixed, program_controls_mint, ApprovalMessage,
+    calculate_fees, calculate_token_out_amount, mul_div_round_u128, pow_fixed,
+    program_controls_mint, ApprovalMessage,
 };
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::Mint;
@@ -120,15 +120,7 @@ fn process_offer_core_at(
     current_time: u64,
 ) -> Result<OfferProcessResult> {
     require!(token_in_amount > 0, crate::OnreError::InvalidAmount);
-
-    require!(
-        offer.token_in_mint == token_in_mint_key,
-        crate::OnreError::InvalidTokenInMint
-    );
-    require!(
-        offer.token_out_mint == token_out_mint_key,
-        crate::OnreError::InvalidTokenOutMint
-    );
+    offer.require_mints(token_in_mint_key, token_out_mint_key)?;
 
     // Find the currently active pricing vector
     let active_vector = find_active_vector_at(offer, current_time)?;
@@ -184,45 +176,20 @@ pub(crate) fn load_redemption_offer_vault_target_bps_for_offer(
     token_in_mint: Pubkey,
     token_out_mint: Pubkey,
 ) -> Result<Option<u16>> {
-    let (expected_redemption_offer, _) = Pubkey::find_program_address(
-        &[
-            seeds::REDEMPTION_OFFER,
-            token_out_mint.as_ref(),
-            token_in_mint.as_ref(),
-        ],
+    let Some(redemption_offer) = load_optional_checked_redemption_offer(
         program_id,
-    );
-    require_keys_eq!(
-        redemption_offer_account.key(),
-        expected_redemption_offer,
-        crate::OnreError::InvalidRedemptionOffer
-    );
-
-    let Some(redemption_offer) = load_optional_pda_account::<RedemptionOffer>(
-        &redemption_offer_account.to_account_info(),
-        program_id,
-        crate::OnreError::InvalidRedemptionOfferOwner.into(),
-        crate::OnreError::InvalidRedemptionOfferData.into(),
+        redemption_offer_account,
+        offer_key,
+        token_out_mint,
+        token_in_mint,
     )?
     else {
         return Ok(None);
     };
 
-    require_keys_eq!(
-        redemption_offer.offer,
-        offer_key,
-        crate::OnreError::InvalidRedemptionOffer
-    );
-    require_keys_eq!(
-        redemption_offer.token_in_mint,
-        token_out_mint,
-        crate::OnreError::InvalidRedemptionOffer
-    );
-    require_keys_eq!(
-        redemption_offer.token_out_mint,
-        token_in_mint,
-        crate::OnreError::InvalidRedemptionOffer
-    );
+    if redemption_offer.is_disabled() {
+        return Ok(None);
+    }
 
     Ok(Some(redemption_offer.vault_target_bps))
 }

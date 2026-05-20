@@ -802,6 +802,13 @@ pub mod onreapp {
         redemption::make_redemption_offer(ctx, fee_basis_points)
     }
 
+    pub fn set_redemption_offer_disabled(
+        ctx: Context<SetRedemptionOfferDisabled>,
+        disabled: bool,
+    ) -> Result<()> {
+        redemption::set_redemption_offer_disabled(ctx, disabled)
+    }
+
     /// Creates a redemption request.
     ///
     /// Delegates to `redemption::create_redemption_request`.

@@ -7593,6 +7593,87 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "setRedemptionOfferDisabled",
+      "discriminator": [
+        44,
+        130,
+        57,
+        167,
+        162,
+        117,
+        37,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "redemptionOffer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "redemption_offer.token_in_mint",
+                "account": "redemptionOffer"
+              },
+              {
+                "kind": "account",
+                "path": "redemption_offer.token_out_mint",
+                "account": "redemptionOffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "disabled",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "takeOffer",
       "docs": [
         "Takes a offer.",
@@ -11202,6 +11283,19 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "redemptionOfferDisabledSetEvent",
+      "discriminator": [
+        187,
+        148,
+        3,
+        190,
+        96,
+        151,
+        65,
+        45
+      ]
+    },
+    {
       "name": "redemptionOfferFeeUpdatedEvent",
       "discriminator": [
         221,
@@ -11900,116 +11994,121 @@ export type Onreapp = {
     },
     {
       "code": 6113,
+      "name": "redemptionOfferDisabled",
+      "msg": "Redemption Offer Disabled"
+    },
+    {
+      "code": 6114,
       "name": "unauthorizedToDisableOffer",
       "msg": "Unauthorized To Disable Offer"
     },
     {
-      "code": 6114,
+      "code": 6115,
       "name": "onlyBossCanEnableOffer",
       "msg": "Only Boss Can Enable Offer"
     },
     {
-      "code": 6115,
+      "code": 6116,
       "name": "amountExceedsRemaining",
       "msg": "Amount Exceeds Remaining"
     },
     {
-      "code": 6116,
+      "code": 6117,
       "name": "invalidFeeDestination",
       "msg": "Invalid Fee Destination"
     },
     {
-      "code": 6117,
+      "code": 6118,
       "name": "invalidConfigurableVault",
       "msg": "Invalid Configurable Vault"
     },
     {
-      "code": 6118,
+      "code": 6119,
       "name": "invalidConfigurableVaultOwner",
       "msg": "Invalid Configurable Vault Owner"
     },
     {
-      "code": 6119,
+      "code": 6120,
       "name": "invalidConfigurableVaultData",
       "msg": "Invalid Configurable Vault Data"
     },
     {
-      "code": 6120,
+      "code": 6121,
       "name": "invalidConfigurableVaultKind",
       "msg": "Invalid Configurable Vault Kind"
     },
     {
-      "code": 6121,
+      "code": 6122,
       "name": "missingConfigurableVaultDestination",
       "msg": "Missing Configurable Vault Destination"
     },
     {
-      "code": 6122,
+      "code": 6123,
       "name": "invalidConfigurableVaultTokenAccount",
       "msg": "Invalid Configurable Vault Token Account"
     },
     {
-      "code": 6123,
+      "code": 6124,
       "name": "invalidBufferStateAccount",
       "msg": "Invalid Buffer State Account"
     },
     {
-      "code": 6124,
+      "code": 6125,
       "name": "invalidTimestamp",
       "msg": "Invalid Timestamp"
     },
     {
-      "code": 6125,
+      "code": 6126,
       "name": "minimumOutNotMet",
       "msg": "Minimum Out Not Met"
     },
     {
-      "code": 6126,
+      "code": 6127,
       "name": "invalidSwapPair",
       "msg": "Invalid Swap Pair"
     },
     {
-      "code": 6127,
+      "code": 6128,
       "name": "invalidPropAmmPairState",
       "msg": "Invalid Prop AMM Pair State"
     },
     {
-      "code": 6128,
+      "code": 6129,
       "name": "propAmmPairDisabled",
       "msg": "Prop AMM Pair Disabled"
     },
     {
-      "code": 6129,
+      "code": 6130,
       "name": "invalidTargetNav",
       "msg": "Invalid Target Nav"
     },
     {
-      "code": 6130,
+      "code": 6131,
       "name": "invalidAssetAdjustmentAmount",
       "msg": "Invalid Asset Adjustment Amount"
     },
     {
-      "code": 6131,
+      "code": 6132,
       "name": "noBurnNeeded",
       "msg": "No Burn Needed"
     },
     {
-      "code": 6132,
+      "code": 6133,
       "name": "insufficientCacheBalance",
       "msg": "Insufficient Cache Balance"
     },
     {
-      "code": 6133,
+      "code": 6134,
       "name": "insufficientFeeBalance",
       "msg": "Insufficient Fee Balance"
     },
     {
-      "code": 6134,
+      "code": 6135,
       "name": "invalidFeeRecipient",
       "msg": "Invalid Fee Recipient"
     },
     {
-      "code": 6135,
+      "code": 6136,
       "name": "invalidBurnTarget",
       "msg": "Invalid Burn Target"
     }
@@ -14226,6 +14325,13 @@ export type Onreapp = {
             "type": "u64"
           },
           {
+            "name": "disabled",
+            "docs": [
+              "Whether the redemption offer is disabled by targeted emergency controls (0 = false, 1 = true)"
+            ],
+            "type": "u8"
+          },
+          {
             "name": "bump",
             "docs": [
               "PDA bump seed for account derivation"
@@ -14240,7 +14346,7 @@ export type Onreapp = {
             "type": {
               "array": [
                 "u8",
-                107
+                106
               ]
             }
           }
@@ -14298,6 +14404,26 @@ export type Onreapp = {
               "Target stable-token vault balance as basis points of TVL."
             ],
             "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "redemptionOfferDisabledSetEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "redemptionOfferPda",
+            "type": "pubkey"
+          },
+          {
+            "name": "disabled",
+            "type": "bool"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
           }
         ]
       }

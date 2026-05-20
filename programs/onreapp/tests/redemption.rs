@@ -104,6 +104,51 @@ fn test_make_redemption_offer_success() {
     assert_eq!(offer_data.requested_redemptions, 0);
     assert_eq!(offer_data.token_in_mint, redemption_tin);
     assert_eq!(offer_data.token_out_mint, redemption_tout);
+    assert_eq!(offer_data.disabled, 0);
+}
+
+#[test]
+fn test_set_redemption_offer_disabled_admin_can_disable_boss_only_can_enable() {
+    let (mut svm, payer, _usdc, _onyc, redemption_tin, redemption_tout) = setup_redemption();
+    let boss = payer.pubkey();
+    let admin = Keypair::new();
+    svm.airdrop(&admin.pubkey(), INITIAL_LAMPORTS).unwrap();
+
+    let ix = build_add_admin_ix(&boss, &admin.pubkey());
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_set_redemption_offer_disabled_ix(
+        &admin.pubkey(),
+        &redemption_tin,
+        &redemption_tout,
+        true,
+    );
+    send_tx(&mut svm, &[ix], &[&admin]).unwrap();
+    assert_eq!(
+        read_redemption_offer(&svm, &redemption_tin, &redemption_tout).disabled,
+        1
+    );
+
+    let ix = build_set_redemption_offer_disabled_ix(
+        &admin.pubkey(),
+        &redemption_tin,
+        &redemption_tout,
+        false,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&admin]);
+    assert!(
+        result.is_err(),
+        "admin should not re-enable redemption offer"
+    );
+
+    let ix =
+        build_set_redemption_offer_disabled_ix(&boss, &redemption_tin, &redemption_tout, false);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    assert_eq!(
+        read_redemption_offer(&svm, &redemption_tin, &redemption_tout).disabled,
+        0
+    );
 }
 
 #[test]
@@ -327,6 +372,37 @@ fn test_create_redemption_request_fails_kill_switch() {
     );
     let result = send_tx(&mut svm, &[ix], &[&user]);
     assert!(result.is_err(), "should fail when kill switch is active");
+}
+
+#[test]
+fn test_create_redemption_request_fails_when_redemption_offer_disabled() {
+    let (mut svm, payer, _usdc, onyc_mint, redemption_tin, redemption_tout) = setup_redemption();
+    let boss = payer.pubkey();
+
+    let user = Keypair::new();
+    svm.airdrop(&user.pubkey(), 10 * INITIAL_LAMPORTS).unwrap();
+    create_token_account(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
+
+    let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
+    create_token_account(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
+
+    let ix = build_set_redemption_offer_disabled_ix(&boss, &redemption_tin, &redemption_tout, true);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_create_redemption_request_ix(
+        &user.pubkey(),
+        &redemption_tin,
+        &redemption_tout,
+        500_000_000,
+        0,
+        &TOKEN_PROGRAM_ID,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&user]);
+    assert!(
+        result.is_err(),
+        "disabled redemption offer should reject new redemption requests"
+    );
 }
 
 // ===========================================================================
@@ -566,6 +642,39 @@ fn test_fulfill_redemption_request_transfer_mode() {
     // = 950_000
     let user_usdc_ata = get_associated_token_address(&user.pubkey(), &usdc_mint);
     assert_eq!(get_token_balance(&svm, &user_usdc_ata), 950_000);
+}
+
+#[test]
+fn test_fulfill_redemption_request_fails_when_redemption_offer_disabled() {
+    let mut ctx = setup_fulfillable_request(500, 1_000_000_000);
+    let boss = ctx.payer.pubkey();
+
+    let ix = build_set_redemption_offer_disabled_ix(
+        &boss,
+        &ctx.redemption_tin,
+        &ctx.redemption_tout,
+        true,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    advance_slot(&mut ctx.svm);
+
+    let ix = build_fulfill_redemption_request_ix(
+        &boss,
+        &boss,
+        &ctx.main_offer,
+        &ctx.user.pubkey(),
+        &ctx.redemption_tin,
+        &ctx.redemption_tout,
+        0,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+        1_000_000_000,
+    );
+    let result = send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]);
+    assert!(
+        result.is_err(),
+        "disabled redemption offer should reject fulfillments"
+    );
 }
 
 #[test]

@@ -1,4 +1,5 @@
 use crate::constants::seeds;
+use crate::instructions::targeted_disable::authorize_targeted_disable;
 use crate::instructions::Offer;
 use crate::state::State;
 use anchor_lang::prelude::*;
@@ -25,19 +26,7 @@ pub struct SetOfferDisabled<'info> {
 }
 
 pub fn set_offer_disabled(ctx: Context<SetOfferDisabled>, disabled: bool) -> Result<()> {
-    let state = &ctx.accounts.state;
-    let signer = &ctx.accounts.signer;
-    let boss_signed = state.boss == signer.key() && signer.is_signer;
-    let admin_signed = state.admins.contains(&signer.key()) && signer.is_signer;
-
-    if disabled {
-        require!(
-            boss_signed || admin_signed,
-            crate::OnreError::UnauthorizedToDisableOffer
-        );
-    } else {
-        require!(boss_signed, crate::OnreError::OnlyBossCanEnableOffer);
-    }
+    authorize_targeted_disable(&ctx.accounts.state, &ctx.accounts.signer, disabled)?;
 
     let mut offer = ctx.accounts.offer.load_mut()?;
     offer.set_disabled(disabled);
@@ -45,7 +34,7 @@ pub fn set_offer_disabled(ctx: Context<SetOfferDisabled>, disabled: bool) -> Res
     emit!(OfferDisabledSetEvent {
         offer_pda: ctx.accounts.offer.key(),
         disabled,
-        signer: signer.key(),
+        signer: ctx.accounts.signer.key(),
     });
 
     Ok(())

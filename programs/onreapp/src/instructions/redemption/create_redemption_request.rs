@@ -163,6 +163,7 @@ pub fn create_redemption_request(ctx: Context<CreateRedemptionRequest>, amount: 
         ctx.accounts.offer.key(),
         crate::OnreError::OfferMismatch
     );
+    ctx.accounts.redemption_offer.require_enabled()?;
     ctx.accounts.offer.load()?.require_enabled()?;
 
     // Capture counter before incrementing (used for PDA derivation)

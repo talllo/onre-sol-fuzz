@@ -1,3 +1,5 @@
+use crate::constants::seeds;
+use crate::utils::load_optional_pda_account;
 use anchor_lang::prelude::*;
 
 /// Redemption offer for converting ONyc tokens back to stable tokens
@@ -34,10 +36,80 @@ pub struct RedemptionOffer {
     /// Counter for sequential redemption request numbering
     /// Increments with each new redemption request created
     pub request_counter: u64,
+    /// Whether the redemption offer is disabled by targeted emergency controls (0 = false, 1 = true)
+    disabled: u8,
     /// PDA bump seed for account derivation
     pub bump: u8,
     /// Reserved space for future fields
-    pub reserved: [u8; 107],
+    pub reserved: [u8; 106],
+}
+
+impl RedemptionOffer {
+    pub fn is_disabled(&self) -> bool {
+        self.disabled != 0
+    }
+
+    pub fn set_disabled(&mut self, disabled: bool) {
+        self.disabled = if disabled { 1 } else { 0 };
+    }
+
+    pub fn require_enabled(&self) -> Result<()> {
+        require!(
+            !self.is_disabled(),
+            crate::OnreError::RedemptionOfferDisabled
+        );
+        Ok(())
+    }
+}
+
+pub(crate) fn load_optional_checked_redemption_offer(
+    program_id: &Pubkey,
+    redemption_offer_account: &UncheckedAccount,
+    offer_key: Pubkey,
+    token_in_mint: Pubkey,
+    token_out_mint: Pubkey,
+) -> Result<Option<RedemptionOffer>> {
+    let (expected_redemption_offer, _) = Pubkey::find_program_address(
+        &[
+            seeds::REDEMPTION_OFFER,
+            token_in_mint.as_ref(),
+            token_out_mint.as_ref(),
+        ],
+        program_id,
+    );
+    require_keys_eq!(
+        redemption_offer_account.key(),
+        expected_redemption_offer,
+        crate::OnreError::InvalidRedemptionOffer
+    );
+
+    let Some(redemption_offer) = load_optional_pda_account::<RedemptionOffer>(
+        &redemption_offer_account.to_account_info(),
+        program_id,
+        crate::OnreError::InvalidRedemptionOfferOwner.into(),
+        crate::OnreError::InvalidRedemptionOfferData.into(),
+    )?
+    else {
+        return Ok(None);
+    };
+
+    require_keys_eq!(
+        redemption_offer.offer,
+        offer_key,
+        crate::OnreError::InvalidRedemptionOffer
+    );
+    require_keys_eq!(
+        redemption_offer.token_in_mint,
+        token_in_mint,
+        crate::OnreError::InvalidRedemptionOffer
+    );
+    require_keys_eq!(
+        redemption_offer.token_out_mint,
+        token_out_mint,
+        crate::OnreError::InvalidRedemptionOffer
+    );
+
+    Ok(Some(redemption_offer))
 }
 
 #[account]
