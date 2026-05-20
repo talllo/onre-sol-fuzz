@@ -164,6 +164,23 @@ pub fn build_configure_max_supply_ix(boss: &Pubkey, max_supply: u64) -> Instruct
     }
 }
 
+pub fn build_configure_max_mint_amount_ix(
+    boss: &Pubkey,
+    max_mint_amount: u64,
+) -> Instruction {
+    let (state_pda, _) = find_state_pda();
+    let mut data = ix_discriminator("configure_max_mint_amount").to_vec();
+    data.extend_from_slice(&max_mint_amount.to_le_bytes());
+    Instruction {
+        program_id: PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(state_pda, false),
+            AccountMeta::new_readonly(*boss, true),
+        ],
+        data,
+    }
+}
+
 pub fn build_configure_prop_amm_ix(
     boss: &Pubkey,
     asset_mint: &Pubkey,

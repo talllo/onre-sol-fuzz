@@ -748,6 +748,16 @@ pub mod onreapp {
         state_operations::configure_max_supply(ctx, max_supply)
     }
 
+    /// Configures the maximum amount allowed in one ONyc mint operation.
+    ///
+    /// Setting to 0 removes the per-mint cap.
+    pub fn configure_max_mint_amount(
+        ctx: Context<ConfigureMaxMintAmount>,
+        max_mint_amount: u64,
+    ) -> Result<()> {
+        state_operations::configure_max_mint_amount(ctx, max_mint_amount)
+    }
+
     /// Closes the program state account and returns the rent to the boss.
     ///
     /// Delegates to `state_operations::close_state`.

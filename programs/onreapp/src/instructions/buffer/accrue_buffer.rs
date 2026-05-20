@@ -117,6 +117,7 @@ pub(crate) fn accrue_buffer<'info>(
                 mint_authority_signer_seeds,
                 fee_split.reserve_mint_amount,
                 state.max_supply,
+                state.max_mint_amount,
             )?;
         }
 
@@ -129,6 +130,7 @@ pub(crate) fn accrue_buffer<'info>(
                 mint_authority_signer_seeds,
                 fee_split.management_fee_mint_amount,
                 state.max_supply,
+                state.max_mint_amount,
             )?;
         }
 
@@ -141,6 +143,7 @@ pub(crate) fn accrue_buffer<'info>(
                 mint_authority_signer_seeds,
                 fee_split.performance_fee_mint_amount,
                 state.max_supply,
+                state.max_mint_amount,
             )?;
         }
     }

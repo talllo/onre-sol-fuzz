@@ -158,6 +158,7 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
 
     // Initialize max supply as 0 (no cap by default)
     state.max_supply = 0;
+    state.max_mint_amount = 0;
 
     // Initialize proposed_boss as unset
     state.proposed_boss = Pubkey::default();

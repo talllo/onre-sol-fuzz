@@ -145,6 +145,8 @@ pub struct ExecuteRedemptionOpsParams<'a, 'info> {
     // State params
     /// Maximum supply cap for token_out minting (0 = no cap)
     pub token_out_max_supply: u64,
+    /// Maximum amount allowed in one token_out mint operation (0 = no cap)
+    pub token_out_max_mint_amount: u64,
 }
 
 #[cfg(test)]
@@ -296,6 +298,7 @@ pub fn execute_redemption_operations(params: ExecuteRedemptionOpsParams) -> Resu
             mint_authority_signer_seeds,
             params.token_out_amount,
             params.token_out_max_supply,
+            params.token_out_max_mint_amount,
         )?;
     } else {
         // Transfer token_out from vault to user

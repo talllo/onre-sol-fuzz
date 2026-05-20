@@ -84,6 +84,7 @@ fn test_reinitialized_state_has_defaults() {
     assert!(!state.is_killed);
     assert_eq!(state.proposed_boss, Pubkey::default());
     assert_eq!(state.max_supply, 0);
+    assert_eq!(state.max_mint_amount, 0);
     assert_eq!(state.active_admins().len(), 0);
     assert_eq!(state.approver1, Pubkey::default());
     assert_eq!(state.approver2, Pubkey::default());

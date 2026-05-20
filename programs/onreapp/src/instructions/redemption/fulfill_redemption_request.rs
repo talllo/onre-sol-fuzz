@@ -476,6 +476,7 @@ fn execute_fulfill_redemption_request(
         mint_authority_pda: &params.mint_authority.to_account_info(),
         mint_authority_bump: params.mint_authority_bump,
         token_out_max_supply: 0,
+        token_out_max_mint_amount: 0,
     })?;
 
     if let Some(accrual) = accrual {

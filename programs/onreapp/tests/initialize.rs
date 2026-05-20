@@ -40,6 +40,10 @@ fn test_initialize_succeeds_with_upgrade_authority() {
     );
     assert_eq!(state.max_supply, 0, "max_supply should be 0");
     assert_eq!(
+        state.max_mint_amount, 0,
+        "max_mint_amount should be 0"
+    );
+    assert_eq!(
         state.redemption_admin,
         Pubkey::default(),
         "redemption_admin should be default"

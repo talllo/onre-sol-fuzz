@@ -180,6 +180,7 @@ pub fn mint_to(ctx: Context<MintTo>, amount: u64) -> Result<()> {
         mint_authority_signer_seeds,
         amount,
         ctx.accounts.state.max_supply,
+        ctx.accounts.state.max_mint_amount,
     )?;
 
     if let Some(accrual) = accrual {

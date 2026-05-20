@@ -1188,6 +1188,57 @@ export type Onreapp = {
       "args": []
     },
     {
+      "name": "configureMaxMintAmount",
+      "docs": [
+        "Configures the maximum amount allowed in one ONyc mint operation.",
+        "",
+        "Setting to 0 removes the per-mint cap."
+      ],
+      "discriminator": [
+        7,
+        197,
+        225,
+        52,
+        209,
+        53,
+        89,
+        172
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "maxMintAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "configureMaxSupply",
       "docs": [
         "Configures the maximum supply cap for ONyc token minting.",
@@ -10904,6 +10955,19 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "maxMintAmountConfiguredEvent",
+      "discriminator": [
+        148,
+        177,
+        167,
+        17,
+        6,
+        243,
+        15,
+        12
+      ]
+    },
+    {
       "name": "maxSupplyConfiguredEvent",
       "discriminator": [
         180,
@@ -11281,666 +11345,671 @@ export type Onreapp = {
     },
     {
       "code": 6002,
+      "name": "maxMintAmountExceeded",
+      "msg": "Max Mint Amount Exceeded"
+    },
+    {
+      "code": 6003,
       "name": "transferFeeNotSupported",
       "msg": "Transfer Fee Not Supported"
     },
     {
-      "code": 6003,
+      "code": 6004,
       "name": "zeroPriceNotAllowed",
       "msg": "Zero Price Not Allowed"
     },
     {
-      "code": 6004,
+      "code": 6005,
       "name": "decimalsExceedMax",
       "msg": "Decimals Exceed Max"
     },
     {
-      "code": 6005,
+      "code": 6006,
       "name": "resultOverflow",
       "msg": "Result Overflow"
     },
     {
-      "code": 6006,
+      "code": 6007,
       "name": "expired",
       "msg": "expired"
     },
     {
-      "code": 6007,
+      "code": 6008,
       "name": "wrongProgram",
       "msg": "Wrong Program"
     },
     {
-      "code": 6008,
+      "code": 6009,
       "name": "wrongUser",
       "msg": "Wrong User"
     },
     {
-      "code": 6009,
+      "code": 6010,
       "name": "missingEd25519Ix",
       "msg": "Missing Ed25519 Ix"
     },
     {
-      "code": 6010,
+      "code": 6011,
       "name": "wrongIxProgram",
       "msg": "Wrong Ix Program"
     },
     {
-      "code": 6011,
+      "code": 6012,
       "name": "badEd25519Accounts",
       "msg": "Bad Ed25519 Accounts"
     },
     {
-      "code": 6012,
+      "code": 6013,
       "name": "malformedEd25519Ix",
       "msg": "Malformed Ed25519 Ix"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "multipleSigs",
       "msg": "Multiple Sigs"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "wrongAuthority",
       "msg": "Wrong Authority"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "msgMismatch",
       "msg": "Msg Mismatch"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "msgDeserialize",
       "msg": "Msg Deserialize"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "invalidFee",
       "msg": "Invalid Fee"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "invalidTokenInMint",
       "msg": "Invalid Token In Mint"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "invalidTokenOutMint",
       "msg": "Invalid Token Out Mint"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "vectorNotFound",
       "msg": "Vector Not Found"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "startTimeInPast",
       "msg": "Start Time In Past"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "invalidBoss",
       "msg": "Invalid Boss"
     },
     {
-      "code": 6023,
+      "code": 6024,
       "name": "killSwitchActivated",
       "msg": "Kill Switch Activated"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "permissionlessNotAllowed",
       "msg": "Permissionless Not Allowed"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "invalidMarketStatsPda",
       "msg": "Invalid Market Stats Pda"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "marketStatsNotWritable",
       "msg": "Market Stats Not Writable"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "invalidInstructionsSysvar",
       "msg": "Invalid Instructions Sysvar"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "invalidPermissionlessTokenOutAccount",
       "msg": "Invalid Permissionless Token Out Account"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "invalidUserTokenOutAccount",
       "msg": "Invalid User Token Out Account"
     },
     {
-      "code": 6030,
+      "code": 6031,
       "name": "invalidBossTokenInAccount",
       "msg": "Invalid Boss Token In Account"
     },
     {
-      "code": 6031,
+      "code": 6032,
       "name": "invalidTimeRange",
       "msg": "Invalid Time Range"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "zeroValue",
       "msg": "Zero Value"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "duplicateStartTime",
       "msg": "Duplicate Start Time"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "tooManyVectors",
       "msg": "Too Many Vectors"
     },
     {
-      "code": 6035,
+      "code": 6036,
       "name": "invalidApr",
       "msg": "Invalid A P R"
     },
     {
-      "code": 6036,
+      "code": 6037,
       "name": "invalidPriceFixDuration",
       "msg": "Invalid Price Fix Duration"
     },
     {
-      "code": 6037,
+      "code": 6038,
       "name": "invalidVaultAuthority",
       "msg": "Invalid Vault Authority"
     },
     {
-      "code": 6038,
+      "code": 6039,
       "name": "invalidMintAuthority",
       "msg": "Invalid Mint Authority"
     },
     {
-      "code": 6039,
+      "code": 6040,
       "name": "offerNotFound",
       "msg": "Offer Not Found"
     },
     {
-      "code": 6040,
+      "code": 6041,
       "name": "noActiveVector",
       "msg": "No Active Vector"
     },
     {
-      "code": 6041,
+      "code": 6042,
       "name": "overflowError",
       "msg": "Overflow Error"
     },
     {
-      "code": 6042,
+      "code": 6043,
       "name": "approvalRequired",
       "msg": "Approval Required"
     },
     {
-      "code": 6043,
+      "code": 6044,
       "name": "accountFull",
       "msg": "Account Full"
     },
     {
-      "code": 6044,
+      "code": 6045,
       "name": "invalidTokenProgram",
       "msg": "Invalid Token Program"
     },
     {
-      "code": 6045,
+      "code": 6046,
       "name": "invalidOnycMint",
       "msg": "Invalid Onyc Mint"
     },
     {
-      "code": 6046,
+      "code": 6047,
       "name": "invalidMarketStatsOwner",
       "msg": "Invalid Market Stats Owner"
     },
     {
-      "code": 6047,
+      "code": 6048,
       "name": "invalidMarketStatsData",
       "msg": "Invalid Market Stats Data"
     },
     {
-      "code": 6048,
+      "code": 6049,
       "name": "invalidCirculatingSupplyExcludedAccounts",
       "msg": "Invalid Circulating Supply Excluded Accounts"
     },
     {
-      "code": 6049,
+      "code": 6050,
       "name": "invalidCirculatingSupplyExcludedAccountsOwner",
       "msg": "Invalid Circulating Supply Excluded Accounts Owner"
     },
     {
-      "code": 6050,
+      "code": 6051,
       "name": "invalidCirculatingSupplyExcludedAccountsData",
       "msg": "Invalid Circulating Supply Excluded Accounts Data"
     },
     {
-      "code": 6051,
+      "code": 6052,
       "name": "invalidCirculatingSupplyExcludedBalance",
       "msg": "Invalid Circulating Supply Excluded Balance"
     },
     {
-      "code": 6052,
+      "code": 6053,
       "name": "invalidCirculatingSupplyExcludedBalanceOwner",
       "msg": "Invalid Circulating Supply Excluded Balance Owner"
     },
     {
-      "code": 6053,
+      "code": 6054,
       "name": "invalidCirculatingSupplyExcludedBalanceData",
       "msg": "Invalid Circulating Supply Excluded Balance Data"
     },
     {
-      "code": 6054,
+      "code": 6055,
       "name": "missingExcludedTokenAccount",
       "msg": "Missing Excluded Token Account"
     },
     {
-      "code": 6055,
+      "code": 6056,
       "name": "tooManyExcludedTokenAccounts",
       "msg": "Too Many Excluded Token Accounts"
     },
     {
-      "code": 6056,
+      "code": 6057,
       "name": "invalidExcludedTokenAccount",
       "msg": "Invalid Excluded Token Account"
     },
     {
-      "code": 6057,
+      "code": 6058,
       "name": "duplicateExcludedAccountOwner",
       "msg": "Duplicate Excluded Account Owner"
     },
     {
-      "code": 6058,
+      "code": 6059,
       "name": "overflow",
       "msg": "overflow"
     },
     {
-      "code": 6059,
+      "code": 6060,
       "name": "invalidMainOffer",
       "msg": "Invalid Main Offer"
     },
     {
-      "code": 6060,
+      "code": 6061,
       "name": "divByZero",
       "msg": "Div By Zero"
     },
     {
-      "code": 6061,
+      "code": 6062,
       "name": "invalidVaultAccount",
       "msg": "Invalid Vault Account"
     },
     {
-      "code": 6062,
+      "code": 6063,
       "name": "bossAlreadySet",
       "msg": "Boss Already Set"
     },
     {
-      "code": 6063,
+      "code": 6064,
       "name": "wrongBoss",
       "msg": "Wrong Boss"
     },
     {
-      "code": 6064,
+      "code": 6065,
       "name": "wrongOwner",
       "msg": "Wrong Owner"
     },
     {
-      "code": 6065,
+      "code": 6066,
       "name": "immutableProgram",
       "msg": "Immutable Program"
     },
     {
-      "code": 6066,
+      "code": 6067,
       "name": "wrongProgramData",
       "msg": "Wrong Program Data"
     },
     {
-      "code": 6067,
+      "code": 6068,
       "name": "missingProgramData",
       "msg": "Missing Program Data"
     },
     {
-      "code": 6068,
+      "code": 6069,
       "name": "deserializeProgramDataFailed",
       "msg": "Deserialize Program Data Failed"
     },
     {
-      "code": 6069,
+      "code": 6070,
       "name": "notProgramData",
       "msg": "Not Program Data"
     },
     {
-      "code": 6070,
+      "code": 6071,
       "name": "invalidPermissionlessAccountName",
       "msg": "Invalid Permissionless Account Name"
     },
     {
-      "code": 6071,
+      "code": 6072,
       "name": "bothApproversFilled",
       "msg": "Both Approvers Filled"
     },
     {
-      "code": 6072,
+      "code": 6073,
       "name": "invalidApprover",
       "msg": "Invalid Approver"
     },
     {
-      "code": 6073,
+      "code": 6074,
       "name": "approverAlreadyExists",
       "msg": "Approver Already Exists"
     },
     {
-      "code": 6074,
+      "code": 6075,
       "name": "onlyBossCanDisable",
       "msg": "Only Boss Can Disable"
     },
     {
-      "code": 6075,
+      "code": 6076,
       "name": "unauthorizedToEnable",
       "msg": "Unauthorized To Enable"
     },
     {
-      "code": 6076,
+      "code": 6077,
       "name": "notAnApprover",
       "msg": "Not An Approver"
     },
     {
-      "code": 6077,
+      "code": 6078,
       "name": "invalidStateOwner",
       "msg": "Invalid State Owner"
     },
     {
-      "code": 6078,
+      "code": 6079,
       "name": "invalidStatePda",
       "msg": "Invalid State Pda"
     },
     {
-      "code": 6079,
+      "code": 6080,
       "name": "invalidStateData",
       "msg": "Invalid State Data"
     },
     {
-      "code": 6080,
+      "code": 6081,
       "name": "unauthorizedSigner",
       "msg": "Unauthorized Signer"
     },
     {
-      "code": 6081,
+      "code": 6082,
       "name": "lamportOverflow",
       "msg": "Lamport Overflow"
     },
     {
-      "code": 6082,
+      "code": 6083,
       "name": "noBossProposal",
       "msg": "No Boss Proposal"
     },
     {
-      "code": 6083,
+      "code": 6084,
       "name": "notProposedBoss",
       "msg": "Not Proposed Boss"
     },
     {
-      "code": 6084,
+      "code": 6085,
       "name": "invalidBossAddress",
       "msg": "Invalid Boss Address"
     },
     {
-      "code": 6085,
+      "code": 6086,
       "name": "noChange",
       "msg": "No Change"
     },
     {
-      "code": 6086,
+      "code": 6087,
       "name": "adminAlreadyExists",
       "msg": "Admin Already Exists"
     },
     {
-      "code": 6087,
+      "code": 6088,
       "name": "maxAdminsReached",
       "msg": "Max Admins Reached"
     },
     {
-      "code": 6088,
+      "code": 6089,
       "name": "adminNotFound",
       "msg": "Admin Not Found"
     },
     {
-      "code": 6089,
+      "code": 6090,
       "name": "programNotMintAuthority",
       "msg": "Program Not Mint Authority"
     },
     {
-      "code": 6090,
+      "code": 6091,
       "name": "noMintAuthority",
       "msg": "No Mint Authority"
     },
     {
-      "code": 6091,
+      "code": 6092,
       "name": "bossNotMintAuthority",
       "msg": "Boss Not Mint Authority"
     },
     {
-      "code": 6092,
+      "code": 6093,
       "name": "unauthorized",
       "msg": "unauthorized"
     },
     {
-      "code": 6093,
+      "code": 6094,
       "name": "zeroBalance",
       "msg": "Zero Balance"
     },
     {
-      "code": 6094,
+      "code": 6095,
       "name": "insufficientBalance",
       "msg": "Insufficient Balance"
     },
     {
-      "code": 6095,
+      "code": 6096,
       "name": "arithmeticOverflow",
       "msg": "Arithmetic Overflow"
     },
     {
-      "code": 6096,
+      "code": 6097,
       "name": "invalidMint",
       "msg": "Invalid Mint"
     },
     {
-      "code": 6097,
+      "code": 6098,
       "name": "invalidRedemptionOffer",
       "msg": "Invalid Redemption Offer"
     },
     {
-      "code": 6098,
+      "code": 6099,
       "name": "arithmeticUnderflow",
       "msg": "Arithmetic Underflow"
     },
     {
-      "code": 6099,
+      "code": 6100,
       "name": "invalidRedeemer",
       "msg": "Invalid Redeemer"
     },
     {
-      "code": 6100,
+      "code": 6101,
       "name": "invalidRedemptionAdmin",
       "msg": "Invalid Redemption Admin"
     },
     {
-      "code": 6101,
+      "code": 6102,
       "name": "invalidRedeemerTokenAccount",
       "msg": "Invalid Redeemer Token Account"
     },
     {
-      "code": 6102,
+      "code": 6103,
       "name": "offerMismatch",
       "msg": "Offer Mismatch"
     },
     {
-      "code": 6103,
+      "code": 6104,
       "name": "offerMintMismatch",
       "msg": "Offer Mint Mismatch"
     },
     {
-      "code": 6104,
+      "code": 6105,
       "name": "invalidRedemptionOfferOwner",
       "msg": "Invalid Redemption Offer Owner"
     },
     {
-      "code": 6105,
+      "code": 6106,
       "name": "invalidRedemptionOfferData",
       "msg": "Invalid Redemption Offer Data"
     },
     {
-      "code": 6106,
+      "code": 6107,
       "name": "invalidFeeDestinationTokenInAccount",
       "msg": "Invalid Fee Destination Token In Account"
     },
     {
-      "code": 6107,
+      "code": 6108,
       "name": "invalidOfferVaultOnycAccount",
       "msg": "Invalid Offer Vault Onyc Account"
     },
     {
-      "code": 6108,
+      "code": 6109,
       "name": "invalidVaultTokenInAccount",
       "msg": "Invalid Vault Token In Account"
     },
     {
-      "code": 6109,
+      "code": 6110,
       "name": "invalidVaultTokenOutAccount",
       "msg": "Invalid Vault Token Out Account"
     },
     {
-      "code": 6110,
+      "code": 6111,
       "name": "invalidAmount",
       "msg": "Invalid Amount"
     },
     {
-      "code": 6111,
+      "code": 6112,
       "name": "offerDisabled",
       "msg": "Offer Disabled"
     },
     {
-      "code": 6112,
+      "code": 6113,
       "name": "unauthorizedToDisableOffer",
       "msg": "Unauthorized To Disable Offer"
     },
     {
-      "code": 6113,
+      "code": 6114,
       "name": "onlyBossCanEnableOffer",
       "msg": "Only Boss Can Enable Offer"
     },
     {
-      "code": 6114,
+      "code": 6115,
       "name": "amountExceedsRemaining",
       "msg": "Amount Exceeds Remaining"
     },
     {
-      "code": 6115,
+      "code": 6116,
       "name": "invalidFeeDestination",
       "msg": "Invalid Fee Destination"
     },
     {
-      "code": 6116,
+      "code": 6117,
       "name": "invalidConfigurableVault",
       "msg": "Invalid Configurable Vault"
     },
     {
-      "code": 6117,
+      "code": 6118,
       "name": "invalidConfigurableVaultOwner",
       "msg": "Invalid Configurable Vault Owner"
     },
     {
-      "code": 6118,
+      "code": 6119,
       "name": "invalidConfigurableVaultData",
       "msg": "Invalid Configurable Vault Data"
     },
     {
-      "code": 6119,
+      "code": 6120,
       "name": "invalidConfigurableVaultKind",
       "msg": "Invalid Configurable Vault Kind"
     },
     {
-      "code": 6120,
+      "code": 6121,
       "name": "missingConfigurableVaultDestination",
       "msg": "Missing Configurable Vault Destination"
     },
     {
-      "code": 6121,
+      "code": 6122,
       "name": "invalidConfigurableVaultTokenAccount",
       "msg": "Invalid Configurable Vault Token Account"
     },
     {
-      "code": 6122,
+      "code": 6123,
       "name": "invalidBufferStateAccount",
       "msg": "Invalid Buffer State Account"
     },
     {
-      "code": 6123,
+      "code": 6124,
       "name": "invalidTimestamp",
       "msg": "Invalid Timestamp"
     },
     {
-      "code": 6124,
+      "code": 6125,
       "name": "minimumOutNotMet",
       "msg": "Minimum Out Not Met"
     },
     {
-      "code": 6125,
+      "code": 6126,
       "name": "invalidSwapPair",
       "msg": "Invalid Swap Pair"
     },
     {
-      "code": 6126,
+      "code": 6127,
       "name": "invalidPropAmmPairState",
       "msg": "Invalid Prop AMM Pair State"
     },
     {
-      "code": 6127,
+      "code": 6128,
       "name": "propAmmPairDisabled",
       "msg": "Prop AMM Pair Disabled"
     },
     {
-      "code": 6128,
+      "code": 6129,
       "name": "invalidTargetNav",
       "msg": "Invalid Target Nav"
     },
     {
-      "code": 6129,
+      "code": 6130,
       "name": "invalidAssetAdjustmentAmount",
       "msg": "Invalid Asset Adjustment Amount"
     },
     {
-      "code": 6130,
+      "code": 6131,
       "name": "noBurnNeeded",
       "msg": "No Burn Needed"
     },
     {
-      "code": 6131,
+      "code": 6132,
       "name": "insufficientCacheBalance",
       "msg": "Insufficient Cache Balance"
     },
     {
-      "code": 6132,
+      "code": 6133,
       "name": "insufficientFeeBalance",
       "msg": "Insufficient Fee Balance"
     },
     {
-      "code": 6133,
+      "code": 6134,
       "name": "invalidFeeRecipient",
       "msg": "Invalid Fee Recipient"
     },
     {
-      "code": 6134,
+      "code": 6135,
       "name": "invalidBurnTarget",
       "msg": "Invalid Burn Target"
     }
@@ -13107,6 +13176,31 @@ export type Onreapp = {
             "name": "slot",
             "docs": [
               "Slot of the successful refresh."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "maxMintAmountConfiguredEvent",
+      "docs": [
+        "Event emitted when the ONyc per-mint amount cap is configured."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oldMaxMintAmount",
+            "docs": [
+              "The previous per-mint cap (0 = no cap)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "newMaxMintAmount",
+            "docs": [
+              "The new per-mint cap (0 = no cap)"
             ],
             "type": "u64"
           }
@@ -14714,6 +14808,13 @@ export type Onreapp = {
             "type": "u64"
           },
           {
+            "name": "maxMintAmount",
+            "docs": [
+              "Optional maximum amount allowed in one mint operation (0 = no cap)"
+            ],
+            "type": "u64"
+          },
+          {
             "name": "redemptionAdmin",
             "docs": [
               "Admin account authorized to manage ONr token mints and redemptions"
@@ -14735,7 +14836,7 @@ export type Onreapp = {
             "type": {
               "array": [
                 "u8",
-                64
+                56
               ]
             }
           }

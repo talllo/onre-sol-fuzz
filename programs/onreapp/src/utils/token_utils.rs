@@ -257,7 +257,7 @@ pub fn calculate_fees(token_in_amount: u64, fee_basis_points: u16) -> Result<Cal
     })
 }
 
-/// Mint tokens with maximum supply validation
+/// Mint tokens with maximum supply and per-mint amount validation
 ///
 /// This function validates that minting the requested amount will not exceed
 /// the configured maximum supply cap (if set). If max_supply is 0, no cap is enforced.
@@ -270,6 +270,7 @@ pub fn calculate_fees(token_in_amount: u64, fee_basis_points: u16) -> Result<Cal
 /// * `signer_seeds` - PDA seeds for program-signed minting
 /// * `amount` - Amount of tokens to mint
 /// * `max_supply` - Maximum supply cap (0 = no cap)
+/// * `max_mint_amount` - Maximum amount allowed in this mint operation (0 = no cap)
 ///
 /// # Returns
 /// * `Ok(())` - If minting completes successfully and doesn't exceed max supply
@@ -277,6 +278,7 @@ pub fn calculate_fees(token_in_amount: u64, fee_basis_points: u16) -> Result<Cal
 /// * `Err(_)` - If token minting operation fails
 ///
 /// # Security
+/// - Validates amount <= max_mint_amount (when max_mint_amount > 0)
 /// - Validates current supply + amount <= max_supply (when max_supply > 0)
 /// - Uses checked token instructions for decimal validation
 /// - Prevents unbounded inflation when max supply is configured
@@ -288,7 +290,15 @@ pub fn mint_tokens<'info>(
     signer_seeds: &[&[&[u8]]],
     amount: u64,
     max_supply: u64,
+    max_mint_amount: u64,
 ) -> Result<()> {
+    if max_mint_amount > 0 {
+        require!(
+            amount <= max_mint_amount,
+            crate::OnreError::MaxMintAmountExceeded
+        );
+    }
+
     // Validate max supply if configured (0 = no cap)
     if max_supply > 0 {
         let current_supply = mint.supply;
@@ -398,6 +408,8 @@ pub struct ExecTokenOpsParams<'a, 'info> {
     pub mint_authority_bump: &'a [u8],
     /// Maximum supply cap for token_out minting (0 = no cap)
     pub token_out_max_supply: u64,
+    /// Maximum amount allowed in one token_out mint operation (0 = no cap)
+    pub token_out_max_mint_amount: u64,
 }
 
 /// Executes token operations for exchanging token_in for token_out
@@ -545,6 +557,7 @@ pub fn execute_token_operations(params: ExecTokenOpsParams) -> Result<()> {
             mint_authority_signer_seeds,
             params.token_out_amount,
             params.token_out_max_supply,
+            params.token_out_max_mint_amount,
         )?;
     } else {
         transfer_tokens(

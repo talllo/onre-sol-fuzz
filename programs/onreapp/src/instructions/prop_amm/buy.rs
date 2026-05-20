@@ -425,6 +425,7 @@ fn execute_open_swap_buy<'info>(
             mint_authority_signer_seeds,
             result.token_out_amount,
             ctx.accounts.state.max_supply,
+            ctx.accounts.state.max_mint_amount,
         )?;
     } else {
         let offer_vault_signer_seeds: &[&[&[u8]]] = &[&[

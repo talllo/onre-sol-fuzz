@@ -377,6 +377,7 @@ fn execute_open_swap_sell<'info>(
         mint_authority_pda: &ctx.accounts.mint_authority.to_account_info(),
         mint_authority_bump,
         token_out_max_supply: ctx.accounts.state.max_supply,
+        token_out_max_mint_amount: ctx.accounts.state.max_mint_amount,
     })?;
 
     if let Some(accrual) = accrual {

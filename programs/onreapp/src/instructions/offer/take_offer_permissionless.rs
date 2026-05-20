@@ -729,6 +729,7 @@ pub(crate) fn execute_take_offer_permissionless<'info>(
         mint_authority_pda: &mint_authority.to_account_info(),
         mint_authority_bump: &[ma_bump],
         token_out_max_supply: state.max_supply,
+        token_out_max_mint_amount: state.max_mint_amount,
     })?;
 
     transfer_tokens(

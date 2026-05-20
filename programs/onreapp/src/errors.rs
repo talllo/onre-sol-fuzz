@@ -6,6 +6,8 @@ pub enum OnreError {
     MathOverflow,
     #[msg("Max Supply Exceeded")]
     MaxSupplyExceeded,
+    #[msg("Max Mint Amount Exceeded")]
+    MaxMintAmountExceeded,
     #[msg("Transfer Fee Not Supported")]
     TransferFeeNotSupported,
     #[msg("Zero Price Not Allowed")]
