@@ -14,6 +14,7 @@ pub const DEFAULT_CADENCE_SENSITIVITY_SCALED: u32 = 10_000;
 pub const DEFAULT_EPOCH_DURATION_SECONDS: i64 = 86_400;
 pub const WALL_SENSITIVITY_SCALE: u128 = 10_000;
 pub const DEFAULT_WALL_SENSITIVITY_SCALED: u32 = 20_000;
+pub const PROP_AMM_PAIR_STATE_RESERVED_BYTES: usize = 292;
 
 #[account]
 #[derive(InitSpace)]
@@ -35,6 +36,7 @@ pub struct PropAmmPairState {
     pub curr_sell_trade_count: u32,
     pub epoch_start: i64,
     pub bump: u8,
+    pub reserved: [u8; PROP_AMM_PAIR_STATE_RESERVED_BYTES],
 }
 
 #[event]
@@ -210,6 +212,7 @@ impl Default for PropAmmPairState {
             curr_sell_trade_count: 0,
             epoch_start: 0,
             bump: 0,
+            reserved: [0; PROP_AMM_PAIR_STATE_RESERVED_BYTES],
         }
     }
 }

@@ -14215,6 +14215,15 @@ export type Onreapp = {
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                292
+              ]
+            }
           }
         ]
       }

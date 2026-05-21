@@ -4,7 +4,8 @@ use anchor_lang::AnchorDeserialize;
 use common::*;
 use onreapp::instructions::prop_amm::{
     apply_hard_wall_liquidity_factor_at_time, apply_hard_wall_reserve_curve_with_params,
-    dynamic_wall_position, effective_curve_exponent_scaled, preview_effective_sell_volume,
+    dynamic_wall_liquidity_at_time, dynamic_wall_position, effective_curve_exponent_scaled,
+    hard_wall_reserve_from_tvl, preview_effective_sell_volume, roll_prop_amm_volume_tracker,
     PropAmmPairState, SwapQuote,
 };
 use onreapp::state::ConfigurableVaultKind;
@@ -156,6 +157,36 @@ fn test_hard_wall_curve_rejects_raw_value_above_actual_vault() {
 }
 
 #[test]
+fn test_hard_wall_liquidity_rejects_output_above_actual_liquidity() {
+    let state = PropAmmPairState {
+        curve_peg_haircut_bps: 700,
+        curve_exponent_scaled: 25_000,
+        min_cadence_exponent_scaled: 1_000,
+        cadence_threshold: 20,
+        cadence_sensitivity_scaled: 10_000,
+        epoch_duration_seconds: 86_400,
+        wall_sensitivity_scaled: 20_000,
+        epoch_start: 1,
+        bump: 0,
+        ..Default::default()
+    };
+
+    let result =
+        apply_hard_wall_liquidity_factor_at_time(10_000_001, 10_000_000, 10_000_000, &state, 1);
+
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_hard_wall_reserve_from_tvl_scales_to_token_out_decimals() {
+    assert_eq!(
+        hard_wall_reserve_from_tvl(2_000_000_000_000, 1_500, 6, 9).unwrap(),
+        300_000_000
+    );
+    assert!(hard_wall_reserve_from_tvl(1, 1, 6, 9).is_err());
+}
+
+#[test]
 fn test_dynamic_wall_preview_includes_current_sell_and_buy_relief() {
     let state = PropAmmPairState {
         curve_peg_haircut_bps: 700,
@@ -192,6 +223,51 @@ fn test_dynamic_wall_position_uses_effective_sell_pressure() {
         dynamic_wall_position(15_000_000, 30_000_000, 20_000).unwrap(),
         3_000_000
     );
+}
+
+#[test]
+fn test_dynamic_wall_liquidity_matches_graph_dynamic_wall() {
+    let state = PropAmmPairState {
+        epoch_duration_seconds: 86_400,
+        wall_sensitivity_scaled: 20_000,
+        epoch_start: 1,
+        ..Default::default()
+    };
+
+    let liquidity =
+        dynamic_wall_liquidity_at_time(100_000, 10_000_000_000, 200_000, &state, 1).unwrap();
+
+    assert_eq!(liquidity, 10_000_000_000);
+}
+
+#[test]
+fn test_prop_amm_volume_tracker_rolls_and_resets_epochs() {
+    let mut state = PropAmmPairState {
+        epoch_duration_seconds: 100,
+        epoch_start: 1_000,
+        curr_sell_value_stable: 1_000,
+        curr_buy_value_stable: 250,
+        prev_net_sell_value_stable: 125,
+        curr_sell_trade_count: 7,
+        ..Default::default()
+    };
+
+    roll_prop_amm_volume_tracker(&mut state, 1_100).unwrap();
+    assert_eq!(state.epoch_start, 1_100);
+    assert_eq!(state.prev_net_sell_value_stable, 750);
+    assert_eq!(state.curr_sell_value_stable, 0);
+    assert_eq!(state.curr_buy_value_stable, 0);
+    assert_eq!(state.curr_sell_trade_count, 0);
+
+    state.curr_sell_value_stable = 500;
+    state.curr_buy_value_stable = 100;
+    state.curr_sell_trade_count = 3;
+    roll_prop_amm_volume_tracker(&mut state, 1_300).unwrap();
+    assert_eq!(state.epoch_start, 1_300);
+    assert_eq!(state.prev_net_sell_value_stable, 0);
+    assert_eq!(state.curr_sell_value_stable, 0);
+    assert_eq!(state.curr_buy_value_stable, 0);
+    assert_eq!(state.curr_sell_trade_count, 0);
 }
 
 #[test]
@@ -291,6 +367,28 @@ fn test_quote_swap_returns_expected_quote_data() {
     assert_eq!(quote.token_in_fee_amount, 0);
     assert_eq!(quote.token_out_amount, 1_000_000_000);
     assert_eq!(quote.minimum_out, quote.token_out_amount);
+}
+
+#[test]
+fn test_quote_swap_rejects_invalid_token_pairs() {
+    let mut ctx = setup_prop_amm();
+    let eurc_mint = create_mint(&mut ctx.svm, &ctx.payer, 6, &ctx.payer.pubkey());
+
+    let mut same_mint_ix =
+        build_quote_swap_ix(&ctx.onyc_mint, &ctx.usdc_mint, &ctx.onyc_mint, 1_000_000);
+    same_mint_ix.accounts[4] = AccountMeta::new_readonly(ctx.usdc_mint, false);
+    assert!(
+        send_tx(&mut ctx.svm, &[same_mint_ix], &[&ctx.payer]).is_err(),
+        "quote should reject identical token in/out mints"
+    );
+
+    let mut no_onyc_ix =
+        build_quote_swap_ix(&ctx.onyc_mint, &ctx.usdc_mint, &ctx.onyc_mint, 1_000_000);
+    no_onyc_ix.accounts[4] = AccountMeta::new_readonly(eurc_mint, false);
+    assert!(
+        send_tx(&mut ctx.svm, &[no_onyc_ix], &[&ctx.payer]).is_err(),
+        "quote should reject pairs that do not include ONYC"
+    );
 }
 
 #[test]
@@ -725,6 +823,78 @@ fn test_quote_and_open_swap_support_sell_side() {
             ),
         ),
         vault_before - quote.token_out_amount
+    );
+}
+
+#[test]
+fn test_quote_swap_sell_uses_actual_redemption_vault_balance_not_vault_target() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    let current_time = get_clock_time(&ctx.svm);
+
+    let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let ix = build_add_offer_vector_ix(
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        Some(current_time),
+        current_time,
+        1_000_000_000,
+        0,
+        86_400,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let ix = build_make_redemption_offer_ix(
+        &boss,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        0,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
+    create_token_account(
+        &mut ctx.svm,
+        &ctx.usdc_mint,
+        &redemption_vault_authority,
+        10_000_000_000,
+    );
+    create_token_account(
+        &mut ctx.svm,
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        2_000_000_000_000,
+    );
+    let ix = build_refresh_market_stats_ix(&boss, &boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    assert!(read_market_stats(&ctx.svm).tvl > 0);
+
+    let sell_amount = 100_000_000;
+    let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.onyc_mint, &ctx.usdc_mint, sell_amount);
+    let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
+    let vault_balance_quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
+
+    let ix =
+        build_update_redemption_offer_vault_target_ix(&boss, &ctx.onyc_mint, &ctx.usdc_mint, 1);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    advance_slot(&mut ctx.svm);
+    let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.onyc_mint, &ctx.usdc_mint, sell_amount);
+    let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
+    let target_quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
+
+    assert_eq!(
+        target_quote.token_in_net_amount,
+        vault_balance_quote.token_in_net_amount
+    );
+    assert_eq!(
+        target_quote.token_out_amount,
+        vault_balance_quote.token_out_amount
     );
 }
 

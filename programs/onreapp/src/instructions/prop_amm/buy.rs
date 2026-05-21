@@ -39,7 +39,7 @@ pub struct OpenSwapBuy<'info> {
         seeds = [crate::constants::seeds::PROP_AMM_PAIR_STATE, offer.key().as_ref()],
         bump = prop_amm_pair_state.bump
     )]
-    pub prop_amm_pair_state: Account<'info, PropAmmPairState>,
+    pub prop_amm_pair_state: Box<Account<'info, PropAmmPairState>>,
 
     /// CHECK: Redemption offer PDA for the opposite offer direction; may be uninitialized.
     pub redemption_offer: UncheckedAccount<'info>,

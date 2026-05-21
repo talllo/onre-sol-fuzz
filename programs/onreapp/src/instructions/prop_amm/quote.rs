@@ -1,5 +1,4 @@
 use crate::constants::seeds;
-use crate::instructions::market_info::read_market_stats_account;
 use crate::instructions::offer::process_offer_core;
 use crate::instructions::redemption::{
     load_optional_checked_redemption_offer, process_redemption_core,
@@ -52,7 +51,7 @@ pub struct QuoteSwapBuy<'info> {
         seeds = [seeds::PROP_AMM_PAIR_STATE, offer.key().as_ref()],
         bump = prop_amm_pair_state.bump
     )]
-    pub prop_amm_pair_state: Account<'info, PropAmmPairState>,
+    pub prop_amm_pair_state: Box<Account<'info, PropAmmPairState>>,
 
     #[account(
         seeds = [seeds::STATE],
@@ -73,7 +72,7 @@ pub struct QuoteSwapSell<'info> {
         seeds = [seeds::PROP_AMM_PAIR_STATE, offer.key().as_ref()],
         bump = prop_amm_pair_state.bump
     )]
-    pub prop_amm_pair_state: Account<'info, PropAmmPairState>,
+    pub prop_amm_pair_state: Box<Account<'info, PropAmmPairState>>,
 
     #[account(
         seeds = [
@@ -207,7 +206,6 @@ pub(crate) fn validate_prop_amm_pair_for_side(
 
 pub(crate) struct RedemptionOfferConfig {
     pub fee_basis_points: u16,
-    pub vault_target_bps: u16,
 }
 
 pub(crate) fn redemption_offer_config(
@@ -227,14 +225,12 @@ pub(crate) fn redemption_offer_config(
     else {
         return Ok(RedemptionOfferConfig {
             fee_basis_points: 0,
-            vault_target_bps: 0,
         });
     };
     redemption_offer.require_enabled()?;
 
     Ok(RedemptionOfferConfig {
         fee_basis_points: redemption_offer.fee_basis_points,
-        vault_target_bps: redemption_offer.vault_target_bps,
     })
 }
 
@@ -802,7 +798,6 @@ pub fn quote_swap_sell(ctx: Context<QuoteSwapSell>, token_in_amount: u64) -> Res
         ctx.accounts.market_stats.key(),
         crate::OnreError::InvalidMarketStatsPda
     );
-    let market_stats = read_market_stats_account(&ctx.accounts.market_stats.to_account_info())?;
     let redemption_config = redemption_offer_config(
         ctx.program_id,
         &ctx.accounts.redemption_offer,
@@ -810,16 +805,7 @@ pub fn quote_swap_sell(ctx: Context<QuoteSwapSell>, token_in_amount: u64) -> Res
         ctx.accounts.token_in_mint.key(),
         ctx.accounts.token_out_mint.key(),
     )?;
-    let hard_wall_reserve = if redemption_config.vault_target_bps > 0 {
-        hard_wall_reserve_from_tvl(
-            market_stats.tvl,
-            redemption_config.vault_target_bps,
-            ctx.accounts.token_out_mint.decimals,
-            ctx.accounts.token_in_mint.decimals,
-        )?
-    } else {
-        ctx.accounts.redemption_vault_token_out_account.amount
-    };
+    let hard_wall_reserve = ctx.accounts.redemption_vault_token_out_account.amount;
     let quote = build_swap_sell_quote(
         ctx.program_id,
         &ctx.accounts.state,

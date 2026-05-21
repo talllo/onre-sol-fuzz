@@ -10,9 +10,7 @@ use crate::instructions::buffer::BufferAccrualAccounts;
 use crate::instructions::configurable_vault::{
     get_or_create_configurable_vault_token_account_pair, ConfigurableVaultTokenAccountPairParams,
 };
-use crate::instructions::market_info::{
-    load_main_offer, read_market_stats_account, refresh_market_stats_pda,
-};
+use crate::instructions::market_info::{load_main_offer, refresh_market_stats_pda};
 use crate::instructions::offer::{
     validate_take_offer_authorities, verify_offer_approval, OfferTakenEvent,
 };
@@ -33,8 +31,8 @@ use anchor_spl::{
 
 use super::config::PropAmmPairState;
 use super::quote::{
-    apply_hard_wall_liquidity_factor, hard_wall_reserve_from_tvl, record_prop_amm_sell,
-    redemption_offer_config, validate_prop_amm_pair_for_side, SwapSide,
+    apply_hard_wall_liquidity_factor, record_prop_amm_sell, redemption_offer_config,
+    validate_prop_amm_pair_for_side, SwapSide,
 };
 
 #[derive(Accounts)]
@@ -46,7 +44,7 @@ pub struct OpenSwapSell<'info> {
         seeds = [crate::constants::seeds::PROP_AMM_PAIR_STATE, offer.key().as_ref()],
         bump = prop_amm_pair_state.bump
     )]
-    pub prop_amm_pair_state: Account<'info, PropAmmPairState>,
+    pub prop_amm_pair_state: Box<Account<'info, PropAmmPairState>>,
 
     #[account(
         seeds = [
@@ -183,7 +181,6 @@ fn execute_open_swap_sell<'info>(
         ctx.accounts.market_stats.key(),
         crate::OnreError::InvalidMarketStatsPda
     );
-    let market_stats = read_market_stats_account(&ctx.accounts.market_stats.to_account_info())?;
     let redemption_config = redemption_offer_config(
         ctx.program_id,
         &ctx.accounts.redemption_offer,
@@ -198,16 +195,7 @@ fn execute_open_swap_sell<'info>(
         &ctx.accounts.token_out_program.key(),
         crate::OnreError::InvalidVaultTokenOutAccount,
     )?;
-    let hard_wall_reserve = if redemption_config.vault_target_bps > 0 {
-        hard_wall_reserve_from_tvl(
-            market_stats.tvl,
-            redemption_config.vault_target_bps,
-            ctx.accounts.token_out_mint.decimals,
-            ctx.accounts.token_in_mint.decimals,
-        )?
-    } else {
-        redemption_vault_token_out_account.amount
-    };
+    let hard_wall_reserve = redemption_vault_token_out_account.amount;
 
     verify_offer_approval(
         &offer,
