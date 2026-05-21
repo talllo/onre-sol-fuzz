@@ -150,10 +150,10 @@ pub fn build_remove_approver_ix(boss: &Pubkey, approver: &Pubkey) -> Instruction
     }
 }
 
-pub fn build_configure_max_supply_ix(boss: &Pubkey, max_supply: u64) -> Instruction {
+fn build_state_u64_ix(discriminator: &str, boss: &Pubkey, value: u64) -> Instruction {
     let (state_pda, _) = find_state_pda();
-    let mut data = ix_discriminator("configure_max_supply").to_vec();
-    data.extend_from_slice(&max_supply.to_le_bytes());
+    let mut data = ix_discriminator(discriminator).to_vec();
+    data.extend_from_slice(&value.to_le_bytes());
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![
@@ -164,21 +164,12 @@ pub fn build_configure_max_supply_ix(boss: &Pubkey, max_supply: u64) -> Instruct
     }
 }
 
-pub fn build_configure_max_mint_amount_ix(
-    boss: &Pubkey,
-    max_mint_amount: u64,
-) -> Instruction {
-    let (state_pda, _) = find_state_pda();
-    let mut data = ix_discriminator("configure_max_mint_amount").to_vec();
-    data.extend_from_slice(&max_mint_amount.to_le_bytes());
-    Instruction {
-        program_id: PROGRAM_ID,
-        accounts: vec![
-            AccountMeta::new(state_pda, false),
-            AccountMeta::new_readonly(*boss, true),
-        ],
-        data,
-    }
+pub fn build_configure_max_supply_ix(boss: &Pubkey, max_supply: u64) -> Instruction {
+    build_state_u64_ix("configure_max_supply", boss, max_supply)
+}
+
+pub fn build_configure_max_mint_amount_ix(boss: &Pubkey, max_mint_amount: u64) -> Instruction {
+    build_state_u64_ix("configure_max_mint_amount", boss, max_mint_amount)
 }
 
 pub fn build_configure_prop_amm_ix(

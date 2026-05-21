@@ -137,16 +137,7 @@ pub fn configure_prop_amm(
     require!(wall_sensitivity_scaled > 0, crate::OnreError::InvalidAmount);
 
     let offer = ctx.accounts.offer.load()?;
-    require_keys_eq!(
-        offer.token_in_mint,
-        ctx.accounts.asset_mint.key(),
-        crate::OnreError::InvalidTokenInMint
-    );
-    require_keys_eq!(
-        offer.token_out_mint,
-        ctx.accounts.state.onyc_mint,
-        crate::OnreError::InvalidTokenOutMint
-    );
+    offer.require_mints(ctx.accounts.asset_mint.key(), ctx.accounts.state.onyc_mint)?;
 
     let prop_amm_pair_state = &mut ctx.accounts.prop_amm_pair_state;
     let old_enabled = prop_amm_pair_state.enabled;

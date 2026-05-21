@@ -282,6 +282,21 @@ pub fn calculate_fees(token_in_amount: u64, fee_basis_points: u16) -> Result<Cal
 /// - Validates current supply + amount <= max_supply (when max_supply > 0)
 /// - Uses checked token instructions for decimal validation
 /// - Prevents unbounded inflation when max supply is configured
+pub fn validate_max_supply(current_supply: u64, amount: u64, max_supply: u64) -> Result<()> {
+    if max_supply > 0 {
+        let new_supply = current_supply
+            .checked_add(amount)
+            .ok_or(crate::OnreError::MathOverflow)?;
+
+        require!(
+            new_supply <= max_supply,
+            crate::OnreError::MaxSupplyExceeded
+        );
+    }
+
+    Ok(())
+}
+
 pub fn mint_tokens<'info>(
     token_program: &Interface<'info, TokenInterface>,
     mint: &InterfaceAccount<'info, Mint>,
@@ -299,18 +314,7 @@ pub fn mint_tokens<'info>(
         );
     }
 
-    // Validate max supply if configured (0 = no cap)
-    if max_supply > 0 {
-        let current_supply = mint.supply;
-        let new_supply = current_supply
-            .checked_add(amount)
-            .ok_or(crate::OnreError::MathOverflow)?;
-
-        require!(
-            new_supply <= max_supply,
-            crate::OnreError::MaxSupplyExceeded
-        );
-    }
+    validate_max_supply(mint.supply, amount, max_supply)?;
 
     // Perform the mint operation
     let mint_accounts = MintToChecked {

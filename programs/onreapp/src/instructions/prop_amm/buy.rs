@@ -7,7 +7,7 @@ use crate::instructions::buffer::accrue_buffer::{
 };
 use crate::instructions::buffer::BufferAccrualAccounts;
 use crate::instructions::configurable_vault::{
-    get_or_create_configurable_vault_token_account, ConfigurableVaultTokenAccountParams,
+    get_or_create_configurable_vault_token_account_pair, ConfigurableVaultTokenAccountPairParams,
 };
 use crate::instructions::market_info::{load_main_offer, refresh_market_stats_pda};
 use crate::instructions::offer::{
@@ -28,9 +28,7 @@ use anchor_spl::{
 };
 
 use super::config::PropAmmPairState;
-use super::quote::{
-    record_prop_amm_buy, validate_canonical_offer, validate_prop_amm_pair_state, SwapSide,
-};
+use super::quote::{record_prop_amm_buy, validate_prop_amm_pair_for_side, SwapSide};
 
 #[derive(Accounts)]
 pub struct OpenSwapBuy<'info> {
@@ -148,25 +146,15 @@ pub fn open_swap_buy<'info>(
     minimum_out: u64,
     approval_message: Option<ApprovalMessage>,
 ) -> Result<()> {
-    let side = validate_canonical_offer(
+    validate_prop_amm_pair_for_side(
         ctx.program_id,
-        &ctx.accounts.state,
-        ctx.accounts.offer.key(),
-        ctx.accounts.token_in_mint.key(),
-        ctx.accounts.token_out_mint.key(),
-    )?;
-    require!(side == SwapSide::Buy, crate::OnreError::InvalidSwapPair);
-    let pair_side = validate_prop_amm_pair_state(
         &ctx.accounts.state,
         &ctx.accounts.prop_amm_pair_state,
         ctx.accounts.offer.key(),
         ctx.accounts.token_in_mint.key(),
         ctx.accounts.token_out_mint.key(),
+        SwapSide::Buy,
     )?;
-    require!(
-        pair_side == SwapSide::Buy,
-        crate::OnreError::InvalidSwapPair
-    );
 
     execute_open_swap_buy(ctx, token_in_amount, minimum_out, approval_message)
 }
@@ -216,30 +204,22 @@ fn execute_open_swap_buy<'info>(
         token_program_id: ctx.accounts.token_out_program.key(),
         invalid_account_error: crate::OnreError::InvalidUserTokenOutAccount,
     })?;
-    let prop_amm_proceeds_token_in_account = get_or_create_configurable_vault_token_account::<
-        { ConfigurableVaultKind::PropAmmProceeds.as_u8() },
-    >(ConfigurableVaultTokenAccountParams {
-        vault: &ctx.accounts.prop_amm_proceeds_vault,
-        token_account: &ctx.accounts.prop_amm_proceeds_token_in_account,
-        payer: ctx.accounts.user.to_account_info(),
-        mint_account: ctx.accounts.token_in_mint.to_account_info(),
-        token_program: ctx.accounts.token_in_program.to_account_info(),
-        associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
-        system_program: ctx.accounts.system_program.to_account_info(),
-        program_id: ctx.program_id,
-    })?;
-    let prop_amm_fee_token_in_account = get_or_create_configurable_vault_token_account::<
-        { ConfigurableVaultKind::PropAmmFee.as_u8() },
-    >(ConfigurableVaultTokenAccountParams {
-        vault: &ctx.accounts.prop_amm_fee_vault,
-        token_account: &ctx.accounts.prop_amm_fee_token_in_account,
-        payer: ctx.accounts.user.to_account_info(),
-        mint_account: ctx.accounts.token_in_mint.to_account_info(),
-        token_program: ctx.accounts.token_in_program.to_account_info(),
-        associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
-        system_program: ctx.accounts.system_program.to_account_info(),
-        program_id: ctx.program_id,
-    })?;
+    let (prop_amm_proceeds_token_in_account, prop_amm_fee_token_in_account) =
+        get_or_create_configurable_vault_token_account_pair::<
+            { ConfigurableVaultKind::PropAmmProceeds.as_u8() },
+            { ConfigurableVaultKind::PropAmmFee.as_u8() },
+        >(ConfigurableVaultTokenAccountPairParams {
+            first_vault: &ctx.accounts.prop_amm_proceeds_vault,
+            first_token_account: &ctx.accounts.prop_amm_proceeds_token_in_account,
+            second_vault: &ctx.accounts.prop_amm_fee_vault,
+            second_token_account: &ctx.accounts.prop_amm_fee_token_in_account,
+            payer: ctx.accounts.user.to_account_info(),
+            mint_account: ctx.accounts.token_in_mint.to_account_info(),
+            token_program: ctx.accounts.token_in_program.to_account_info(),
+            associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            program_id: ctx.program_id,
+        })?;
     let _offer_vault_token_in_account = get_associated_token_account(
         &ctx.accounts.offer_vault_token_in_account,
         &ctx.accounts.offer_vault_authority.key(),

@@ -6,7 +6,9 @@ use crate::instructions::buffer::{
 use crate::instructions::market_info::offer_valuation_utils::get_active_vector_and_current_price;
 use crate::instructions::Offer;
 use crate::state::State;
-use crate::utils::token_utils::{mint_tokens, read_optional_token_account_amount};
+use crate::utils::token_utils::{
+    mint_tokens, read_optional_token_account_amount, validate_max_supply,
+};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenInterface};
 
@@ -95,56 +97,38 @@ pub(crate) fn accrue_buffer<'info>(
     )?;
 
     if buffer_mint_amount > 0 {
-        if state.max_supply > 0 {
-            let new_supply = current_supply_before_mint
-                .checked_add(buffer_mint_amount)
-                .ok_or(crate::OnreError::MathOverflow)?;
-            require!(
-                new_supply <= state.max_supply,
-                crate::OnreError::MaxSupplyExceeded
-            );
-        }
+        validate_max_supply(
+            current_supply_before_mint,
+            buffer_mint_amount,
+            state.max_supply,
+        )?;
 
         let mint_authority_seeds = &[seeds::MINT_AUTHORITY, &[mint_authority_bump]];
         let mint_authority_signer_seeds = &[mint_authority_seeds.as_slice()];
 
-        if fee_split.reserve_mint_amount > 0 {
-            mint_tokens(
-                token_program,
-                onyc_mint,
-                &reserve_vault_onyc_account,
-                &mint_authority,
-                mint_authority_signer_seeds,
-                fee_split.reserve_mint_amount,
-                state.max_supply,
-                state.max_mint_amount,
-            )?;
-        }
-
-        if fee_split.management_fee_mint_amount > 0 {
-            mint_tokens(
-                token_program,
-                onyc_mint,
+        for (destination, amount) in [
+            (&reserve_vault_onyc_account, fee_split.reserve_mint_amount),
+            (
                 &management_fee_vault_onyc_account,
-                &mint_authority,
-                mint_authority_signer_seeds,
                 fee_split.management_fee_mint_amount,
-                state.max_supply,
-                state.max_mint_amount,
-            )?;
-        }
-
-        if fee_split.performance_fee_mint_amount > 0 {
-            mint_tokens(
-                token_program,
-                onyc_mint,
+            ),
+            (
                 &performance_fee_vault_onyc_account,
-                &mint_authority,
-                mint_authority_signer_seeds,
                 fee_split.performance_fee_mint_amount,
-                state.max_supply,
-                state.max_mint_amount,
-            )?;
+            ),
+        ] {
+            if amount > 0 {
+                mint_tokens(
+                    token_program,
+                    onyc_mint,
+                    destination,
+                    &mint_authority,
+                    mint_authority_signer_seeds,
+                    amount,
+                    state.max_supply,
+                    state.max_mint_amount,
+                )?;
+            }
         }
     }
 

@@ -579,18 +579,7 @@ pub(crate) fn execute_take_offer_permissionless<'info>(
 
     let offer = offer_account.load()?;
     offer.require_enabled()?;
-
-    // Validate offer mints
-    require_keys_eq!(
-        offer.token_in_mint,
-        token_in_mint.key(),
-        crate::OnreError::InvalidTokenInMint
-    );
-    require_keys_eq!(
-        offer.token_out_mint,
-        token_out_mint.key(),
-        crate::OnreError::InvalidTokenOutMint
-    );
+    offer.require_mints(token_in_mint.key(), token_out_mint.key())?;
     // Validate if offer allows permissionless access
     require!(
         offer.allow_permissionless(),

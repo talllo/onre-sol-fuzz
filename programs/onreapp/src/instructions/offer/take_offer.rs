@@ -8,7 +8,7 @@ use crate::instructions::buffer::{
     BufferAccrualAccounts,
 };
 use crate::instructions::configurable_vault::{
-    get_or_create_configurable_vault_token_account, ConfigurableVaultTokenAccountParams,
+    get_or_create_configurable_vault_token_account_pair, ConfigurableVaultTokenAccountPairParams,
 };
 use crate::instructions::market_info::{load_main_offer, refresh_market_stats_pda};
 use crate::instructions::offer::offer_utils::{
@@ -495,30 +495,22 @@ pub fn execute_take_offer_v2<'info>(
         ctx.accounts.token_out_mint.key(),
     )?
     .unwrap_or(0);
-    let offer_proceeds_token_in_account = get_or_create_configurable_vault_token_account::<
-        { ConfigurableVaultKind::OfferProceeds.as_u8() },
-    >(ConfigurableVaultTokenAccountParams {
-        vault: &ctx.accounts.offer_proceeds_vault,
-        token_account: &ctx.accounts.offer_proceeds_token_in_account,
-        payer: ctx.accounts.user.to_account_info(),
-        mint_account: ctx.accounts.token_in_mint.to_account_info(),
-        token_program: ctx.accounts.token_in_program.to_account_info(),
-        associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
-        system_program: ctx.accounts.system_program.to_account_info(),
-        program_id: ctx.program_id,
-    })?;
-    let offer_fee_token_in_account = get_or_create_configurable_vault_token_account::<
-        { ConfigurableVaultKind::OfferFee.as_u8() },
-    >(ConfigurableVaultTokenAccountParams {
-        vault: &ctx.accounts.offer_fee_vault,
-        token_account: &ctx.accounts.offer_fee_token_in_account,
-        payer: ctx.accounts.user.to_account_info(),
-        mint_account: ctx.accounts.token_in_mint.to_account_info(),
-        token_program: ctx.accounts.token_in_program.to_account_info(),
-        associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
-        system_program: ctx.accounts.system_program.to_account_info(),
-        program_id: ctx.program_id,
-    })?;
+    let (offer_proceeds_token_in_account, offer_fee_token_in_account) =
+        get_or_create_configurable_vault_token_account_pair::<
+            { ConfigurableVaultKind::OfferProceeds.as_u8() },
+            { ConfigurableVaultKind::OfferFee.as_u8() },
+        >(ConfigurableVaultTokenAccountPairParams {
+            first_vault: &ctx.accounts.offer_proceeds_vault,
+            first_token_account: &ctx.accounts.offer_proceeds_token_in_account,
+            second_vault: &ctx.accounts.offer_fee_vault,
+            second_token_account: &ctx.accounts.offer_fee_token_in_account,
+            payer: ctx.accounts.user.to_account_info(),
+            mint_account: ctx.accounts.token_in_mint.to_account_info(),
+            token_program: ctx.accounts.token_in_program.to_account_info(),
+            associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            program_id: ctx.program_id,
+        })?;
     let should_refill_redemption_vault = redemption_vault_target_bps > 0
         && !program_controls_mint(
             &ctx.accounts.token_in_mint,

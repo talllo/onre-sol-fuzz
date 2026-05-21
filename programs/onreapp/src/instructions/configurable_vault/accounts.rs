@@ -17,6 +17,19 @@ pub(crate) struct ConfigurableVaultTokenAccountParams<'a, 'info> {
     pub program_id: &'a Pubkey,
 }
 
+pub(crate) struct ConfigurableVaultTokenAccountPairParams<'a, 'info> {
+    pub first_vault: &'info UncheckedAccount<'info>,
+    pub first_token_account: &'info UncheckedAccount<'info>,
+    pub second_vault: &'info UncheckedAccount<'info>,
+    pub second_token_account: &'info UncheckedAccount<'info>,
+    pub payer: AccountInfo<'info>,
+    pub mint_account: AccountInfo<'info>,
+    pub token_program: AccountInfo<'info>,
+    pub associated_token_program: AccountInfo<'info>,
+    pub system_program: AccountInfo<'info>,
+    pub program_id: &'a Pubkey,
+}
+
 pub(crate) fn get_or_create_configurable_vault_token_account<'info, const KIND: u8>(
     params: ConfigurableVaultTokenAccountParams<'_, 'info>,
 ) -> Result<InterfaceAccount<'info, TokenAccount>> {
@@ -61,4 +74,42 @@ pub(crate) fn get_or_create_configurable_vault_token_account<'info, const KIND: 
         token_program_id: params.token_program.key(),
         invalid_account_error: crate::OnreError::InvalidConfigurableVaultTokenAccount,
     })
+}
+
+pub(crate) fn get_or_create_configurable_vault_token_account_pair<
+    'info,
+    const FIRST_KIND: u8,
+    const SECOND_KIND: u8,
+>(
+    params: ConfigurableVaultTokenAccountPairParams<'_, 'info>,
+) -> Result<(
+    InterfaceAccount<'info, TokenAccount>,
+    InterfaceAccount<'info, TokenAccount>,
+)> {
+    let first = get_or_create_configurable_vault_token_account::<FIRST_KIND>(
+        ConfigurableVaultTokenAccountParams {
+            vault: params.first_vault,
+            token_account: params.first_token_account,
+            payer: params.payer.clone(),
+            mint_account: params.mint_account.clone(),
+            token_program: params.token_program.clone(),
+            associated_token_program: params.associated_token_program.clone(),
+            system_program: params.system_program.clone(),
+            program_id: params.program_id,
+        },
+    )?;
+    let second = get_or_create_configurable_vault_token_account::<SECOND_KIND>(
+        ConfigurableVaultTokenAccountParams {
+            vault: params.second_vault,
+            token_account: params.second_token_account,
+            payer: params.payer,
+            mint_account: params.mint_account,
+            token_program: params.token_program,
+            associated_token_program: params.associated_token_program,
+            system_program: params.system_program,
+            program_id: params.program_id,
+        },
+    )?;
+
+    Ok((first, second))
 }

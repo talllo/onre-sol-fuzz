@@ -4,6 +4,23 @@ use common::*;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
 
+fn setup_program_mint_with_max_mint_amount(
+    cap: u64,
+) -> (litesvm::LiteSVM, Keypair, solana_sdk::pubkey::Pubkey) {
+    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+
+    let ix = build_configure_max_mint_amount_ix(&boss, cap);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_transfer_mint_authority_to_program_ix(&boss, &onyc_mint, &TOKEN_PROGRAM_ID);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    (svm, payer, onyc_mint)
+}
+
 #[test]
 fn test_boss_can_configure_max_mint_amount() {
     let (mut svm, payer, _onyc_mint) = setup_initialized();
@@ -49,16 +66,8 @@ fn test_non_boss_cannot_configure_max_mint_amount() {
 
 #[test]
 fn test_mint_to_cannot_exceed_max_mint_amount() {
-    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let (mut svm, payer, onyc_mint) = setup_program_mint_with_max_mint_amount(50_000_000_000);
     let boss = payer.pubkey();
-
-    let ix = build_configure_max_mint_amount_ix(&boss, 50_000_000_000);
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
-    advance_slot(&mut svm);
-
-    let ix = build_transfer_mint_authority_to_program_ix(&boss, &onyc_mint, &TOKEN_PROGRAM_ID);
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
-    advance_slot(&mut svm);
 
     let ix = build_mint_to_ix(&boss, &onyc_mint, 50_000_000_001, &TOKEN_PROGRAM_ID);
     let result = send_tx(&mut svm, &[ix], &[&payer]);
@@ -67,16 +76,8 @@ fn test_mint_to_cannot_exceed_max_mint_amount() {
 
 #[test]
 fn test_mint_to_multiple_mints_can_reach_supply_above_per_mint_cap() {
-    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let (mut svm, payer, onyc_mint) = setup_program_mint_with_max_mint_amount(50_000_000_000);
     let boss = payer.pubkey();
-
-    let ix = build_configure_max_mint_amount_ix(&boss, 50_000_000_000);
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
-    advance_slot(&mut svm);
-
-    let ix = build_transfer_mint_authority_to_program_ix(&boss, &onyc_mint, &TOKEN_PROGRAM_ID);
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
-    advance_slot(&mut svm);
 
     let ix = build_mint_to_ix(&boss, &onyc_mint, 50_000_000_000, &TOKEN_PROGRAM_ID);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
