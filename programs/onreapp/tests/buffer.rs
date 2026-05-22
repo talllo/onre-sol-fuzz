@@ -467,6 +467,21 @@ fn test_set_buffer_gross_yield_rejects_no_change() {
 }
 
 #[test]
+fn test_set_buffer_gross_yield_rejects_non_boss() {
+    let (mut svm, _payer, _token_in_mint, onyc_mint, _caller) =
+        setup_buffer_context(150_000, 50_000, 0, 0);
+    let state = read_state(&svm);
+    let non_boss = Keypair::new();
+    svm.airdrop(&non_boss.pubkey(), INITIAL_LAMPORTS).unwrap();
+
+    let ix =
+        build_set_buffer_gross_yield_ix(&non_boss.pubkey(), &state.main_offer, &onyc_mint, 200_000);
+    let result = send_tx(&mut svm, &[ix], &[&non_boss]);
+    assert!(result.is_err(), "non-boss should not update gross APR");
+    assert_eq!(read_buffer_state(&svm).gross_yield, 150_000);
+}
+
+#[test]
 fn test_set_buffer_fee_config_rejects_no_change() {
     let (mut svm, payer, _token_in_mint, onyc_mint, _caller) =
         setup_buffer_context(150_000, 50_000, 100, 1_000);
@@ -476,6 +491,29 @@ fn test_set_buffer_fee_config_rejects_no_change() {
     let ix = build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 100, 1_000);
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(result.is_err(), "setting same fee config should fail");
+}
+
+#[test]
+fn test_set_buffer_fee_config_rejects_non_boss() {
+    let (mut svm, _payer, _token_in_mint, onyc_mint, _caller) =
+        setup_buffer_context(150_000, 50_000, 100, 1_000);
+    let state = read_state(&svm);
+    let non_boss = Keypair::new();
+    svm.airdrop(&non_boss.pubkey(), INITIAL_LAMPORTS).unwrap();
+
+    let ix = build_set_buffer_fee_config_ix(
+        &non_boss.pubkey(),
+        &state.main_offer,
+        &onyc_mint,
+        200,
+        2_000,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&non_boss]);
+    assert!(result.is_err(), "non-boss should not update buffer fees");
+
+    let buffer_state = read_buffer_state(&svm);
+    assert_eq!(buffer_state.management_fee_basis_points, 100);
+    assert_eq!(buffer_state.performance_fee_basis_points, 1_000);
 }
 
 #[test]
