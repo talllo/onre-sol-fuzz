@@ -405,6 +405,37 @@ fn test_create_redemption_request_fails_when_redemption_offer_disabled() {
     );
 }
 
+#[test]
+fn test_create_redemption_request_fails_when_underlying_offer_disabled() {
+    let (mut svm, payer, _usdc, onyc_mint, redemption_tin, redemption_tout) = setup_redemption();
+    let boss = payer.pubkey();
+
+    let user = Keypair::new();
+    svm.airdrop(&user.pubkey(), 10 * INITIAL_LAMPORTS).unwrap();
+    create_token_account(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
+
+    let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
+    create_token_account(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
+
+    let ix = build_set_offer_disabled_ix(&boss, &redemption_tout, &redemption_tin, true);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_create_redemption_request_ix(
+        &user.pubkey(),
+        &redemption_tin,
+        &redemption_tout,
+        500_000_000,
+        0,
+        &TOKEN_PROGRAM_ID,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&user]);
+    assert!(
+        result.is_err(),
+        "disabled underlying offer should reject new redemption requests"
+    );
+}
+
 // ===========================================================================
 // cancel_redemption_request tests
 // ===========================================================================
@@ -678,6 +709,34 @@ fn test_fulfill_redemption_request_fails_when_redemption_offer_disabled() {
 }
 
 #[test]
+fn test_fulfill_redemption_request_fails_when_underlying_offer_disabled() {
+    let mut ctx = setup_fulfillable_request(500, 1_000_000_000);
+    let boss = ctx.payer.pubkey();
+
+    let ix = build_set_offer_disabled_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint, true);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    advance_slot(&mut ctx.svm);
+
+    let ix = build_fulfill_redemption_request_ix(
+        &boss,
+        &boss,
+        &ctx.main_offer,
+        &ctx.user.pubkey(),
+        &ctx.redemption_tin,
+        &ctx.redemption_tout,
+        0,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+        1_000_000_000,
+    );
+    let result = send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]);
+    assert!(
+        result.is_err(),
+        "disabled underlying offer should reject redemption fulfillments"
+    );
+}
+
+#[test]
 fn test_fulfill_redemption_request_rejects_non_admin() {
     let (mut svm, payer, _usdc, onyc_mint, redemption_tin, redemption_tout) = setup_redemption();
     let boss = payer.pubkey();
@@ -786,6 +845,65 @@ fn test_update_redemption_offer_fee_rejects_same_fee() {
     let ix = build_update_redemption_offer_fee_ix(&boss, &redemption_tin, &redemption_tout, 500);
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(result.is_err(), "setting same fee should fail (no-op)");
+}
+
+#[test]
+fn test_update_redemption_offer_vault_target_success() {
+    let (mut svm, payer, _usdc, _onyc, redemption_tin, redemption_tout) = setup_redemption();
+    let boss = payer.pubkey();
+
+    let ix = build_update_redemption_offer_vault_target_ix(
+        &boss,
+        &redemption_tin,
+        &redemption_tout,
+        1_500,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let offer_data = read_redemption_offer(&svm, &redemption_tin, &redemption_tout);
+    assert_eq!(offer_data.vault_target_bps, 1_500);
+}
+
+#[test]
+fn test_update_redemption_offer_vault_target_rejects_over_max() {
+    let (mut svm, payer, _usdc, _onyc, redemption_tin, redemption_tout) = setup_redemption();
+    let boss = payer.pubkey();
+
+    let ix = build_update_redemption_offer_vault_target_ix(
+        &boss,
+        &redemption_tin,
+        &redemption_tout,
+        10_001,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(result.is_err(), "vault target over 100% should fail");
+}
+
+#[test]
+fn test_update_redemption_offer_vault_target_rejects_same_value() {
+    let (mut svm, payer, _usdc, _onyc, redemption_tin, redemption_tout) = setup_redemption();
+    let boss = payer.pubkey();
+
+    let ix =
+        build_update_redemption_offer_vault_target_ix(&boss, &redemption_tin, &redemption_tout, 0);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(result.is_err(), "setting the same vault target should fail");
+}
+
+#[test]
+fn test_update_redemption_offer_vault_target_rejects_non_boss() {
+    let (mut svm, _payer, _usdc, _onyc, redemption_tin, redemption_tout) = setup_redemption();
+    let non_boss = Keypair::new();
+    svm.airdrop(&non_boss.pubkey(), INITIAL_LAMPORTS).unwrap();
+
+    let ix = build_update_redemption_offer_vault_target_ix(
+        &non_boss.pubkey(),
+        &redemption_tin,
+        &redemption_tout,
+        1_500,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&non_boss]);
+    assert!(result.is_err(), "non-boss should not update vault target");
 }
 
 // ===========================================================================
