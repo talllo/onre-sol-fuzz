@@ -275,6 +275,99 @@ fn test_fee_routing_rejects_invalid_fee_destination() {
 }
 
 #[test]
+fn test_set_fee_destination_rejects_non_boss() {
+    let mut ctx = setup_fee_routing();
+    let destination = Keypair::new();
+    let non_boss = Keypair::new();
+    ctx.svm
+        .airdrop(&destination.pubkey(), INITIAL_LAMPORTS)
+        .unwrap();
+    ctx.svm
+        .airdrop(&non_boss.pubkey(), INITIAL_LAMPORTS)
+        .unwrap();
+
+    let (fee_vault_pda, _) = find_offer_fee_vault_pda();
+    let ix = build_set_configurable_vault_destination_ix(
+        &non_boss.pubkey(),
+        &fee_vault_pda,
+        ConfigurableVaultKind::OfferFee.as_u8(),
+        &destination.pubkey(),
+    );
+    let result = send_tx(&mut ctx.svm, &[ix], &[&non_boss]);
+    assert!(
+        result.is_err(),
+        "non-boss should not set configurable vault destination"
+    );
+}
+
+#[test]
+fn test_set_fee_destination_rejects_no_change() {
+    let mut ctx = setup_fee_routing();
+    let destination = Keypair::new();
+    ctx.svm
+        .airdrop(&destination.pubkey(), INITIAL_LAMPORTS)
+        .unwrap();
+    set_offer_fee_destination(&mut ctx, &destination.pubkey());
+
+    let boss = ctx.payer.pubkey();
+    let (fee_vault_pda, _) = find_offer_fee_vault_pda();
+    let ix = build_set_configurable_vault_destination_ix(
+        &boss,
+        &fee_vault_pda,
+        ConfigurableVaultKind::OfferFee.as_u8(),
+        &destination.pubkey(),
+    );
+    let result = send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]);
+    assert!(
+        result.is_err(),
+        "setting the same configurable vault destination should fail"
+    );
+}
+
+#[test]
+fn test_withdraw_offer_fees_rejects_missing_destination() {
+    let mut ctx = setup_fee_routing();
+    let boss = ctx.payer.pubkey();
+    create_and_fulfill(&mut ctx);
+
+    let ix =
+        build_withdraw_offer_fee_vault_ix(&boss, &Pubkey::default(), &ctx.onyc_mint, EXPECTED_FEE);
+    let result = send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]);
+    assert!(
+        result.is_err(),
+        "withdrawal should fail before a destination is configured"
+    );
+}
+
+#[test]
+fn test_withdraw_offer_fees_rejects_kind_mismatch() {
+    let mut ctx = setup_fee_routing();
+    let boss = ctx.payer.pubkey();
+    let destination = Keypair::new();
+    ctx.svm
+        .airdrop(&destination.pubkey(), INITIAL_LAMPORTS)
+        .unwrap();
+    set_offer_fee_destination(&mut ctx, &destination.pubkey());
+    create_and_fulfill(&mut ctx);
+
+    let (fee_vault_pda, _) = find_offer_fee_vault_pda();
+    let ix = build_withdraw_configurable_vault_ix(
+        &boss,
+        &fee_vault_pda,
+        &destination.pubkey(),
+        &ctx.onyc_mint,
+        ConfigurableVaultKind::ManagementFee.as_u8(),
+        EXPECTED_FEE,
+        &TOKEN_PROGRAM_ID,
+    );
+    let result = send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]);
+    assert!(
+        result.is_err(),
+        "withdrawal should reject a vault PDA/kind mismatch"
+    );
+}
+
+#[test]
 fn test_fee_routing_no_fee_transfer_when_zero_bps() {
     let mut ctx = setup_fee_routing();
     let boss = ctx.payer.pubkey();
