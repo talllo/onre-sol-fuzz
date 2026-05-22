@@ -1,6 +1,6 @@
 mod common;
 
-use anchor_lang::AnchorDeserialize;
+use anchor_lang::{AccountDeserialize, AnchorDeserialize};
 use common::*;
 use onreapp::instructions::prop_amm::{
     apply_hard_wall_liquidity_factor_at_time, apply_hard_wall_reserve_curve_with_params,
@@ -9,7 +9,7 @@ use onreapp::instructions::prop_amm::{
     PropAmmPairState, SwapQuote,
 };
 use onreapp::state::ConfigurableVaultKind;
-use solana_sdk::instruction::AccountMeta;
+use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
@@ -66,6 +66,115 @@ fn setup_prop_amm() -> PropAmmCtx {
         onyc_mint,
         user,
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_configure_prop_amm_with_params_ix(
+    boss: &Pubkey,
+    asset_mint: &Pubkey,
+    onyc_mint: &Pubkey,
+    enabled: bool,
+    curve_peg_haircut_bps: u16,
+    curve_exponent_scaled: u32,
+    min_cadence_exponent_scaled: u32,
+    cadence_threshold: u32,
+    cadence_sensitivity_scaled: u32,
+    epoch_duration_seconds: i64,
+    wall_sensitivity_scaled: u32,
+) -> Instruction {
+    let (state_pda, _) = find_state_pda();
+    let (offer_pda, _) = find_offer_pda(asset_mint, onyc_mint);
+    let (prop_amm_pair_state_pda, _) = find_prop_amm_pair_state_pda(&offer_pda);
+    let mut data = ix_discriminator("configure_prop_amm").to_vec();
+    data.push(if enabled { 1 } else { 0 });
+    data.extend_from_slice(&curve_peg_haircut_bps.to_le_bytes());
+    data.extend_from_slice(&curve_exponent_scaled.to_le_bytes());
+    data.extend_from_slice(&min_cadence_exponent_scaled.to_le_bytes());
+    data.extend_from_slice(&cadence_threshold.to_le_bytes());
+    data.extend_from_slice(&cadence_sensitivity_scaled.to_le_bytes());
+    data.extend_from_slice(&epoch_duration_seconds.to_le_bytes());
+    data.extend_from_slice(&wall_sensitivity_scaled.to_le_bytes());
+    Instruction {
+        program_id: PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new_readonly(state_pda, false),
+            AccountMeta::new_readonly(offer_pda, false),
+            AccountMeta::new_readonly(*asset_mint, false),
+            AccountMeta::new(prop_amm_pair_state_pda, false),
+            AccountMeta::new(*boss, true),
+            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
+        ],
+        data,
+    }
+}
+
+fn read_prop_amm_pair_state(svm: &litesvm::LiteSVM, offer: &Pubkey) -> PropAmmPairState {
+    let (pair_state_pda, _) = find_prop_amm_pair_state_pda(offer);
+    let account = svm
+        .get_account(&pair_state_pda)
+        .expect("Prop AMM pair state not found");
+    let mut data = account.data.as_slice();
+    PropAmmPairState::try_deserialize(&mut data).expect("failed to deserialize Prop AMM pair state")
+}
+
+fn overwrite_pair_state_pubkey(svm: &mut litesvm::LiteSVM, offer: &Pubkey, offset: usize) {
+    let (pair_state_pda, _) = find_prop_amm_pair_state_pda(offer);
+    let mut account = svm
+        .get_account(&pair_state_pda)
+        .expect("Prop AMM pair state not found");
+    account.data[offset..offset + 32].copy_from_slice(Pubkey::new_unique().as_ref());
+    svm.set_account(pair_state_pda, account).unwrap();
+}
+
+fn add_prop_amm_vector(ctx: &mut PropAmmCtx) {
+    let boss = ctx.payer.pubkey();
+    let current_time = get_clock_time(&ctx.svm);
+    let ix = build_add_offer_vector_ix(
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        Some(current_time),
+        current_time,
+        1_000_000_000,
+        0,
+        86_400,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+}
+
+fn prepare_prop_amm_sell_side(ctx: &mut PropAmmCtx, redemption_fee_bps: u16) {
+    let boss = ctx.payer.pubkey();
+    let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    add_prop_amm_vector(ctx);
+
+    if redemption_fee_bps > 0 {
+        let ix = build_make_redemption_offer_ix(
+            &boss,
+            &ctx.onyc_mint,
+            &ctx.usdc_mint,
+            redemption_fee_bps,
+            &TOKEN_PROGRAM_ID,
+            &TOKEN_PROGRAM_ID,
+        );
+        send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    }
+
+    let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
+    create_token_account(
+        &mut ctx.svm,
+        &ctx.usdc_mint,
+        &redemption_vault_authority,
+        10_000_000_000,
+    );
+    create_token_account(
+        &mut ctx.svm,
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        2_000_000_000_000,
+    );
+    let ix = build_refresh_market_stats_ix(&boss, &boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 }
 
 #[test]
@@ -500,6 +609,55 @@ fn test_prop_amm_pair_must_be_enabled() {
 }
 
 #[test]
+fn test_configure_prop_amm_rejects_invalid_parameters() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+
+    let invalid_cases = [
+        (10_001, 25_000, 1_000, 20, 10_000, 86_400, 20_000),
+        (700, 999, 1_000, 20, 10_000, 86_400, 20_000),
+        (700, 100_001, 1_000, 20, 10_000, 86_400, 20_000),
+        (700, 25_500, 1_000, 20, 10_000, 86_400, 20_000),
+        (700, 25_000, 0, 20, 10_000, 86_400, 20_000),
+        (700, 25_000, 11_000, 20, 10_000, 86_400, 20_000),
+        (700, 25_000, 1_500, 20, 10_000, 86_400, 20_000),
+        (700, 25_000, 1_000, 0, 10_000, 86_400, 20_000),
+        (700, 25_000, 1_000, 20, 100_001, 86_400, 20_000),
+        (700, 25_000, 1_000, 20, 10_000, 0, 20_000),
+        (700, 25_000, 1_000, 20, 10_000, 86_400, 0),
+    ];
+
+    for (
+        haircut_bps,
+        exponent_scaled,
+        min_cadence_exponent_scaled,
+        cadence_threshold,
+        cadence_sensitivity_scaled,
+        epoch_duration_seconds,
+        wall_sensitivity_scaled,
+    ) in invalid_cases
+    {
+        let ix = build_configure_prop_amm_with_params_ix(
+            &boss,
+            &ctx.usdc_mint,
+            &ctx.onyc_mint,
+            true,
+            haircut_bps,
+            exponent_scaled,
+            min_cadence_exponent_scaled,
+            cadence_threshold,
+            cadence_sensitivity_scaled,
+            epoch_duration_seconds,
+            wall_sensitivity_scaled,
+        );
+        assert!(
+            send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).is_err(),
+            "invalid Prop AMM config should fail: {invalid_cases:?}"
+        );
+    }
+}
+
+#[test]
 fn test_prop_amm_rejects_pair_state_for_different_offer() {
     let mut ctx = setup_prop_amm();
     let boss = ctx.payer.pubkey();
@@ -527,6 +685,29 @@ fn test_prop_amm_rejects_pair_state_for_different_offer() {
     assert!(
         result.is_err(),
         "Prop AMM should reject a pair-state PDA derived from another offer"
+    );
+}
+
+#[test]
+fn test_prop_amm_rejects_pair_state_with_mismatched_stored_mints() {
+    let mut ctx = setup_prop_amm();
+    let (offer_pda, _) = find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint);
+
+    overwrite_pair_state_pubkey(&mut ctx.svm, &offer_pda, 8 + 32);
+    let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.usdc_mint, &ctx.onyc_mint, 1_000_000);
+    assert!(
+        send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).is_err(),
+        "Prop AMM should reject a pair state with the wrong stored asset mint"
+    );
+
+    let boss = ctx.payer.pubkey();
+    let ix = build_configure_prop_amm_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint, true, 700, 26_000);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    overwrite_pair_state_pubkey(&mut ctx.svm, &offer_pda, 8 + 32 + 32);
+    let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.usdc_mint, &ctx.onyc_mint, 1_000_000);
+    assert!(
+        send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).is_err(),
+        "Prop AMM should reject a pair state with the wrong stored ONYC mint"
     );
 }
 
@@ -586,6 +767,253 @@ fn test_open_swap_enforces_minimum_out() {
         &get_associated_token_address(&ctx.user.pubkey(), &ctx.onyc_mint),
     );
     assert_eq!(user_onyc, quote.token_out_amount);
+}
+
+#[test]
+fn test_open_swap_sell_enforces_minimum_out() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    prepare_prop_amm_sell_side(&mut ctx, 0);
+
+    let sell_amount = 100_000_000;
+    let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.onyc_mint, &ctx.usdc_mint, sell_amount);
+    let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
+    let quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
+
+    let ix = build_open_swap_sell_ix(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        sell_amount,
+        quote.minimum_out + 1,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    assert!(send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).is_err());
+}
+
+#[test]
+fn test_prop_amm_rejects_quotes_and_swaps_when_kill_switch_active() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    add_prop_amm_vector(&mut ctx);
+
+    let ix = build_set_kill_switch_ix(&boss, true);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.usdc_mint, &ctx.onyc_mint, 1_000_000);
+    assert!(
+        send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).is_err(),
+        "buy quote should reject while the kill switch is active"
+    );
+
+    let buy_ix = build_open_swap_buy_ix(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        1_000_000,
+        0,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    assert!(
+        send_tx(&mut ctx.svm, &[buy_ix], &[&ctx.payer, &ctx.user]).is_err(),
+        "buy execution should reject while the kill switch is active"
+    );
+
+    let mut sell_ctx = setup_prop_amm();
+    let sell_boss = sell_ctx.payer.pubkey();
+    prepare_prop_amm_sell_side(&mut sell_ctx, 0);
+    let ix = build_set_kill_switch_ix(&sell_boss, true);
+    send_tx(&mut sell_ctx.svm, &[ix], &[&sell_ctx.payer]).unwrap();
+
+    let sell_quote_ix = build_quote_swap_ix(
+        &sell_ctx.onyc_mint,
+        &sell_ctx.onyc_mint,
+        &sell_ctx.usdc_mint,
+        100,
+    );
+    assert!(
+        send_tx(&mut sell_ctx.svm, &[sell_quote_ix], &[&sell_ctx.payer]).is_err(),
+        "sell quote should reject while the kill switch is active"
+    );
+
+    let sell_ix = build_open_swap_sell_ix(
+        &sell_ctx.onyc_mint,
+        &sell_ctx.user.pubkey(),
+        &sell_boss,
+        &sell_ctx.onyc_mint,
+        &sell_ctx.usdc_mint,
+        100,
+        0,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    assert!(
+        send_tx(
+            &mut sell_ctx.svm,
+            &[sell_ix],
+            &[&sell_ctx.payer, &sell_ctx.user]
+        )
+        .is_err(),
+        "sell execution should reject while the kill switch is active"
+    );
+}
+
+#[test]
+fn test_open_swap_buy_respects_max_supply_and_max_mint_amount() {
+    let mut max_supply_ctx = setup_prop_amm();
+    let boss = max_supply_ctx.payer.pubkey();
+    add_prop_amm_vector(&mut max_supply_ctx);
+    let ix = build_transfer_mint_authority_to_program_ix(
+        &boss,
+        &max_supply_ctx.onyc_mint,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut max_supply_ctx.svm, &[ix], &[&max_supply_ctx.payer]).unwrap();
+
+    let quote_ix = build_quote_swap_ix(
+        &max_supply_ctx.onyc_mint,
+        &max_supply_ctx.usdc_mint,
+        &max_supply_ctx.onyc_mint,
+        1_000_000,
+    );
+    let quote_metadata = send_tx(
+        &mut max_supply_ctx.svm,
+        &[quote_ix],
+        &[&max_supply_ctx.payer],
+    )
+    .unwrap();
+    let quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
+    let current_supply = get_mint_supply(&max_supply_ctx.svm, &max_supply_ctx.onyc_mint);
+    let ix = build_configure_max_supply_ix(&boss, current_supply + quote.token_out_amount - 1);
+    send_tx(&mut max_supply_ctx.svm, &[ix], &[&max_supply_ctx.payer]).unwrap();
+    let buy_ix = build_open_swap_buy_ix(
+        &max_supply_ctx.onyc_mint,
+        &max_supply_ctx.user.pubkey(),
+        &boss,
+        &max_supply_ctx.usdc_mint,
+        &max_supply_ctx.onyc_mint,
+        1_000_000,
+        quote.minimum_out,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    assert!(
+        send_tx(
+            &mut max_supply_ctx.svm,
+            &[buy_ix],
+            &[&max_supply_ctx.payer, &max_supply_ctx.user],
+        )
+        .is_err(),
+        "Prop AMM buy should enforce max supply"
+    );
+
+    let mut max_mint_ctx = setup_prop_amm();
+    let boss = max_mint_ctx.payer.pubkey();
+    add_prop_amm_vector(&mut max_mint_ctx);
+    let ix = build_transfer_mint_authority_to_program_ix(
+        &boss,
+        &max_mint_ctx.onyc_mint,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut max_mint_ctx.svm, &[ix], &[&max_mint_ctx.payer]).unwrap();
+    let ix = build_configure_max_mint_amount_ix(&boss, quote.token_out_amount - 1);
+    send_tx(&mut max_mint_ctx.svm, &[ix], &[&max_mint_ctx.payer]).unwrap();
+    let buy_ix = build_open_swap_buy_ix(
+        &max_mint_ctx.onyc_mint,
+        &max_mint_ctx.user.pubkey(),
+        &boss,
+        &max_mint_ctx.usdc_mint,
+        &max_mint_ctx.onyc_mint,
+        1_000_000,
+        quote.minimum_out,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    assert!(
+        send_tx(
+            &mut max_mint_ctx.svm,
+            &[buy_ix],
+            &[&max_mint_ctx.payer, &max_mint_ctx.user],
+        )
+        .is_err(),
+        "Prop AMM buy should enforce max minted amount per mint"
+    );
+}
+
+#[test]
+fn test_open_swap_sell_rolls_epoch_tracker_before_recording_trade() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    let ix = build_configure_prop_amm_with_params_ix(
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        true,
+        700,
+        25_000,
+        1_000,
+        20,
+        10_000,
+        10,
+        20_000,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    prepare_prop_amm_sell_side(&mut ctx, 0);
+
+    let sell_amount = 100_000_000;
+    let sell_ix = build_open_swap_sell_ix(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        sell_amount,
+        0,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[sell_ix], &[&ctx.payer, &ctx.user]).unwrap();
+
+    let (offer_pda, _) = find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint);
+    let first_state = read_prop_amm_pair_state(&ctx.svm, &offer_pda);
+    assert_eq!(first_state.curr_sell_trade_count, 1);
+    assert_eq!(first_state.curr_sell_value_stable, sell_amount / 1_000);
+
+    advance_clock_by(&mut ctx.svm, 11);
+    let sell_ix = build_open_swap_sell_ix(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        sell_amount,
+        0,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[sell_ix], &[&ctx.payer, &ctx.user]).unwrap();
+    let rolled_state = read_prop_amm_pair_state(&ctx.svm, &offer_pda);
+
+    assert!(rolled_state.epoch_start > first_state.epoch_start);
+    assert_eq!(
+        rolled_state.prev_net_sell_value_stable,
+        first_state.curr_sell_value_stable
+    );
+    assert_eq!(rolled_state.curr_sell_trade_count, 1);
+    assert_eq!(rolled_state.curr_sell_value_stable, sell_amount / 1_000);
 }
 
 #[test]
