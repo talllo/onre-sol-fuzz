@@ -609,6 +609,29 @@ fn test_prop_amm_pair_must_be_enabled() {
 }
 
 #[test]
+fn test_configure_prop_amm_rejects_non_boss() {
+    let mut ctx = setup_prop_amm();
+    let unauthorized = Keypair::new();
+    ctx.svm
+        .airdrop(&unauthorized.pubkey(), INITIAL_LAMPORTS)
+        .unwrap();
+
+    let ix = build_configure_prop_amm_ix(
+        &unauthorized.pubkey(),
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        false,
+        700,
+        25_000,
+    );
+    let result = send_tx(&mut ctx.svm, &[ix], &[&unauthorized]);
+    assert!(result.is_err(), "non-boss should not configure Prop AMM");
+
+    let (offer_pda, _) = find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint);
+    assert!(read_prop_amm_pair_state(&ctx.svm, &offer_pda).enabled);
+}
+
+#[test]
 fn test_configure_prop_amm_rejects_invalid_parameters() {
     let mut ctx = setup_prop_amm();
     let boss = ctx.payer.pubkey();

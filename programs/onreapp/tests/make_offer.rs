@@ -70,6 +70,36 @@ fn test_set_offer_disabled_admin_can_disable_boss_only_can_enable() {
 }
 
 #[test]
+fn test_set_offer_disabled_rejects_non_boss_non_admin() {
+    let (mut svm, payer, _) = setup_initialized();
+    let boss = payer.pubkey();
+
+    let token_in = create_mint(&mut svm, &payer, 9, &boss);
+    let token_out = create_mint(&mut svm, &payer, 9, &boss);
+    let ix = build_make_offer_ix(
+        &boss,
+        &token_in,
+        &token_out,
+        0,
+        false,
+        false,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let unauthorized = Keypair::new();
+    svm.airdrop(&unauthorized.pubkey(), INITIAL_LAMPORTS)
+        .unwrap();
+    let ix = build_set_offer_disabled_ix(&unauthorized.pubkey(), &token_in, &token_out, true);
+    let result = send_tx(&mut svm, &[ix], &[&unauthorized]);
+    assert!(
+        result.is_err(),
+        "non-boss non-admin should not disable offers"
+    );
+    assert_eq!(read_offer(&svm, &token_in, &token_out).disabled, 0);
+}
+
+#[test]
 fn test_make_multiple_offers() {
     let (mut svm, payer, _) = setup_initialized();
     let boss = payer.pubkey();

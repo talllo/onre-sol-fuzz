@@ -152,6 +152,30 @@ fn test_set_redemption_offer_disabled_admin_can_disable_boss_only_can_enable() {
 }
 
 #[test]
+fn test_set_redemption_offer_disabled_rejects_non_boss_non_admin() {
+    let (mut svm, _payer, _usdc, _onyc, redemption_tin, redemption_tout) = setup_redemption();
+    let unauthorized = Keypair::new();
+    svm.airdrop(&unauthorized.pubkey(), INITIAL_LAMPORTS)
+        .unwrap();
+
+    let ix = build_set_redemption_offer_disabled_ix(
+        &unauthorized.pubkey(),
+        &redemption_tin,
+        &redemption_tout,
+        true,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&unauthorized]);
+    assert!(
+        result.is_err(),
+        "non-boss non-admin should not disable redemption offers"
+    );
+    assert_eq!(
+        read_redemption_offer(&svm, &redemption_tin, &redemption_tout).disabled,
+        0
+    );
+}
+
+#[test]
 fn test_make_redemption_offer_rejects_non_authorized() {
     let (mut svm, payer, _onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
