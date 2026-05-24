@@ -18,8 +18,8 @@ use crate::instructions::offer::{
 use crate::instructions::Offer;
 use crate::state::{ConfigurableVaultKind, State};
 use crate::utils::{
-    get_associated_token_account, get_or_create_associated_token_account, mint_tokens,
-    program_controls_mint, transfer_tokens, ApprovalMessage, EnsureAtaParams,
+    get_associated_token_account, get_or_create_associated_token_account, has_transfer_fee,
+    mint_tokens, program_controls_mint, transfer_tokens, ApprovalMessage, EnsureAtaParams,
 };
 use anchor_lang::{prelude::*, Accounts};
 use anchor_spl::{
@@ -115,7 +115,8 @@ pub struct OpenSwapBuy<'info> {
     #[account(mut)]
     pub permissionless_token_out_account: UncheckedAccount<'info>,
 
-    /// CHECK: PDA derivation validated in instruction logic
+    /// CHECK: PDA derivation validated by seeds constraint
+    #[account(seeds = [crate::constants::seeds::MINT_AUTHORITY], bump)]
     pub mint_authority: UncheckedAccount<'info>,
 
     pub buffer_accounts: BufferAccrualAccounts<'info>,
@@ -177,6 +178,14 @@ fn execute_open_swap_buy<'info>(
         &ctx.accounts.token_in_mint,
         &ctx.accounts.token_out_mint,
     )?;
+    require!(
+        !has_transfer_fee(&ctx.accounts.token_in_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
+    require!(
+        !has_transfer_fee(&ctx.accounts.token_out_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
     require!(
         result.token_out_amount >= minimum_out,
         crate::OnreError::MinimumOutNotMet

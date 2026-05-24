@@ -975,6 +975,98 @@ fn test_open_swap_buy_respects_max_supply_and_max_mint_amount() {
 }
 
 #[test]
+fn test_open_swap_buy_rejects_noncanonical_mint_authority() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    add_prop_amm_vector(&mut ctx);
+    let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let fake_mint_authority = Keypair::new();
+    ctx.svm
+        .airdrop(&fake_mint_authority.pubkey(), INITIAL_LAMPORTS)
+        .unwrap();
+
+    let mut ix = build_open_swap_buy_ix(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        1_000_000,
+        0,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    ix.accounts[22] = AccountMeta::new_readonly(fake_mint_authority.pubkey(), false);
+
+    let result = send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]);
+    assert!(
+        result.is_err(),
+        "Prop AMM buy should reject a non-canonical mint authority account"
+    );
+}
+
+#[test]
+fn test_open_swap_buy_rejects_token_in_transfer_fee() {
+    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+    let usdg_mint = create_mint_2022_with_transfer_fee(&mut svm, &payer, 6, &boss, 500, 1_000_000);
+
+    let ix = build_make_offer_ix(
+        &boss,
+        &usdg_mint,
+        &onyc_mint,
+        0,
+        false,
+        true,
+        &TOKEN_2022_PROGRAM_ID,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let (offer_pda, _) = find_offer_pda(&usdg_mint, &onyc_mint);
+    let ix = build_set_main_offer_ix(&boss, &offer_pda);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let ix = build_configure_prop_amm_ix(&boss, &usdg_mint, &onyc_mint, true, 700, 25_000);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let current_time = get_clock_time(&svm);
+    let ix = build_add_offer_vector_ix(
+        &boss,
+        &usdg_mint,
+        &onyc_mint,
+        Some(current_time),
+        current_time,
+        1_000_000_000,
+        0,
+        86_400,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let user = Keypair::new();
+    svm.airdrop(&user.pubkey(), 10 * INITIAL_LAMPORTS).unwrap();
+    create_token_account_2022(&mut svm, &usdg_mint, &user.pubkey(), 10_000_000);
+
+    let ix = build_open_swap_buy_ix(
+        &onyc_mint,
+        &user.pubkey(),
+        &boss,
+        &usdg_mint,
+        &onyc_mint,
+        1_000_000,
+        0,
+        None,
+        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&payer, &user]);
+    assert!(
+        result.is_err(),
+        "Prop AMM buy should reject Token-2022 transfer-fee assets"
+    );
+}
+
+#[test]
 fn test_open_swap_sell_rolls_epoch_tracker_before_recording_trade() {
     let mut ctx = setup_prop_amm();
     let boss = ctx.payer.pubkey();
