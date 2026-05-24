@@ -147,6 +147,8 @@ pub struct CreateRedemptionRequest<'info> {
 /// # Events
 /// * `RedemptionRequestCreatedEvent` - Emitted with redemption request details
 pub fn create_redemption_request(ctx: Context<CreateRedemptionRequest>, amount: u64) -> Result<()> {
+    require!(amount > 0, crate::OnreError::InvalidAmount);
+
     // Validate the redemption offer is properly initialized (offer is not default)
     require!(
         ctx.accounts.redemption_offer.offer != Pubkey::default(),

@@ -332,6 +332,33 @@ fn test_create_redemption_request_success() {
 }
 
 #[test]
+fn test_create_redemption_request_rejects_zero_amount() {
+    let (mut svm, _payer, _usdc, onyc_mint, redemption_tin, redemption_tout) = setup_redemption();
+
+    let user = Keypair::new();
+    svm.airdrop(&user.pubkey(), 10 * INITIAL_LAMPORTS).unwrap();
+    create_token_account(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
+
+    let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
+    create_token_account(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
+
+    let ix = build_create_redemption_request_ix(
+        &user.pubkey(),
+        &redemption_tin,
+        &redemption_tout,
+        0,
+        0,
+        &TOKEN_PROGRAM_ID,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&user]);
+    assert!(result.is_err(), "zero redemption requests should fail");
+
+    let offer_data = read_redemption_offer(&svm, &redemption_tin, &redemption_tout);
+    assert_eq!(offer_data.request_counter, 0);
+    assert_eq!(offer_data.requested_redemptions, 0);
+}
+
+#[test]
 fn test_create_multiple_redemption_requests() {
     let (mut svm, _payer, _usdc, onyc_mint, redemption_tin, redemption_tout) = setup_redemption();
     let user = Keypair::new();
