@@ -121,6 +121,12 @@ pub struct RefreshMarketStatsV2<'info> {
 
 /// Recomputes and writes the canonical market-stats PDA without requiring admin access.
 pub fn refresh_market_stats(ctx: Context<RefreshMarketStats>) -> Result<()> {
+    require_keys_eq!(
+        ctx.accounts.token_program.key(),
+        anchor_spl::token::ID,
+        crate::OnreError::InvalidTokenProgram
+    );
+
     let main_offer = load_main_offer(
         ctx.program_id,
         &ctx.accounts.main_offer.to_account_info(),

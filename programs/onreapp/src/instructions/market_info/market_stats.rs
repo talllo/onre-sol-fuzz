@@ -62,6 +62,11 @@ pub fn recompute_market_stats(
     excluded_balance_amount: u64,
 ) -> Result<MarketStatsSnapshot> {
     require_keys_eq!(
+        *onyc_mint.to_account_info().owner,
+        anchor_spl::token::ID,
+        crate::OnreError::InvalidTokenProgram
+    );
+    require_keys_eq!(
         offer.token_out_mint,
         onyc_mint.key(),
         crate::OnreError::InvalidOnycMint
