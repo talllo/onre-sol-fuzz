@@ -82,6 +82,7 @@ fn build_configure_prop_amm_with_params_ix(
     cadence_sensitivity_scaled: u32,
     epoch_duration_seconds: i64,
     wall_sensitivity_scaled: u32,
+    minimum_sell_haircut_onyc: u64,
 ) -> Instruction {
     let (state_pda, _) = find_state_pda();
     let (offer_pda, _) = find_offer_pda(asset_mint, onyc_mint);
@@ -95,6 +96,7 @@ fn build_configure_prop_amm_with_params_ix(
     data.extend_from_slice(&cadence_sensitivity_scaled.to_le_bytes());
     data.extend_from_slice(&epoch_duration_seconds.to_le_bytes());
     data.extend_from_slice(&wall_sensitivity_scaled.to_le_bytes());
+    data.extend_from_slice(&minimum_sell_haircut_onyc.to_le_bytes());
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![
@@ -143,11 +145,31 @@ fn add_prop_amm_vector(ctx: &mut PropAmmCtx) {
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 }
 
+fn configure_minimum_sell_haircut(ctx: &mut PropAmmCtx, minimum_sell_haircut_onyc: u64) {
+    let boss = ctx.payer.pubkey();
+    let ix = build_configure_prop_amm_with_params_ix(
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        true,
+        700,
+        25_000,
+        1_000,
+        20,
+        10_000,
+        86_400,
+        20_000,
+        minimum_sell_haircut_onyc,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+}
+
 fn prepare_prop_amm_sell_side(ctx: &mut PropAmmCtx, redemption_fee_bps: u16) {
     let boss = ctx.payer.pubkey();
     let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
     add_prop_amm_vector(ctx);
+    configure_minimum_sell_haircut(ctx, 0);
 
     if redemption_fee_bps > 0 {
         let ix = build_make_redemption_offer_ix(
@@ -521,6 +543,7 @@ fn test_dynamic_wall_accumulates_sell_pressure_and_buys_relieve_it() {
         86_400,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    configure_minimum_sell_haircut(&mut ctx, 0);
 
     let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
     create_token_account(
@@ -673,6 +696,7 @@ fn test_configure_prop_amm_rejects_invalid_parameters() {
             cadence_sensitivity_scaled,
             epoch_duration_seconds,
             wall_sensitivity_scaled,
+            5_000_000_000,
         );
         assert!(
             send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).is_err(),
@@ -858,6 +882,95 @@ fn test_open_swap_sell_enforces_minimum_out() {
         &TOKEN_PROGRAM_ID,
     );
     assert!(send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).is_err());
+}
+
+#[test]
+fn test_open_swap_sell_applies_default_minimum_haircut() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    add_prop_amm_vector(&mut ctx);
+
+    let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
+    create_token_account(
+        &mut ctx.svm,
+        &ctx.usdc_mint,
+        &redemption_vault_authority,
+        10_000_000_000,
+    );
+    create_token_account(
+        &mut ctx.svm,
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        20_000_000_000,
+    );
+    let ix = build_refresh_market_stats_ix(&boss, &boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let dust_quote_ix =
+        build_quote_swap_ix(&ctx.onyc_mint, &ctx.onyc_mint, &ctx.usdc_mint, 100_000_000);
+    assert!(
+        send_tx(&mut ctx.svm, &[dust_quote_ix], &[&ctx.payer]).is_err(),
+        "gross input below 5 ONYC minimum haircut should fail"
+    );
+
+    let zero_net_sell_amount = 5_000_000_000;
+    let quote_ix = build_quote_swap_ix(
+        &ctx.onyc_mint,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        zero_net_sell_amount,
+    );
+    let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
+    let quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
+
+    assert_eq!(quote.token_in_amount, zero_net_sell_amount);
+    assert_eq!(quote.token_in_fee_amount, 5_000_000_000);
+    assert_eq!(quote.token_in_net_amount, 0);
+    assert_eq!(quote.token_out_amount, 0);
+    assert_eq!(quote.minimum_out, 0);
+
+    let ix = build_open_swap_sell_ix(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        zero_net_sell_amount,
+        0,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
+
+    let sell_amount = 5_100_000_000;
+    let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.onyc_mint, &ctx.usdc_mint, sell_amount);
+    let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
+    let quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
+
+    assert_eq!(quote.token_in_amount, sell_amount);
+    assert_eq!(quote.token_in_fee_amount, 5_000_000_000);
+    assert_eq!(quote.token_in_net_amount, 100_000_000);
+
+    let ix = build_open_swap_sell_ix(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        sell_amount,
+        quote.minimum_out,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
+
+    let fee_vault_ata =
+        get_associated_token_address(&find_prop_amm_fee_vault_pda().0, &ctx.onyc_mint);
+    assert_eq!(get_token_balance(&ctx.svm, &fee_vault_ata), 10_000_000_000);
 }
 
 #[test]
@@ -1124,9 +1237,26 @@ fn test_open_swap_sell_rolls_epoch_tracker_before_recording_trade() {
         10_000,
         10,
         20_000,
+        0,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
     prepare_prop_amm_sell_side(&mut ctx, 0);
+    advance_slot(&mut ctx.svm);
+    let ix = build_configure_prop_amm_with_params_ix(
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        true,
+        700,
+        25_000,
+        1_000,
+        20,
+        10_000,
+        10,
+        20_000,
+        0,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     let sell_amount = 100_000_000;
     let sell_ix = build_open_swap_sell_ix(
@@ -1325,6 +1455,7 @@ fn test_quote_and_open_swap_support_sell_side() {
         86_400,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    configure_minimum_sell_haircut(&mut ctx, 0);
 
     let ix = build_make_redemption_offer_ix(
         &boss,
@@ -1431,6 +1562,7 @@ fn test_quote_swap_sell_uses_actual_redemption_vault_balance_not_vault_target() 
         86_400,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    configure_minimum_sell_haircut(&mut ctx, 0);
 
     let ix = build_make_redemption_offer_ix(
         &boss,
@@ -1503,6 +1635,7 @@ fn test_open_swap_sell_accrues_buffer_before_burning_onyc() {
         86_400,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    configure_minimum_sell_haircut(&mut ctx, 0);
 
     create_token_account(
         &mut ctx.svm,
@@ -1591,6 +1724,7 @@ fn test_sell_side_uses_zero_fee_when_redemption_offer_is_uninitialized() {
         86_400,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    configure_minimum_sell_haircut(&mut ctx, 0);
 
     let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
     create_token_account(

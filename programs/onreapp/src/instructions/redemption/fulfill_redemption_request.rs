@@ -426,6 +426,7 @@ fn execute_fulfill_redemption_request(
         params.token_in_mint,
         params.token_out_mint,
         params.redemption_offer.fee_basis_points,
+        0,
     )?;
     let price = result.price;
     let token_in_net_amount = result.token_in_net_amount;

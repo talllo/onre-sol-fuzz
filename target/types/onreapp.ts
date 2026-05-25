@@ -1439,6 +1439,10 @@ export type Onreapp = {
         {
           "name": "wallSensitivityScaled",
           "type": "u32"
+        },
+        {
+          "name": "minimumSellHaircutOnyc",
+          "type": "u64"
         }
       ]
     },
@@ -14162,6 +14166,14 @@ export type Onreapp = {
           {
             "name": "newWallSensitivityScaled",
             "type": "u32"
+          },
+          {
+            "name": "oldMinimumSellHaircutOnyc",
+            "type": "u64"
+          },
+          {
+            "name": "newMinimumSellHaircutOnyc",
+            "type": "u64"
           }
         ]
       }
@@ -14216,6 +14228,10 @@ export type Onreapp = {
             "type": "u32"
           },
           {
+            "name": "minimumSellHaircutOnyc",
+            "type": "u64"
+          },
+          {
             "name": "currSellValueStable",
             "type": "u64"
           },
@@ -14244,7 +14260,7 @@ export type Onreapp = {
             "type": {
               "array": [
                 "u8",
-                292
+                284
               ]
             }
           }

@@ -511,6 +511,7 @@ pub mod onreapp {
         cadence_sensitivity_scaled: u32,
         epoch_duration_seconds: i64,
         wall_sensitivity_scaled: u32,
+        minimum_sell_haircut_onyc: u64,
     ) -> Result<()> {
         prop_amm::configure_prop_amm(
             ctx,
@@ -522,6 +523,7 @@ pub mod onreapp {
             cadence_sensitivity_scaled,
             epoch_duration_seconds,
             wall_sensitivity_scaled,
+            minimum_sell_haircut_onyc,
         )
     }
 

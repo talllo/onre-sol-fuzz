@@ -735,6 +735,7 @@ pub fn build_swap_sell_quote(
         token_in_mint,
         token_out_mint,
         redemption_fee_basis_points,
+        prop_amm_pair_state.minimum_sell_haircut_onyc,
     )
     .map(|result| SwapQuoteComputation {
         current_price: result.price,

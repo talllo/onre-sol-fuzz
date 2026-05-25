@@ -300,6 +300,7 @@ fn execute_open_swap_sell<'info>(
         &ctx.accounts.token_in_mint,
         &ctx.accounts.token_out_mint,
         redemption_config.fee_basis_points,
+        ctx.accounts.prop_amm_pair_state.minimum_sell_haircut_onyc,
     )?;
     let raw_sell_value_stable = result.token_out_amount;
     result.token_out_amount = apply_hard_wall_liquidity_factor(

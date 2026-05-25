@@ -57,13 +57,24 @@ pub fn process_redemption_core(
     token_in_mint: &InterfaceAccount<Mint>,
     token_out_mint: &InterfaceAccount<Mint>,
     redemption_fee_basis_points: u16,
+    minimum_token_in_fee_amount: u64,
 ) -> Result<RedemptionProcessResult> {
     let current_time = Clock::get()?.unix_timestamp as u64;
 
     let current_price = compute_offer_current_price(offer, current_time)?;
 
     // Calculate fees
-    let fee_amounts = calculate_fees(token_in_amount, redemption_fee_basis_points)?;
+    let mut fee_amounts = calculate_fees(token_in_amount, redemption_fee_basis_points)?;
+    if minimum_token_in_fee_amount > fee_amounts.token_in_fee_amount {
+        require!(
+            token_in_amount >= minimum_token_in_fee_amount,
+            crate::OnreError::InvalidAmount
+        );
+        fee_amounts.token_in_fee_amount = minimum_token_in_fee_amount;
+        fee_amounts.token_in_net_amount = token_in_amount
+            .checked_sub(minimum_token_in_fee_amount)
+            .ok_or(crate::OnreError::MathOverflow)?;
+    }
 
     // Calculate token_out using direct multiplication with price (after fee deduction)
     // token_out_amount = (token_in_net_amount * price * 10^token_out_decimals) / (10^(token_in_decimals + 9))

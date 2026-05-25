@@ -1433,6 +1433,10 @@
         {
           "name": "wall_sensitivity_scaled",
           "type": "u32"
+        },
+        {
+          "name": "minimum_sell_haircut_onyc",
+          "type": "u64"
         }
       ]
     },
@@ -14156,6 +14160,14 @@
           {
             "name": "new_wall_sensitivity_scaled",
             "type": "u32"
+          },
+          {
+            "name": "old_minimum_sell_haircut_onyc",
+            "type": "u64"
+          },
+          {
+            "name": "new_minimum_sell_haircut_onyc",
+            "type": "u64"
           }
         ]
       }
@@ -14210,6 +14222,10 @@
             "type": "u32"
           },
           {
+            "name": "minimum_sell_haircut_onyc",
+            "type": "u64"
+          },
+          {
             "name": "curr_sell_value_stable",
             "type": "u64"
           },
@@ -14238,7 +14254,7 @@
             "type": {
               "array": [
                 "u8",
-                292
+                284
               ]
             }
           }

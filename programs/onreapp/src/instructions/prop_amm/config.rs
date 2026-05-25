@@ -14,7 +14,8 @@ pub const DEFAULT_CADENCE_SENSITIVITY_SCALED: u32 = 10_000;
 pub const DEFAULT_EPOCH_DURATION_SECONDS: i64 = 86_400;
 pub const WALL_SENSITIVITY_SCALE: u128 = 10_000;
 pub const DEFAULT_WALL_SENSITIVITY_SCALED: u32 = 20_000;
-pub const PROP_AMM_PAIR_STATE_RESERVED_BYTES: usize = 292;
+pub const DEFAULT_MINIMUM_SELL_HAIRCUT_ONYC: u64 = 5_000_000_000;
+pub const PROP_AMM_PAIR_STATE_RESERVED_BYTES: usize = 284;
 
 #[account]
 #[derive(InitSpace)]
@@ -30,6 +31,7 @@ pub struct PropAmmPairState {
     pub cadence_sensitivity_scaled: u32,
     pub epoch_duration_seconds: i64,
     pub wall_sensitivity_scaled: u32,
+    pub minimum_sell_haircut_onyc: u64,
     pub curr_sell_value_stable: u64,
     pub curr_buy_value_stable: u64,
     pub prev_net_sell_value_stable: u64,
@@ -60,6 +62,8 @@ pub struct PropAmmConfiguredEvent {
     pub new_epoch_duration_seconds: i64,
     pub old_wall_sensitivity_scaled: u32,
     pub new_wall_sensitivity_scaled: u32,
+    pub old_minimum_sell_haircut_onyc: u64,
+    pub new_minimum_sell_haircut_onyc: u64,
 }
 
 #[derive(Accounts)]
@@ -108,6 +112,7 @@ pub fn configure_prop_amm(
     cadence_sensitivity_scaled: u32,
     epoch_duration_seconds: i64,
     wall_sensitivity_scaled: u32,
+    minimum_sell_haircut_onyc: u64,
 ) -> Result<()> {
     require!(
         curve_peg_haircut_bps <= MAX_BASIS_POINTS,
@@ -150,6 +155,7 @@ pub fn configure_prop_amm(
     let old_cadence_sensitivity_scaled = prop_amm_pair_state.cadence_sensitivity_scaled;
     let old_epoch_duration_seconds = prop_amm_pair_state.epoch_duration_seconds;
     let old_wall_sensitivity_scaled = prop_amm_pair_state.wall_sensitivity_scaled;
+    let old_minimum_sell_haircut_onyc = prop_amm_pair_state.minimum_sell_haircut_onyc;
 
     prop_amm_pair_state.offer = ctx.accounts.offer.key();
     prop_amm_pair_state.asset_mint = ctx.accounts.asset_mint.key();
@@ -162,6 +168,7 @@ pub fn configure_prop_amm(
     prop_amm_pair_state.cadence_sensitivity_scaled = cadence_sensitivity_scaled;
     prop_amm_pair_state.epoch_duration_seconds = epoch_duration_seconds;
     prop_amm_pair_state.wall_sensitivity_scaled = wall_sensitivity_scaled;
+    prop_amm_pair_state.minimum_sell_haircut_onyc = minimum_sell_haircut_onyc;
     if prop_amm_pair_state.epoch_start == 0 {
         prop_amm_pair_state.epoch_start = Clock::get()?.unix_timestamp;
     }
@@ -187,6 +194,8 @@ pub fn configure_prop_amm(
         new_epoch_duration_seconds: epoch_duration_seconds,
         old_wall_sensitivity_scaled,
         new_wall_sensitivity_scaled: wall_sensitivity_scaled,
+        old_minimum_sell_haircut_onyc,
+        new_minimum_sell_haircut_onyc: minimum_sell_haircut_onyc,
     });
 
     Ok(())
@@ -206,6 +215,7 @@ impl Default for PropAmmPairState {
             cadence_sensitivity_scaled: DEFAULT_CADENCE_SENSITIVITY_SCALED,
             epoch_duration_seconds: DEFAULT_EPOCH_DURATION_SECONDS,
             wall_sensitivity_scaled: DEFAULT_WALL_SENSITIVITY_SCALED,
+            minimum_sell_haircut_onyc: DEFAULT_MINIMUM_SELL_HAIRCUT_ONYC,
             curr_sell_value_stable: 0,
             curr_buy_value_stable: 0,
             prev_net_sell_value_stable: 0,
