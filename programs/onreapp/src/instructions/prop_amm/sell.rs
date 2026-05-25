@@ -11,9 +11,7 @@ use crate::instructions::configurable_vault::{
     get_or_create_configurable_vault_token_account_pair, ConfigurableVaultTokenAccountPairParams,
 };
 use crate::instructions::market_info::{load_main_offer, refresh_market_stats_pda};
-use crate::instructions::offer::{
-    validate_take_offer_authorities, verify_offer_approval, OfferTakenEvent,
-};
+use crate::instructions::offer::{validate_take_offer_authorities, OfferTakenEvent};
 use crate::instructions::redemption::{
     execute_redemption_operations, process_redemption_core, ExecuteRedemptionOpsParams,
 };
@@ -21,7 +19,7 @@ use crate::instructions::Offer;
 use crate::state::{ConfigurableVaultKind, State};
 use crate::utils::{
     get_associated_token_account, get_or_create_associated_token_account, program_controls_mint,
-    transfer_tokens, u64_to_dec9, ApprovalMessage, EnsureAtaParams,
+    transfer_tokens, u64_to_dec9, EnsureAtaParams,
 };
 use anchor_lang::{prelude::*, Accounts};
 use anchor_spl::{
@@ -32,7 +30,7 @@ use anchor_spl::{
 use super::config::PropAmmPairState;
 use super::quote::{
     apply_hard_wall_liquidity_factor, record_prop_amm_sell, redemption_offer_config,
-    validate_prop_amm_pair_for_side, SwapSide,
+    resolve_hard_wall_reserve, validate_prop_amm_pair_for_side, SwapSide,
 };
 
 #[derive(Accounts)]
@@ -145,7 +143,6 @@ pub fn open_swap_sell<'info>(
     ctx: Context<'info, OpenSwapSell<'info>>,
     token_in_amount: u64,
     minimum_out: u64,
-    approval_message: Option<ApprovalMessage>,
 ) -> Result<()> {
     validate_prop_amm_pair_for_side(
         ctx.program_id,
@@ -157,14 +154,13 @@ pub fn open_swap_sell<'info>(
         SwapSide::Sell,
     )?;
 
-    execute_open_swap_sell(ctx, token_in_amount, minimum_out, approval_message)
+    execute_open_swap_sell(ctx, token_in_amount, minimum_out)
 }
 
 fn execute_open_swap_sell<'info>(
     ctx: Context<'info, OpenSwapSell<'info>>,
     token_in_amount: u64,
     minimum_out: u64,
-    approval_message: Option<ApprovalMessage>,
 ) -> Result<()> {
     let (_, mint_authority_bump) = validate_take_offer_authorities(
         ctx.program_id,
@@ -195,16 +191,12 @@ fn execute_open_swap_sell<'info>(
         &ctx.accounts.token_out_program.key(),
         crate::OnreError::InvalidVaultTokenOutAccount,
     )?;
-    let hard_wall_reserve = redemption_vault_token_out_account.amount;
-
-    verify_offer_approval(
-        &offer,
-        &approval_message,
-        ctx.program_id,
-        &ctx.accounts.user.key(),
-        &ctx.accounts.state.approver1,
-        &ctx.accounts.state.approver2,
-        &ctx.accounts.instructions_sysvar,
+    let hard_wall_reserve = resolve_hard_wall_reserve(
+        &ctx.accounts.market_stats,
+        redemption_vault_token_out_account.amount,
+        redemption_config.vault_target_bps,
+        ctx.accounts.token_out_mint.decimals,
+        ctx.accounts.token_in_mint.decimals,
     )?;
 
     let user_token_in_account = get_associated_token_account(

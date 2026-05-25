@@ -562,7 +562,6 @@ pub fn build_open_swap_buy_ix(
     token_out_mint: &Pubkey,
     token_in_amount: u64,
     minimum_out: u64,
-    approval_message: Option<&[u8]>,
     token_in_program: &Pubkey,
     token_out_program: &Pubkey,
 ) -> Instruction {
@@ -639,13 +638,6 @@ pub fn build_open_swap_buy_ix(
     let mut data = ix_discriminator("open_swap_buy").to_vec();
     data.extend_from_slice(&token_in_amount.to_le_bytes());
     data.extend_from_slice(&minimum_out.to_le_bytes());
-    match approval_message {
-        Some(msg_bytes) => {
-            data.push(1);
-            data.extend_from_slice(msg_bytes);
-        }
-        None => data.push(0),
-    }
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![
@@ -696,7 +688,6 @@ pub fn build_open_swap_sell_ix(
     token_out_mint: &Pubkey,
     token_in_amount: u64,
     minimum_out: u64,
-    approval_message: Option<&[u8]>,
     token_in_program: &Pubkey,
     token_out_program: &Pubkey,
 ) -> Instruction {
@@ -759,13 +750,6 @@ pub fn build_open_swap_sell_ix(
     let mut data = ix_discriminator("open_swap_sell").to_vec();
     data.extend_from_slice(&token_in_amount.to_le_bytes());
     data.extend_from_slice(&minimum_out.to_le_bytes());
-    match approval_message {
-        Some(msg_bytes) => {
-            data.push(1);
-            data.extend_from_slice(msg_bytes);
-        }
-        None => data.push(0),
-    }
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![

@@ -13,13 +13,12 @@ use crate::instructions::market_info::{load_main_offer, refresh_market_stats_pda
 use crate::instructions::offer::{
     calculate_redemption_vault_refill_amount, is_onyc_token_out_mint,
     load_redemption_offer_vault_target_bps_for_offer, should_accrue_onyc_mint,
-    verify_offer_approval,
 };
 use crate::instructions::Offer;
 use crate::state::{ConfigurableVaultKind, State};
 use crate::utils::{
     get_associated_token_account, get_or_create_associated_token_account, has_transfer_fee,
-    mint_tokens, program_controls_mint, transfer_tokens, ApprovalMessage, EnsureAtaParams,
+    mint_tokens, program_controls_mint, transfer_tokens, EnsureAtaParams,
 };
 use anchor_lang::{prelude::*, Accounts};
 use anchor_spl::{
@@ -51,7 +50,8 @@ pub struct OpenSwapBuy<'info> {
     )]
     pub state: Box<Account<'info, State>>,
 
-    /// CHECK: PDA derivation validated in instruction logic
+    /// CHECK: PDA derivation validated by seeds constraint
+    #[account(seeds = [crate::constants::seeds::OFFER_VAULT_AUTHORITY], bump)]
     pub offer_vault_authority: UncheckedAccount<'info>,
 
     /// CHECK: PDA derivation validated by seeds constraint
@@ -104,7 +104,8 @@ pub struct OpenSwapBuy<'info> {
     #[account(mut)]
     pub prop_amm_fee_token_in_account: UncheckedAccount<'info>,
 
-    /// CHECK: PDA derivation validated in instruction logic
+    /// CHECK: PDA derivation validated by seeds constraint
+    #[account(seeds = [crate::constants::seeds::PERMISSIONLESS_AUTHORITY], bump)]
     pub permissionless_authority: UncheckedAccount<'info>,
 
     /// CHECK: validated and optionally initialized in instruction logic
@@ -145,7 +146,6 @@ pub fn open_swap_buy<'info>(
     ctx: Context<'info, OpenSwapBuy<'info>>,
     token_in_amount: u64,
     minimum_out: u64,
-    approval_message: Option<ApprovalMessage>,
 ) -> Result<()> {
     validate_prop_amm_pair_for_side(
         ctx.program_id,
@@ -157,14 +157,13 @@ pub fn open_swap_buy<'info>(
         SwapSide::Buy,
     )?;
 
-    execute_open_swap_buy(ctx, token_in_amount, minimum_out, approval_message)
+    execute_open_swap_buy(ctx, token_in_amount, minimum_out)
 }
 
 fn execute_open_swap_buy<'info>(
     ctx: Context<'info, OpenSwapBuy<'info>>,
     token_in_amount: u64,
     minimum_out: u64,
-    approval_message: Option<ApprovalMessage>,
 ) -> Result<()> {
     let offer = ctx.accounts.offer.load()?;
     offer.require_enabled()?;
@@ -271,16 +270,6 @@ fn execute_open_swap_buy<'info>(
             token_program_id: ctx.accounts.token_in_program.key(),
             invalid_account_error: crate::OnreError::InvalidVaultTokenInAccount,
         })?;
-
-    verify_offer_approval(
-        &*ctx.accounts.offer.load()?,
-        &approval_message,
-        ctx.program_id,
-        &ctx.accounts.user.key(),
-        &ctx.accounts.state.approver1,
-        &ctx.accounts.state.approver2,
-        &ctx.accounts.instructions_sysvar,
-    )?;
 
     let (_, permissionless_authority_bump) = Pubkey::find_program_address(
         &[crate::constants::seeds::PERMISSIONLESS_AUTHORITY],

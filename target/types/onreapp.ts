@@ -5107,7 +5107,37 @@ export type Onreapp = {
           }
         },
         {
-          "name": "offerVaultAuthority"
+          "name": "offerVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "redemptionVaultAuthority",
@@ -5204,7 +5234,32 @@ export type Onreapp = {
           "writable": true
         },
         {
-          "name": "permissionlessAuthority"
+          "name": "permissionlessAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110,
+                  108,
+                  101,
+                  115,
+                  115,
+                  45,
+                  49
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "permissionlessTokenInAccount",
@@ -5296,16 +5351,6 @@ export type Onreapp = {
         {
           "name": "minimumOut",
           "type": "u64"
-        },
-        {
-          "name": "approvalMessage",
-          "type": {
-            "option": {
-              "defined": {
-                "name": "approvalMessage"
-              }
-            }
-          }
         }
       ]
     },
@@ -5563,16 +5608,6 @@ export type Onreapp = {
         {
           "name": "minimumOut",
           "type": "u64"
-        },
-        {
-          "name": "approvalMessage",
-          "type": {
-            "option": {
-              "defined": {
-                "name": "approvalMessage"
-              }
-            }
-          }
         }
       ]
     },

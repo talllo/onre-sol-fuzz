@@ -5101,7 +5101,37 @@
           }
         },
         {
-          "name": "offer_vault_authority"
+          "name": "offer_vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "redemption_vault_authority",
@@ -5198,7 +5228,32 @@
           "writable": true
         },
         {
-          "name": "permissionless_authority"
+          "name": "permissionless_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110,
+                  108,
+                  101,
+                  115,
+                  115,
+                  45,
+                  49
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "permissionless_token_in_account",
@@ -5290,16 +5345,6 @@
         {
           "name": "minimum_out",
           "type": "u64"
-        },
-        {
-          "name": "approval_message",
-          "type": {
-            "option": {
-              "defined": {
-                "name": "ApprovalMessage"
-              }
-            }
-          }
         }
       ]
     },
@@ -5557,16 +5602,6 @@
         {
           "name": "minimum_out",
           "type": "u64"
-        },
-        {
-          "name": "approval_message",
-          "type": {
-            "option": {
-              "defined": {
-                "name": "ApprovalMessage"
-              }
-            }
-          }
         }
       ]
     },

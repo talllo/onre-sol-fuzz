@@ -1,6 +1,6 @@
 use crate::constants::seeds;
 use crate::instructions::buffer::{BufferState, ReserveVaultDepositedEvent};
-use crate::utils::transfer_tokens;
+use crate::utils::{has_transfer_fee, transfer_tokens};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
@@ -46,6 +46,11 @@ pub struct DepositReserveVault<'info> {
 }
 
 pub fn deposit_reserve_vault(ctx: Context<DepositReserveVault>, amount: u64) -> Result<()> {
+    require!(
+        !has_transfer_fee(&ctx.accounts.onyc_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
+
     transfer_tokens(
         &ctx.accounts.onyc_mint,
         &ctx.accounts.token_program,

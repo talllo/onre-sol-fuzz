@@ -1,6 +1,6 @@
 use crate::constants::seeds;
 use crate::state::State;
-use crate::utils::transfer_tokens;
+use crate::utils::{has_transfer_fee, transfer_tokens};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
@@ -110,6 +110,11 @@ pub struct OfferVaultWithdraw<'info> {
 /// # Events
 /// * `OfferVaultWithdrawEvent` - Emitted with mint, amount, and withdrawer details
 pub fn offer_vault_withdraw(ctx: Context<OfferVaultWithdraw>, amount: u64) -> Result<()> {
+    require!(
+        !has_transfer_fee(&ctx.accounts.token_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
+
     // Create signer seeds for vault authority
     let vault_authority_seeds = &[seeds::OFFER_VAULT_AUTHORITY, &[ctx.bumps.vault_authority]];
     let signer_seeds = &[&vault_authority_seeds[..]];

@@ -314,18 +314,16 @@ pub mod onreapp {
         ctx: Context<'info, OpenSwapBuy<'info>>,
         token_in_amount: u64,
         minimum_out: u64,
-        approval_message: Option<ApprovalMessage>,
     ) -> Result<()> {
-        prop_amm::open_swap_buy(ctx, token_in_amount, minimum_out, approval_message)
+        prop_amm::open_swap_buy(ctx, token_in_amount, minimum_out)
     }
 
     pub fn open_swap_sell<'info>(
         ctx: Context<'info, OpenSwapSell<'info>>,
         token_in_amount: u64,
         minimum_out: u64,
-        approval_message: Option<ApprovalMessage>,
     ) -> Result<()> {
-        prop_amm::open_swap_sell(ctx, token_in_amount, minimum_out, approval_message)
+        prop_amm::open_swap_sell(ctx, token_in_amount, minimum_out)
     }
 
     /// Takes a offer using permissionless flow with intermediary accounts.

@@ -1,6 +1,6 @@
 use crate::constants::seeds;
 use crate::state::{ConfigurableVault, ConfigurableVaultKind, State};
-use crate::utils::transfer_tokens;
+use crate::utils::{has_transfer_fee, transfer_tokens};
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
@@ -21,6 +21,7 @@ pub struct WithdrawConfigurableVault<'info> {
     #[account(
         seeds = [seeds::STATE],
         bump = state.bump,
+        constraint = state.is_killed == false @ crate::OnreError::KillSwitchActivated,
     )]
     pub state: Box<Account<'info, State>>,
 
@@ -66,6 +67,11 @@ pub fn withdraw_configurable_vault(
     kind: ConfigurableVaultKind,
     amount: u64,
 ) -> Result<()> {
+    require!(
+        !has_transfer_fee(&ctx.accounts.mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
+
     let destination = ctx.accounts.configurable_vault.withdrawal_destination;
     require!(
         destination != Pubkey::default(),

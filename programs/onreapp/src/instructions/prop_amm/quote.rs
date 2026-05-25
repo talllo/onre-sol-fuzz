@@ -1,4 +1,5 @@
 use crate::constants::seeds;
+use crate::instructions::market_info::read_market_stats_account;
 use crate::instructions::offer::process_offer_core;
 use crate::instructions::redemption::{
     load_optional_checked_redemption_offer, process_redemption_core,
@@ -206,6 +207,7 @@ pub(crate) fn validate_prop_amm_pair_for_side(
 
 pub(crate) struct RedemptionOfferConfig {
     pub fee_basis_points: u16,
+    pub vault_target_bps: u16,
 }
 
 pub(crate) fn redemption_offer_config(
@@ -225,13 +227,36 @@ pub(crate) fn redemption_offer_config(
     else {
         return Ok(RedemptionOfferConfig {
             fee_basis_points: 0,
+            vault_target_bps: 0,
         });
     };
     redemption_offer.require_enabled()?;
 
     Ok(RedemptionOfferConfig {
         fee_basis_points: redemption_offer.fee_basis_points,
+        vault_target_bps: redemption_offer.vault_target_bps,
     })
+}
+
+pub(crate) fn resolve_hard_wall_reserve(
+    market_stats_account: &UncheckedAccount,
+    actual_liquidity: u64,
+    vault_target_bps: u16,
+    token_out_decimals: u8,
+    onyc_decimals: u8,
+) -> Result<u64> {
+    if vault_target_bps == 0 {
+        return Ok(actual_liquidity);
+    }
+
+    let market_stats = read_market_stats_account(&market_stats_account.to_account_info())?;
+    let target_reserve = hard_wall_reserve_from_tvl(
+        market_stats.tvl,
+        vault_target_bps,
+        token_out_decimals,
+        onyc_decimals,
+    )?;
+    Ok(actual_liquidity.min(target_reserve))
 }
 
 pub(crate) fn apply_hard_wall_liquidity_factor(
@@ -474,7 +499,7 @@ pub fn dynamic_wall_liquidity_at_time(
         effective_sell_volume,
         prop_amm_pair_state.wall_sensitivity_scaled,
     )?;
-    Ok(wall_position)
+    Ok(wall_position.min(hard_wall_reserve))
 }
 
 pub fn apply_hard_wall_reserve_curve_with_params(
@@ -806,14 +831,21 @@ pub fn quote_swap_sell(ctx: Context<QuoteSwapSell>, token_in_amount: u64) -> Res
         ctx.accounts.token_in_mint.key(),
         ctx.accounts.token_out_mint.key(),
     )?;
-    let hard_wall_reserve = ctx.accounts.redemption_vault_token_out_account.amount;
+    let actual_liquidity = ctx.accounts.redemption_vault_token_out_account.amount;
+    let hard_wall_reserve = resolve_hard_wall_reserve(
+        &ctx.accounts.market_stats,
+        actual_liquidity,
+        redemption_config.vault_target_bps,
+        ctx.accounts.token_out_mint.decimals,
+        ctx.accounts.token_in_mint.decimals,
+    )?;
     let quote = build_swap_sell_quote(
         ctx.program_id,
         &ctx.accounts.state,
         ctx.accounts.offer.key(),
         &offer,
         &ctx.accounts.prop_amm_pair_state,
-        ctx.accounts.redemption_vault_token_out_account.amount,
+        actual_liquidity,
         hard_wall_reserve,
         redemption_config.fee_basis_points,
         token_in_amount,

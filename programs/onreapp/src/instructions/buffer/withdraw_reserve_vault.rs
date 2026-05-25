@@ -1,7 +1,7 @@
 use crate::constants::seeds;
 use crate::instructions::buffer::{BufferState, ReserveVaultWithdrawnEvent};
 use crate::state::State;
-use crate::utils::transfer_tokens;
+use crate::utils::{has_transfer_fee, transfer_tokens};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
@@ -55,6 +55,11 @@ pub struct WithdrawReserveVault<'info> {
 }
 
 pub fn withdraw_reserve_vault(ctx: Context<WithdrawReserveVault>, amount: u64) -> Result<()> {
+    require!(
+        !has_transfer_fee(&ctx.accounts.onyc_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
+
     let reserve_vault_authority_seeds = &[
         seeds::RESERVE_VAULT_AUTHORITY,
         &[ctx.bumps.reserve_vault_authority],

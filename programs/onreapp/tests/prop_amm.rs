@@ -367,9 +367,14 @@ fn test_dynamic_wall_liquidity_matches_graph_dynamic_wall() {
     };
 
     let liquidity =
-        dynamic_wall_liquidity_at_time(100_000, 10_000_000_000, 200_000, &state, 1).unwrap();
+        dynamic_wall_liquidity_at_time(100_000, 10_000_000_000, 20_000_000_000, &state, 1).unwrap();
 
     assert_eq!(liquidity, 10_000_000_000);
+
+    let capped_liquidity =
+        dynamic_wall_liquidity_at_time(100_000, 10_000_000_000, 200_000, &state, 1).unwrap();
+
+    assert_eq!(capped_liquidity, 200_000);
 }
 
 #[test]
@@ -574,7 +579,6 @@ fn test_dynamic_wall_accumulates_sell_pressure_and_buys_relieve_it() {
         &ctx.usdc_mint,
         sell_amount,
         first_quote.minimum_out,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -603,7 +607,6 @@ fn test_dynamic_wall_accumulates_sell_pressure_and_buys_relieve_it() {
         &ctx.onyc_mint,
         1_000_000_000,
         buy_quote.minimum_out,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -789,7 +792,6 @@ fn test_open_swap_enforces_minimum_out() {
         &ctx.onyc_mint,
         1_000_000,
         quote.minimum_out + 1,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -804,7 +806,6 @@ fn test_open_swap_enforces_minimum_out() {
         &ctx.onyc_mint,
         1_000_000,
         quote.minimum_out,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -849,13 +850,15 @@ fn test_open_swap_buy_creates_prefunded_user_output_ata() {
         &ctx.onyc_mint,
         1_000_000,
         quote.minimum_out,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
 
-    assert_eq!(get_token_balance(&ctx.svm, &user_onyc_ata), quote.token_out_amount);
+    assert_eq!(
+        get_token_balance(&ctx.svm, &user_onyc_ata),
+        quote.token_out_amount
+    );
 }
 
 #[test]
@@ -877,7 +880,6 @@ fn test_open_swap_sell_enforces_minimum_out() {
         &ctx.usdc_mint,
         sell_amount,
         quote.minimum_out + 1,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -939,7 +941,6 @@ fn test_open_swap_sell_applies_default_minimum_haircut() {
         &ctx.usdc_mint,
         zero_net_sell_amount,
         0,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -962,7 +963,6 @@ fn test_open_swap_sell_applies_default_minimum_haircut() {
         &ctx.usdc_mint,
         sell_amount,
         quote.minimum_out,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -996,7 +996,6 @@ fn test_prop_amm_rejects_quotes_and_swaps_when_kill_switch_active() {
         &ctx.onyc_mint,
         1_000_000,
         0,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1030,7 +1029,6 @@ fn test_prop_amm_rejects_quotes_and_swaps_when_kill_switch_active() {
         &sell_ctx.usdc_mint,
         100,
         0,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1081,7 +1079,6 @@ fn test_open_swap_buy_respects_max_supply_and_max_mint_amount() {
         &max_supply_ctx.onyc_mint,
         1_000_000,
         quote.minimum_out,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1114,7 +1111,6 @@ fn test_open_swap_buy_respects_max_supply_and_max_mint_amount() {
         &max_mint_ctx.onyc_mint,
         1_000_000,
         quote.minimum_out,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1150,7 +1146,6 @@ fn test_open_swap_buy_rejects_noncanonical_mint_authority() {
         &ctx.onyc_mint,
         1_000_000,
         0,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1210,7 +1205,6 @@ fn test_open_swap_buy_rejects_token_in_transfer_fee() {
         &onyc_mint,
         1_000_000,
         0,
-        None,
         &TOKEN_2022_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1267,7 +1261,6 @@ fn test_open_swap_sell_rolls_epoch_tracker_before_recording_trade() {
         &ctx.usdc_mint,
         sell_amount,
         0,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1287,7 +1280,6 @@ fn test_open_swap_sell_rolls_epoch_tracker_before_recording_trade() {
         &ctx.usdc_mint,
         sell_amount,
         0,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1354,7 +1346,6 @@ fn test_open_swap_buy_refills_redemption_vault_until_target_then_overflows_to_bo
         &ctx.onyc_mint,
         1_000_000,
         first_quote.minimum_out,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1394,7 +1385,6 @@ fn test_open_swap_buy_refills_redemption_vault_until_target_then_overflows_to_bo
         &ctx.onyc_mint,
         1_000_001,
         second_quote.minimum_out,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1514,7 +1504,6 @@ fn test_quote_and_open_swap_support_sell_side() {
         &ctx.usdc_mint,
         sell_amount,
         quote.minimum_out,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1543,7 +1532,7 @@ fn test_quote_and_open_swap_support_sell_side() {
 }
 
 #[test]
-fn test_quote_swap_sell_uses_actual_redemption_vault_balance_not_vault_target() {
+fn test_quote_swap_sell_caps_hard_wall_reserve_by_vault_target() {
     let mut ctx = setup_prop_amm();
     let boss = ctx.payer.pubkey();
     let current_time = get_clock_time(&ctx.svm);
@@ -1589,9 +1578,10 @@ fn test_quote_swap_sell_uses_actual_redemption_vault_balance_not_vault_target() 
     );
     let ix = build_refresh_market_stats_ix(&boss, &boss, &ctx.usdc_mint, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
-    assert!(read_market_stats(&ctx.svm).tvl > 0);
+    let market_stats = read_market_stats(&ctx.svm);
+    assert!(market_stats.tvl > 0);
 
-    let sell_amount = 100_000_000;
+    let sell_amount = 1_000_000_000;
     let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.onyc_mint, &ctx.usdc_mint, sell_amount);
     let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
     let vault_balance_quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
@@ -1601,6 +1591,9 @@ fn test_quote_swap_sell_uses_actual_redemption_vault_balance_not_vault_target() 
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     advance_slot(&mut ctx.svm);
+    let target_reserve = hard_wall_reserve_from_tvl(market_stats.tvl, 1, 6, 9).unwrap();
+    assert!(target_reserve < 10_000_000_000);
+
     let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.onyc_mint, &ctx.usdc_mint, sell_amount);
     let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
     let target_quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
@@ -1609,9 +1602,11 @@ fn test_quote_swap_sell_uses_actual_redemption_vault_balance_not_vault_target() 
         target_quote.token_in_net_amount,
         vault_balance_quote.token_in_net_amount
     );
-    assert_eq!(
-        target_quote.token_out_amount,
-        vault_balance_quote.token_out_amount
+    assert!(
+        target_quote.token_out_amount < vault_balance_quote.token_out_amount,
+        "vault target should cap the hard-wall reserve: target_reserve={target_reserve}, vault_quote={}, target_quote={}",
+        vault_balance_quote.token_out_amount,
+        target_quote.token_out_amount
     );
 }
 
@@ -1681,7 +1676,6 @@ fn test_open_swap_sell_accrues_buffer_before_burning_onyc() {
         &ctx.usdc_mint,
         sell_amount,
         0,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -1769,7 +1763,6 @@ fn test_sell_side_uses_zero_fee_when_redemption_offer_is_uninitialized() {
         &ctx.usdc_mint,
         sell_amount,
         quote.minimum_out,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );

@@ -1,5 +1,5 @@
 use crate::constants::seeds;
-use crate::utils::transfer_tokens;
+use crate::utils::{has_transfer_fee, transfer_tokens};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
@@ -96,6 +96,11 @@ pub struct RedemptionVaultDeposit<'info> {
 /// # Events
 /// * `RedemptionVaultDepositEvent` - Emitted with mint, amount, and depositor details
 pub fn redemption_vault_deposit(ctx: Context<RedemptionVaultDeposit>, amount: u64) -> Result<()> {
+    require!(
+        !has_transfer_fee(&ctx.accounts.token_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
+
     // Transfer tokens from depositor to redemption vault
     transfer_tokens(
         &ctx.accounts.token_mint,
