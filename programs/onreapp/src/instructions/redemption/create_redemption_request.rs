@@ -84,7 +84,9 @@ pub struct CreateRedemptionRequest<'info> {
     /// The token mint for token_in (input token)
     #[account(
         constraint = token_in_mint.key() == redemption_offer.token_in_mint
-            @ crate::OnreError::InvalidMint
+            @ crate::OnreError::InvalidMint,
+        constraint = *token_in_mint.to_account_info().owner == anchor_spl::token::ID
+            @ crate::OnreError::InvalidTokenProgram
     )]
     pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
 
@@ -112,6 +114,10 @@ pub struct CreateRedemptionRequest<'info> {
     pub vault_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// Token program interface for transfer operations
+    #[account(
+        constraint = token_program.key() == anchor_spl::token::ID
+            @ crate::OnreError::InvalidTokenProgram
+    )]
     pub token_program: Interface<'info, TokenInterface>,
 
     /// Associated Token Program for automatic token account creation

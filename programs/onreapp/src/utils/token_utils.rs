@@ -71,7 +71,7 @@ pub fn get_or_create_associated_token_account(
         params.invalid_account_error,
     )?;
 
-    if params.ata_account.owner == &system_program::ID && params.ata_account.lamports() == 0 {
+    if params.ata_account.owner == &system_program::ID {
         associated_token::create_idempotent(CpiContext::new(
             params.associated_token_program.key(),
             associated_token::Create {

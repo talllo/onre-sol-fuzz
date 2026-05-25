@@ -9,6 +9,7 @@ use onreapp::instructions::prop_amm::{
     PropAmmPairState, SwapQuote,
 };
 use onreapp::state::ConfigurableVaultKind;
+use solana_sdk::account::Account;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
@@ -790,6 +791,47 @@ fn test_open_swap_enforces_minimum_out() {
         &get_associated_token_address(&ctx.user.pubkey(), &ctx.onyc_mint),
     );
     assert_eq!(user_onyc, quote.token_out_amount);
+}
+
+#[test]
+fn test_open_swap_buy_creates_prefunded_user_output_ata() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    add_prop_amm_vector(&mut ctx);
+
+    let user_onyc_ata = get_associated_token_address(&ctx.user.pubkey(), &ctx.onyc_mint);
+    ctx.svm
+        .set_account(
+            user_onyc_ata,
+            Account {
+                executable: false,
+                data: Vec::new(),
+                lamports: 1,
+                owner: SYSTEM_PROGRAM_ID,
+                rent_epoch: 0,
+            },
+        )
+        .unwrap();
+
+    let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.usdc_mint, &ctx.onyc_mint, 1_000_000);
+    let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
+    let quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
+
+    let ix = build_open_swap_buy_ix(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        1_000_000,
+        quote.minimum_out,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
+
+    assert_eq!(get_token_balance(&ctx.svm, &user_onyc_ata), quote.token_out_amount);
 }
 
 #[test]

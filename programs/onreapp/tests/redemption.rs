@@ -2286,18 +2286,17 @@ fn test_update_redemption_offer_fee_multiple_times() {
 // Token-2022 Tests
 // ===========================================================================
 
-/// Helper: sets up a Token-2022 redemption scenario with both mints as Token-2022
+/// Helper: sets up a redemption scenario with Token-2022 asset payout and SPL ONYC input.
 fn setup_redemption_token2022() -> (
     LiteSVM,
     Keypair, // payer (boss)
     Pubkey,  // usdc_mint (Token-2022)
-    Pubkey,  // onyc_mint (Token-2022)
+    Pubkey,  // onyc_mint (SPL Token)
 ) {
-    let (mut svm, payer, _original_onyc) = setup_initialized();
+    let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
     let usdc_mint = create_mint_2022(&mut svm, &payer, 6, &boss);
-    let onyc_mint = create_mint_2022(&mut svm, &payer, 9, &boss);
 
     // Set redemption_admin = boss
     let ix = build_set_redemption_admin_ix(&boss, &boss);
@@ -2316,6 +2315,8 @@ fn setup_redemption_token2022() -> (
     );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
+
+    set_main_offer_for_pair(&mut svm, &payer, &boss, &usdc_mint, &onyc_mint);
 
     // Add a vector
     let current_time = get_clock_time(&svm);
@@ -2338,7 +2339,7 @@ fn setup_redemption_token2022() -> (
         &onyc_mint,
         &usdc_mint,
         500,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
         &TOKEN_2022_PROGRAM_ID,
     );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
@@ -2354,10 +2355,10 @@ fn test_fulfill_redemption_token2022_transfer_mode() {
 
     let user = Keypair::new();
     svm.airdrop(&user.pubkey(), 10 * INITIAL_LAMPORTS).unwrap();
-    create_token_account_2022(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
+    create_token_account(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
 
     let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
-    create_token_account_2022(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
+    create_token_account(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
     create_token_account_2022(
         &mut svm,
         &usdc_mint,
@@ -2365,7 +2366,7 @@ fn test_fulfill_redemption_token2022_transfer_mode() {
         10_000_000_000,
     );
 
-    create_token_account_2022(&mut svm, &onyc_mint, &boss, 0);
+    create_token_account(&mut svm, &onyc_mint, &boss, 0);
     create_token_account_2022(&mut svm, &usdc_mint, &user.pubkey(), 0);
 
     let ix = build_create_redemption_request_ix(
@@ -2374,7 +2375,7 @@ fn test_fulfill_redemption_token2022_transfer_mode() {
         &usdc_mint,
         1_000_000_000,
         0,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
     );
     send_tx(&mut svm, &[ix], &[&user]).unwrap();
     advance_slot(&mut svm);
@@ -2387,7 +2388,7 @@ fn test_fulfill_redemption_token2022_transfer_mode() {
         &onyc_mint,
         &usdc_mint,
         0,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
         &TOKEN_2022_PROGRAM_ID,
         1_000_000_000,
     );
@@ -2415,13 +2416,13 @@ fn test_fulfill_redemption_token2022_burn_mint_mode() {
 
     let user = Keypair::new();
     svm.airdrop(&user.pubkey(), 10 * INITIAL_LAMPORTS).unwrap();
-    create_token_account_2022(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
+    create_token_account(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
 
     let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
-    create_token_account_2022(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
+    create_token_account(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
     create_token_account_2022(&mut svm, &usdc_mint, &redemption_vault_authority, 0);
 
-    create_token_account_2022(&mut svm, &onyc_mint, &boss, 0);
+    create_token_account(&mut svm, &onyc_mint, &boss, 0);
     create_token_account_2022(&mut svm, &usdc_mint, &user.pubkey(), 0);
 
     // Fix mint supply for onyc (so burn doesn't underflow)
@@ -2435,7 +2436,7 @@ fn test_fulfill_redemption_token2022_burn_mint_mode() {
         &usdc_mint,
         1_000_000_000,
         0,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
     );
     send_tx(&mut svm, &[ix], &[&user]).unwrap();
     advance_slot(&mut svm);
@@ -2448,7 +2449,7 @@ fn test_fulfill_redemption_token2022_burn_mint_mode() {
         &onyc_mint,
         &usdc_mint,
         0,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
         &TOKEN_2022_PROGRAM_ID,
         1_000_000_000,
     );
@@ -2460,17 +2461,16 @@ fn test_fulfill_redemption_token2022_burn_mint_mode() {
     assert_eq!(get_token_balance(&svm, &user_usdc_ata), 950_000);
 
     let (fee_vault_pda, _) = find_offer_fee_vault_pda();
-    let fee_vault_onyc_ata = get_associated_token_address_2022(&fee_vault_pda, &onyc_mint);
+    let fee_vault_onyc_ata = get_associated_token_address(&fee_vault_pda, &onyc_mint);
     assert_eq!(get_token_balance(&svm, &fee_vault_onyc_ata), 50_000_000);
 }
 
 #[test]
 fn test_fulfill_redemption_token2022_with_fee() {
-    let (mut svm, payer, _original_onyc) = setup_initialized();
+    let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
     let usdc_mint = create_mint_2022(&mut svm, &payer, 6, &boss);
-    let onyc_mint = create_mint_2022(&mut svm, &payer, 9, &boss);
 
     let ix = build_set_redemption_admin_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
@@ -2487,6 +2487,8 @@ fn test_fulfill_redemption_token2022_with_fee() {
     );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
+
+    set_main_offer_for_pair(&mut svm, &payer, &boss, &usdc_mint, &onyc_mint);
 
     let current_time = get_clock_time(&svm);
     let ix = build_add_offer_vector_ix(
@@ -2508,7 +2510,7 @@ fn test_fulfill_redemption_token2022_with_fee() {
         &onyc_mint,
         &usdc_mint,
         500,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
         &TOKEN_2022_PROGRAM_ID,
     );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
@@ -2516,17 +2518,17 @@ fn test_fulfill_redemption_token2022_with_fee() {
 
     let user = Keypair::new();
     svm.airdrop(&user.pubkey(), 10 * INITIAL_LAMPORTS).unwrap();
-    create_token_account_2022(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
+    create_token_account(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
 
     let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
-    create_token_account_2022(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
+    create_token_account(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
     create_token_account_2022(
         &mut svm,
         &usdc_mint,
         &redemption_vault_authority,
         10_000_000_000,
     );
-    create_token_account_2022(&mut svm, &onyc_mint, &boss, 0);
+    create_token_account(&mut svm, &onyc_mint, &boss, 0);
     create_token_account_2022(&mut svm, &usdc_mint, &user.pubkey(), 0);
 
     let ix = build_create_redemption_request_ix(
@@ -2535,7 +2537,7 @@ fn test_fulfill_redemption_token2022_with_fee() {
         &usdc_mint,
         1_000_000_000,
         0,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
     );
     send_tx(&mut svm, &[ix], &[&user]).unwrap();
     advance_slot(&mut svm);
@@ -2548,7 +2550,7 @@ fn test_fulfill_redemption_token2022_with_fee() {
         &onyc_mint,
         &usdc_mint,
         0,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
         &TOKEN_2022_PROGRAM_ID,
         1_000_000_000,
     );
@@ -2567,11 +2569,10 @@ fn test_fulfill_redemption_token2022_with_fee() {
 
 #[test]
 fn test_make_redemption_offer_multiple_pairs() {
-    let (mut svm, payer, _onyc_mint) = setup_initialized();
+    let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
-    let onyc_mint = create_mint(&mut svm, &payer, 9, &boss);
     let other_mint = create_mint(&mut svm, &payer, 9, &boss);
 
     let ix = build_set_redemption_admin_ix(&boss, &boss);
@@ -2623,22 +2624,22 @@ fn test_make_redemption_offer_multiple_pairs() {
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "redemption offers must use the configured ONYC mint as token_in"
+    );
 
     let offer1 = read_redemption_offer(&svm, &onyc_mint, &usdc_mint);
     assert_eq!(offer1.fee_basis_points, 500);
-
-    let offer2 = read_redemption_offer(&svm, &other_mint, &usdc_mint);
-    assert_eq!(offer2.fee_basis_points, 300);
 }
 
 #[test]
 fn test_make_redemption_offer_token2022() {
-    let (mut svm, payer, _onyc_mint) = setup_initialized();
+    let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
     let usdc_mint = create_mint_2022(&mut svm, &payer, 6, &boss);
-    let onyc_mint = create_mint_2022(&mut svm, &payer, 9, &boss);
 
     let ix = build_set_redemption_admin_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
@@ -2676,7 +2677,7 @@ fn test_make_redemption_offer_token2022() {
         &onyc_mint,
         &usdc_mint,
         500,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
         &TOKEN_2022_PROGRAM_ID,
     );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
@@ -2685,6 +2686,45 @@ fn test_make_redemption_offer_token2022() {
     assert_eq!(offer.fee_basis_points, 500);
     assert_eq!(offer.token_in_mint, onyc_mint);
     assert_eq!(offer.token_out_mint, usdc_mint);
+}
+
+#[test]
+fn test_make_redemption_offer_rejects_token2022_onyc() {
+    let (mut svm, payer, _original_onyc) = setup_initialized();
+    let boss = payer.pubkey();
+
+    let usdc_mint = create_mint_2022(&mut svm, &payer, 6, &boss);
+    let token2022_onyc_mint = create_mint_2022(&mut svm, &payer, 9, &boss);
+
+    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_make_offer_ix(
+        &boss,
+        &usdc_mint,
+        &token2022_onyc_mint,
+        0,
+        false,
+        false,
+        &TOKEN_2022_PROGRAM_ID,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_make_redemption_offer_ix(
+        &boss,
+        &token2022_onyc_mint,
+        &usdc_mint,
+        500,
+        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_2022_PROGRAM_ID,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "redemption offers must lock the configured SPL ONYC mint"
+    );
 }
 
 // ===========================================================================
@@ -2977,11 +3017,10 @@ fn fulfill_token2022_with_params(
     advance_days: u64,
     expected_usdc_received: u64,
 ) {
-    let (mut svm, payer, _original_onyc) = setup_initialized();
+    let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
     let usdc_mint = create_mint_2022(&mut svm, &payer, 6, &boss);
-    let onyc_mint = create_mint_2022(&mut svm, &payer, 9, &boss);
 
     let ix = build_set_redemption_admin_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
@@ -2998,6 +3037,8 @@ fn fulfill_token2022_with_params(
     );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
+
+    set_main_offer_for_pair(&mut svm, &payer, &boss, &usdc_mint, &onyc_mint);
 
     let current_time = get_clock_time(&svm);
     let ix = build_add_offer_vector_ix(
@@ -3018,7 +3059,7 @@ fn fulfill_token2022_with_params(
         &onyc_mint,
         &usdc_mint,
         fee_bps,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
         &TOKEN_2022_PROGRAM_ID,
     );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
@@ -3028,17 +3069,17 @@ fn fulfill_token2022_with_params(
 
     let user = Keypair::new();
     svm.airdrop(&user.pubkey(), 10 * INITIAL_LAMPORTS).unwrap();
-    create_token_account_2022(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
+    create_token_account(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
 
     let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
-    create_token_account_2022(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
+    create_token_account(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
     create_token_account_2022(
         &mut svm,
         &usdc_mint,
         &redemption_vault_authority,
         100_000_000_000,
     );
-    create_token_account_2022(&mut svm, &onyc_mint, &boss, 0);
+    create_token_account(&mut svm, &onyc_mint, &boss, 0);
     create_token_account_2022(&mut svm, &usdc_mint, &user.pubkey(), 0);
 
     let ix = build_create_redemption_request_ix(
@@ -3047,7 +3088,7 @@ fn fulfill_token2022_with_params(
         &usdc_mint,
         1_000_000_000,
         0,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
     );
     send_tx(&mut svm, &[ix], &[&user]).unwrap();
     advance_slot(&mut svm);
@@ -3065,7 +3106,7 @@ fn fulfill_token2022_with_params(
         &onyc_mint,
         &usdc_mint,
         0,
-        &TOKEN_2022_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
         &TOKEN_2022_PROGRAM_ID,
         1_000_000_000,
     );
@@ -3087,14 +3128,14 @@ fn fulfill_token2022_with_params(
         let net = 1_000_000_000u64 - fee;
         // Proceeds vault receives net onyc (transfer mode); fee goes to fee vault PDA ATA
         let proceeds_onyc_ata =
-            get_associated_token_address_2022(&find_offer_proceeds_vault_pda().0, &onyc_mint);
+            get_associated_token_address(&find_offer_proceeds_vault_pda().0, &onyc_mint);
         let proceeds_onyc = get_token_balance(&svm, &proceeds_onyc_ata);
         assert_eq!(
             proceeds_onyc, net,
             "proceeds vault receives net onyc in transfer mode"
         );
         let (fee_vault_pda, _) = find_offer_fee_vault_pda();
-        let fee_vault_ata = get_associated_token_address_2022(&fee_vault_pda, &onyc_mint);
+        let fee_vault_ata = get_associated_token_address(&fee_vault_pda, &onyc_mint);
         assert_eq!(
             get_token_balance(&svm, &fee_vault_ata),
             fee,

@@ -61,9 +61,19 @@ pub struct MakeRedemptionOffer<'info> {
     /// The input token mint for redemptions (token_in_mint)
     ///
     /// This corresponds to the token_out_mint from the original offer.
+    #[account(
+        constraint = token_in_mint.key() == state.onyc_mint
+            @ crate::OnreError::InvalidOnycMint,
+        constraint = *token_in_mint.to_account_info().owner == anchor_spl::token::ID
+            @ crate::OnreError::InvalidTokenProgram
+    )]
     pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// Token program interface for the input token
+    #[account(
+        constraint = token_in_program.key() == anchor_spl::token::ID
+            @ crate::OnreError::InvalidTokenProgram
+    )]
     pub token_in_program: Interface<'info, TokenInterface>,
 
     /// Vault account for storing input tokens during redemption operations
