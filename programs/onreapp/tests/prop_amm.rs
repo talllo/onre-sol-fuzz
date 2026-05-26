@@ -196,7 +196,7 @@ fn prepare_prop_amm_sell_side(ctx: &mut PropAmmCtx, redemption_fee_bps: u16) {
         &ctx.user.pubkey(),
         2_000_000_000_000,
     );
-    let ix = build_refresh_market_stats_ix(&boss, &boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_refresh_market_stats_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 }
 
@@ -705,7 +705,7 @@ fn test_dynamic_wall_accumulates_sell_pressure_and_buys_relieve_it() {
         &ctx.user.pubkey(),
         2_000_000_000_000,
     );
-    let ix = build_refresh_market_stats_ix(&boss, &boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_refresh_market_stats_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     let sell_amount = 2_000_000_000_000;
@@ -1049,7 +1049,7 @@ fn test_open_swap_sell_applies_default_minimum_haircut() {
         &ctx.user.pubkey(),
         20_000_000_000,
     );
-    let ix = build_refresh_market_stats_ix(&boss, &boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_refresh_market_stats_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     let dust_quote_ix =
@@ -1511,7 +1511,7 @@ fn test_open_swap_buy_refills_redemption_vault_until_target_then_overflows_to_bo
         &ctx.onyc_mint,
         &[vault_authority],
     );
-    let ix = build_refresh_market_stats_v2_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_refresh_market_stats_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     let second_quote_ix =
@@ -1612,7 +1612,7 @@ fn test_quote_and_open_swap_support_sell_side() {
         &ctx.user.pubkey(),
         2_000_000_000,
     );
-    let ix = build_refresh_market_stats_ix(&boss, &boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_refresh_market_stats_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     let sell_amount = 100_000_000;
@@ -1718,7 +1718,7 @@ fn test_quote_swap_sell_caps_hard_wall_reserve_by_vault_target() {
         &ctx.user.pubkey(),
         2_000_000_000_000,
     );
-    let ix = build_refresh_market_stats_ix(&boss, &boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_refresh_market_stats_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
     let market_stats = read_market_stats(&ctx.svm);
     assert!(market_stats.tvl > 0);
@@ -1795,7 +1795,7 @@ fn test_open_swap_sell_accrues_buffer_before_burning_onyc() {
         &redemption_vault_authority,
         10_000_000_000,
     );
-    let ix = build_refresh_market_stats_ix(&boss, &boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_refresh_market_stats_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     advance_clock_by(&mut ctx.svm, ONE_YEAR_SECONDS);
@@ -1875,7 +1875,7 @@ fn test_sell_side_uses_zero_fee_when_redemption_offer_is_uninitialized() {
         &ctx.user.pubkey(),
         2_000_000_000,
     );
-    let ix = build_refresh_market_stats_ix(&boss, &boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_refresh_market_stats_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     let sell_amount = 100_000_000;

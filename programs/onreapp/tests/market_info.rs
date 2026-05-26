@@ -336,8 +336,7 @@ fn test_refresh_market_stats_permissionless_creates_and_updates_pda() {
     let caller = Keypair::new();
     svm.airdrop(&caller.pubkey(), INITIAL_LAMPORTS).unwrap();
 
-    let ix =
-        build_refresh_market_stats_ix(&caller.pubkey(), &payer.pubkey(), &token_in, &onyc_mint);
+    let ix = build_refresh_market_stats_ix(&caller.pubkey(), &token_in, &onyc_mint);
     send_tx(&mut svm, &[ix], &[&caller]).unwrap();
 
     let market_stats = read_market_stats(&svm);
@@ -345,32 +344,25 @@ fn test_refresh_market_stats_permissionless_creates_and_updates_pda() {
     assert_eq!(market_stats.apy, 37_172);
     assert_eq!(market_stats.nav, 1_000_100_000);
     assert_eq!(market_stats.nav_adjustment, 1_000_100_000);
-    assert_eq!(market_stats.circulating_supply, 3_000_000_000);
-    assert_eq!(market_stats.tvl, 3_000_300_000);
+    assert_eq!(market_stats.circulating_supply, 5_000_000_000);
+    assert_eq!(market_stats.tvl, 5_000_500_000);
     assert_eq!(market_stats.last_updated_at, 1_704_067_201);
     assert_eq!(market_stats.last_updated_slot, 3);
 }
 
 #[test]
-fn test_refresh_market_stats_rejects_non_spl_onyc_token_program() {
+fn test_refresh_market_stats_rejects_invalid_excluded_balance_pda() {
     let (mut svm, payer, token_in, onyc_mint) =
         setup_onyc_offer_with_supply(36_500, 1_000_000_000, 86_400, 5_000_000_000, 2_000_000_000);
     let boss = payer.pubkey();
-    let vault_authority = find_offer_vault_authority_pda().0;
 
-    let mut ix = build_refresh_market_stats_ix(&boss, &boss, &token_in, &onyc_mint);
-    ix.accounts[5] = AccountMeta::new_readonly(
-        get_associated_token_address_2022(&vault_authority, &onyc_mint),
-        false,
-    );
-    ix.accounts[6] =
-        AccountMeta::new_readonly(get_associated_token_address_2022(&boss, &onyc_mint), false);
-    ix.accounts[7] = AccountMeta::new_readonly(TOKEN_2022_PROGRAM_ID, false);
+    let mut ix = build_refresh_market_stats_ix(&boss, &token_in, &onyc_mint);
+    ix.accounts[4] = AccountMeta::new_readonly(Pubkey::new_unique(), false);
 
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(
         result.is_err(),
-        "market stats refresh should require SPL Token for ONYC balance reads"
+        "market stats refresh should require the canonical excluded-balance PDA"
     );
 }
 
@@ -379,7 +371,7 @@ fn test_refresh_market_stats_succeeds_without_recent_purchases() {
     let (mut svm, payer, token_in, onyc_mint) =
         setup_onyc_offer_with_supply(0, 1_000_000_000, 86_400, 7_000_000_000, 1_500_000_000);
 
-    let ix = build_refresh_market_stats_ix(&payer.pubkey(), &payer.pubkey(), &token_in, &onyc_mint);
+    let ix = build_refresh_market_stats_ix(&payer.pubkey(), &token_in, &onyc_mint);
     send_tx(&mut svm, &[ix.clone()], &[&payer]).unwrap();
     let initial = read_market_stats(&svm);
 
@@ -388,7 +380,7 @@ fn test_refresh_market_stats_succeeds_without_recent_purchases() {
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     let refreshed = read_market_stats(&svm);
 
-    assert_eq!(initial.circulating_supply, 5_500_000_000);
+    assert_eq!(initial.circulating_supply, 7_000_000_000);
     assert_eq!(initial.nav, 1_000_000_000);
     assert_eq!(refreshed.circulating_supply, initial.circulating_supply);
     assert_eq!(refreshed.nav, initial.nav);
@@ -705,7 +697,7 @@ fn test_update_circulating_supply_excluded_balance_rejects_missing_or_extra_atas
 }
 
 #[test]
-fn test_v2_market_info_uses_cached_excluded_balance() {
+fn test_market_info_uses_cached_excluded_balance() {
     let (mut svm, payer, token_in, onyc_mint) =
         setup_onyc_offer_with_supply(0, 1_000_000_000, 86_400, 1_000_000_000_000, 0);
     let boss = payer.pubkey();
@@ -734,7 +726,7 @@ fn test_v2_market_info_uses_cached_excluded_balance() {
     let tvl_result = send_tx(&mut svm, &[tvl_ix], &[&payer]).unwrap();
     assert_eq!(get_return_u64(&tvl_result), 700_000_000_000);
 
-    let refresh_ix = build_refresh_market_stats_v2_ix(&boss, &token_in, &onyc_mint);
+    let refresh_ix = build_refresh_market_stats_ix(&boss, &token_in, &onyc_mint);
     send_tx(&mut svm, &[refresh_ix], &[&payer]).unwrap();
     let market_stats = read_market_stats(&svm);
     assert_eq!(market_stats.circulating_supply, 700_000_000_000);

@@ -567,16 +567,13 @@ pub fn build_get_circulating_supply_ix_with_token_program(
 
 pub fn build_refresh_market_stats_ix(
     signer: &Pubkey,
-    boss: &Pubkey,
     token_in_mint: &Pubkey,
     onyc_mint: &Pubkey,
 ) -> Instruction {
     let (main_offer_pda, _) = find_offer_pda(token_in_mint, onyc_mint);
     let (state_pda, _) = find_state_pda();
-    let (vault_authority_pda, _) = find_offer_vault_authority_pda();
     let (market_stats_pda, _) = find_market_stats_pda();
-    let onyc_vault_ata = get_associated_token_address(&vault_authority_pda, onyc_mint);
-    let boss_onyc_ata = get_associated_token_address(boss, onyc_mint);
+    let (excluded_balance_pda, _) = find_circulating_supply_excluded_balance_pda();
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![
@@ -584,10 +581,7 @@ pub fn build_refresh_market_stats_ix(
             AccountMeta::new_readonly(*token_in_mint, false),
             AccountMeta::new_readonly(state_pda, false),
             AccountMeta::new_readonly(*onyc_mint, false),
-            AccountMeta::new_readonly(vault_authority_pda, false),
-            AccountMeta::new_readonly(onyc_vault_ata, false),
-            AccountMeta::new_readonly(boss_onyc_ata, false),
-            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+            AccountMeta::new_readonly(excluded_balance_pda, false),
             AccountMeta::new(market_stats_pda, false),
             AccountMeta::new(*signer, true),
             AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
@@ -624,31 +618,6 @@ pub fn build_get_circulating_supply_v2_ix(onyc_mint: &Pubkey) -> Instruction {
             AccountMeta::new_readonly(excluded_balance_pda, false),
         ],
         data: ix_discriminator("get_circulating_supply_v2").to_vec(),
-    }
-}
-
-pub fn build_refresh_market_stats_v2_ix(
-    signer: &Pubkey,
-    token_in_mint: &Pubkey,
-    onyc_mint: &Pubkey,
-) -> Instruction {
-    let (main_offer_pda, _) = find_offer_pda(token_in_mint, onyc_mint);
-    let (state_pda, _) = find_state_pda();
-    let (market_stats_pda, _) = find_market_stats_pda();
-    let (excluded_balance_pda, _) = find_circulating_supply_excluded_balance_pda();
-    Instruction {
-        program_id: PROGRAM_ID,
-        accounts: vec![
-            AccountMeta::new_readonly(main_offer_pda, false),
-            AccountMeta::new_readonly(*token_in_mint, false),
-            AccountMeta::new_readonly(state_pda, false),
-            AccountMeta::new_readonly(*onyc_mint, false),
-            AccountMeta::new_readonly(excluded_balance_pda, false),
-            AccountMeta::new(market_stats_pda, false),
-            AccountMeta::new(*signer, true),
-            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
-        ],
-        data: ix_discriminator("refresh_market_stats_v2").to_vec(),
     }
 }
 

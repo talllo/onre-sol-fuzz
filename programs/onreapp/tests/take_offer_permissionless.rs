@@ -688,7 +688,7 @@ fn test_take_offer_permissionless_v2_refills_redemption_vault_then_overflows_to_
         &ctx.onyc_mint,
         &[vault_authority],
     );
-    let ix = build_refresh_market_stats_v2_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_refresh_market_stats_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     let second_ix = build_take_offer_permissionless_v2_ix(

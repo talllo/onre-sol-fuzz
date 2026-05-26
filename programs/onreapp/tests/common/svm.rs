@@ -108,7 +108,6 @@ const PROFILE_INSTRUCTION_NAMES: &[&str] = &[
     "redemption_vault_deposit",
     "redemption_vault_withdraw",
     "refresh_market_stats",
-    "refresh_market_stats_v2",
     "remove_admin",
     "remove_approver",
     "set_buffer_fee_config",

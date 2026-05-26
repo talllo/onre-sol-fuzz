@@ -684,11 +684,6 @@ pub mod onreapp {
         market_info::refresh_market_stats(ctx)
     }
 
-    /// Refreshes the canonical market-stats PDA using the cached excluded-balance PDA.
-    pub fn refresh_market_stats_v2(ctx: Context<RefreshMarketStatsV2>) -> Result<()> {
-        market_info::refresh_market_stats_v2(ctx)
-    }
-
     /// Gets TVL using the cached excluded-balance PDA.
     pub fn get_tvl_v2(ctx: Context<GetTVLV2>) -> Result<u64> {
         market_info::get_tvl_v2(ctx)
