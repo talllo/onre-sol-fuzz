@@ -7,7 +7,7 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "anchor-build": "anchor build",
-    "test": "cargo test -p onreapp",
+    "test": "anchor build && cargo test -p onreapp",
     "script:mainnet-prod": "NETWORK=mainnet-prod tsx",
     "script:mainnet-test": "NETWORK=mainnet-test tsx",
     "script:mainnet-dev": "NETWORK=mainnet-dev tsx",

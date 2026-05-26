@@ -16,7 +16,7 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "cargo test --manifest-path programs/onreapp/Cargo.toml --tests"
+test = "anchor build && cargo test --manifest-path programs/onreapp/Cargo.toml --tests"
 
 [test]
 startup_wait = 5000
