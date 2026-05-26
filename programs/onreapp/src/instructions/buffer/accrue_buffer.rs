@@ -102,6 +102,12 @@ pub(crate) fn accrue_buffer<'info>(
             buffer_mint_amount,
             state.max_supply,
         )?;
+        if state.max_mint_amount > 0 {
+            require!(
+                buffer_mint_amount <= state.max_mint_amount,
+                crate::OnreError::MaxMintAmountExceeded
+            );
+        }
 
         let mint_authority_seeds = &[seeds::MINT_AUTHORITY, &[mint_authority_bump]];
         let mint_authority_signer_seeds = &[mint_authority_seeds.as_slice()];

@@ -820,6 +820,28 @@ fn test_accrue_buffer_splits_gross_mint_across_reserve_and_fee_vaults() {
 }
 
 #[test]
+fn test_accrue_buffer_respects_max_mint_amount_for_total_accrual() {
+    let (mut svm, payer, _token_in_mint, onyc_mint, _caller) =
+        setup_buffer_context(150_000, 50_000, 100, 1_000);
+    let boss = payer.pubkey();
+    trigger_buffer_accrual(&mut svm, &payer, &onyc_mint);
+
+    let ix = build_configure_max_mint_amount_ix(&boss, 80_000_000);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+    advance_clock_by(&mut svm, ONE_YEAR_SECONDS);
+
+    let main_offer = read_state(&svm).main_offer;
+    let ix = build_mint_to_ix_for_offer(&boss, &onyc_mint, 0, &TOKEN_PROGRAM_ID, &main_offer);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "buffer accrual should enforce max_mint_amount against the total gross mint"
+    );
+    assert_eq!(get_mint_supply(&svm, &onyc_mint), 1_000_000_000);
+}
+
+#[test]
 fn test_accrue_buffer_mints_nothing_when_spread_is_zero() {
     let (mut svm, payer, _token_in_mint, onyc_mint, _caller) =
         setup_buffer_context(50_000, 50_000, 0, 0);
