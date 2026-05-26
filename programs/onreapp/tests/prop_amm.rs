@@ -6,7 +6,7 @@ use onreapp::instructions::prop_amm::{
     apply_hard_wall_liquidity_factor_at_time, apply_hard_wall_reserve_curve_with_params,
     dynamic_wall_liquidity_at_time, dynamic_wall_position, effective_curve_exponent_scaled,
     hard_wall_reserve_from_tvl, preview_effective_sell_volume, roll_prop_amm_volume_tracker,
-    PropAmmPairState, SwapQuote,
+    PropAmmPairState, SwapQuote, HARD_WALL_SCALE,
 };
 use onreapp::state::ConfigurableVaultKind;
 use solana_sdk::account::Account;
@@ -232,6 +232,43 @@ fn test_hard_wall_curve_is_vulnerable_to_order_splitting() {
 }
 
 #[test]
+fn test_hard_wall_curve_approximation_tracks_exact_curve() {
+    let actual_liquidity = 50_000_000;
+    let hard_wall_reserve = 1_000_000;
+    let peg_haircut_bps = 700;
+    let exponents = [
+        1_000_u32, 2_000, 5_000, 10_000, 15_000, 20_000, 24_000, 25_000, 30_000, 50_000, 100_000,
+    ];
+    let token_out_amounts = [
+        1_000_u64, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 800_000, 1_000_000,
+        1_250_000, 1_500_000, 2_000_000, 3_000_000, 5_000_000, 10_000_000, 25_000_000, 50_000_000,
+    ];
+
+    for exponent in exponents {
+        for token_out_amount in token_out_amounts {
+            let approximate = apply_hard_wall_reserve_curve_with_params(
+                token_out_amount,
+                actual_liquidity,
+                hard_wall_reserve,
+                peg_haircut_bps,
+                exponent,
+            )
+            .unwrap();
+            let exact = exact_hard_wall_output(
+                token_out_amount,
+                hard_wall_reserve,
+                peg_haircut_bps,
+                exponent,
+            );
+            assert!(
+                approximate.abs_diff(exact) <= 2,
+                "approximation drifted for token_out={token_out_amount}, exponent={exponent}: approximate={approximate}, exact={exact}"
+            );
+        }
+    }
+}
+
+#[test]
 fn test_hard_wall_curve_ignores_surplus_above_target_reserve() {
     let hard_wall_reserve = 5_000_000;
     let raw_sell_value_stable = 1_000_000;
@@ -255,6 +292,97 @@ fn test_hard_wall_curve_ignores_surplus_above_target_reserve() {
     assert_eq!(above_target, at_target);
 }
 
+fn exact_hard_wall_output(
+    token_out_amount: u64,
+    effective_liquidity: u64,
+    curve_peg_haircut_bps: u16,
+    curve_exponent_scaled: u32,
+) -> u64 {
+    let utilization = (token_out_amount as u128)
+        .checked_mul(HARD_WALL_SCALE)
+        .unwrap()
+        .checked_div(effective_liquidity as u128)
+        .unwrap();
+    let peg_haircut = HARD_WALL_SCALE
+        .checked_mul(curve_peg_haircut_bps as u128)
+        .unwrap()
+        .checked_div(10_000)
+        .unwrap();
+    let utilization_power = exact_utilization_power_scaled(utilization, curve_exponent_scaled);
+    let haircut = peg_haircut
+        .saturating_mul(utilization_power)
+        .checked_div(HARD_WALL_SCALE)
+        .unwrap();
+    let liquidity_factor = HARD_WALL_SCALE.saturating_sub(haircut);
+    let dampened = (token_out_amount as u128)
+        .checked_mul(liquidity_factor)
+        .unwrap()
+        .checked_div(HARD_WALL_SCALE)
+        .unwrap();
+    dampened as u64
+}
+
+fn exact_utilization_power_scaled(u: u128, exponent_scaled: u32) -> u128 {
+    if exponent_scaled == 0 {
+        return HARD_WALL_SCALE;
+    }
+
+    let tenths = exponent_scaled / 1_000;
+    let tenth_root = exact_tenth_root_scaled(u);
+    let mut value = HARD_WALL_SCALE;
+    for _ in 0..tenths {
+        value = exact_mul_scaled(value, tenth_root);
+    }
+    value
+}
+
+fn exact_tenth_root_scaled(value: u128) -> u128 {
+    if value <= 1 || value == HARD_WALL_SCALE {
+        return value;
+    }
+
+    let mut left = 1_u128;
+    let mut right = value.max(HARD_WALL_SCALE);
+    let mut answer = 1_u128;
+    while left <= right {
+        let mid = left + (right - left) / 2;
+        if exact_pow_scaled_lte(mid, 10, value) {
+            answer = mid;
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
+    }
+    answer
+}
+
+fn exact_pow_scaled_lte(base: u128, exponent: u32, limit: u128) -> bool {
+    let mut value = HARD_WALL_SCALE;
+    if base >= HARD_WALL_SCALE {
+        for _ in 0..exponent {
+            value = exact_mul_scaled(value, base);
+            if value > limit {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    for _ in 0..exponent {
+        value = exact_mul_scaled(value, base);
+        if value <= limit {
+            return true;
+        }
+    }
+    value <= limit
+}
+
+fn exact_mul_scaled(lhs: u128, rhs: u128) -> u128 {
+    lhs.saturating_mul(rhs)
+        .checked_div(HARD_WALL_SCALE)
+        .unwrap_or(u128::MAX)
+}
+
 #[test]
 fn test_hard_wall_curve_allows_zero_output_at_actual_vault_limit() {
     let state = PropAmmPairState {
@@ -276,6 +404,20 @@ fn test_hard_wall_curve_allows_zero_output_at_actual_vault_limit() {
     let output =
         apply_hard_wall_liquidity_factor_at_time(10_000_000, 10_000_000, 10_000_000, &state, 1)
             .unwrap();
+
+    assert_eq!(output, 0);
+}
+
+#[test]
+fn test_hard_wall_curve_saturates_extreme_utilization() {
+    let output = apply_hard_wall_reserve_curve_with_params(
+        1_000_000_000_000,
+        1_000_000_000_000,
+        1,
+        1,
+        32_000,
+    )
+    .unwrap();
 
     assert_eq!(output, 0);
 }

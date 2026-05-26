@@ -18,13 +18,122 @@ pub fn send_tx(
     all_ixs.extend_from_slice(ixs);
     let msg = Message::new(&all_ixs, Some(&payer));
     let tx = Transaction::new(signers, msg, blockhash);
-    svm.send_transaction(tx)
+    let result = svm.send_transaction(tx);
+    if std::env::var_os("ONRE_CU_PROFILE").is_some() {
+        log_compute_profile(&all_ixs, &result);
+    }
+    result
+}
+
+fn log_compute_profile(
+    ixs: &[Instruction],
+    result: &Result<litesvm::types::TransactionMetadata, litesvm::types::FailedTransactionMetadata>,
+) {
+    let names: Vec<_> = ixs
+        .iter()
+        .filter(|ix| ix.program_id == PROGRAM_ID)
+        .map(profile_instruction_name)
+        .collect();
+    if names.is_empty() {
+        return;
+    }
+
+    let name = names.join("+");
+    match result {
+        Ok(metadata) => {
+            println!("CU_PROFILE\t{}\t{}", metadata.compute_units_consumed, name);
+        }
+        Err(metadata) => {
+            println!(
+                "CU_PROFILE_ERR\t{}\t{}\t{:?}",
+                metadata.meta.compute_units_consumed, name, metadata.err
+            );
+        }
+    }
+}
+
+fn profile_instruction_name(ix: &Instruction) -> &'static str {
+    let Some(discriminator) = ix.data.get(..8) else {
+        return "unknown";
+    };
+    PROFILE_INSTRUCTION_NAMES
+        .iter()
+        .copied()
+        .find(|name| ix_discriminator(name).as_ref() == discriminator)
+        .unwrap_or("unknown")
 }
 
 pub fn get_token_balance(svm: &LiteSVM, token_account: &Pubkey) -> u64 {
     let account = svm.get_account(token_account).expect("account not found");
     u64::from_le_bytes(account.data[64..72].try_into().unwrap())
 }
+
+const PROFILE_INSTRUCTION_NAMES: &[&str] = &[
+    "accept_boss",
+    "add_admin",
+    "add_approver",
+    "add_offer_vector",
+    "burn_for_nav_increase",
+    "cancel_redemption_request",
+    "clear_admins",
+    "close_state",
+    "configure_max_mint_amount",
+    "configure_max_supply",
+    "configure_prop_amm",
+    "create_redemption_request",
+    "delete_all_offer_vectors",
+    "delete_offer_vector",
+    "deposit_reserve_vault",
+    "fulfill_redemption_request",
+    "get_apy",
+    "get_circulating_supply",
+    "get_circulating_supply_v2",
+    "get_nav",
+    "get_nav_adjustment",
+    "get_tvl",
+    "get_tvl_v2",
+    "initialize",
+    "initialize_buffer",
+    "initialize_permissionless_authority",
+    "make_offer",
+    "make_redemption_offer",
+    "mint_to",
+    "offer_vault_deposit",
+    "offer_vault_withdraw",
+    "open_swap_buy",
+    "open_swap_sell",
+    "propose_boss",
+    "quote_swap_buy",
+    "quote_swap_sell",
+    "redemption_vault_deposit",
+    "redemption_vault_withdraw",
+    "refresh_market_stats",
+    "refresh_market_stats_v2",
+    "remove_admin",
+    "remove_approver",
+    "set_buffer_fee_config",
+    "set_buffer_gross_apr",
+    "set_circulating_supply_excluded_accounts",
+    "set_configurable_vault_destination",
+    "set_kill_switch",
+    "set_main_offer",
+    "set_onyc_mint",
+    "set_offer_disabled",
+    "set_redemption_admin",
+    "set_redemption_offer_disabled",
+    "take_offer",
+    "take_offer_permissionless",
+    "take_offer_permissionless_v2",
+    "take_offer_v2",
+    "transfer_mint_authority_to_boss",
+    "transfer_mint_authority_to_program",
+    "update_circulating_supply_excluded_balance",
+    "update_offer_fee",
+    "update_redemption_offer_fee",
+    "update_redemption_offer_vault_target",
+    "withdraw_configurable_vault",
+    "withdraw_reserve_vault",
+];
 
 pub fn read_market_stats(svm: &LiteSVM) -> MarketStats {
     let (market_stats_pda, _) = find_market_stats_pda();
