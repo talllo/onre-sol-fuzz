@@ -14390,6 +14390,21 @@ export type Onreapp = {
             "type": "u16"
           },
           {
+            "name": "requestCounter",
+            "docs": [
+              "Counter for sequential redemption request numbering",
+              "Increments with each new redemption request created"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed for account derivation"
+            ],
+            "type": "u8"
+          },
+          {
             "name": "vaultTargetBps",
             "docs": [
               "Target stable-token balance for the redemption vault as basis points of TVL.",
@@ -14400,24 +14415,9 @@ export type Onreapp = {
             "type": "u16"
           },
           {
-            "name": "requestCounter",
-            "docs": [
-              "Counter for sequential redemption request numbering",
-              "Increments with each new redemption request created"
-            ],
-            "type": "u64"
-          },
-          {
             "name": "disabled",
             "docs": [
               "Whether the redemption offer is disabled by targeted emergency controls (0 = false, 1 = true)"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "bump",
-            "docs": [
-              "PDA bump seed for account derivation"
             ],
             "type": "u8"
           },
@@ -15017,18 +15017,18 @@ export type Onreapp = {
             "type": "u64"
           },
           {
-            "name": "maxMintAmount",
-            "docs": [
-              "Optional maximum amount allowed in one mint operation (0 = no cap)"
-            ],
-            "type": "u64"
-          },
-          {
             "name": "redemptionAdmin",
             "docs": [
               "Admin account authorized to manage ONr token mints and redemptions"
             ],
             "type": "pubkey"
+          },
+          {
+            "name": "maxMintAmount",
+            "docs": [
+              "Optional maximum amount allowed in one mint operation (0 = no cap)"
+            ],
+            "type": "u64"
           },
           {
             "name": "mainOffer",

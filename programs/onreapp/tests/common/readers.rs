@@ -296,13 +296,13 @@ pub fn read_redemption_offer(
     offset += 16;
     let fee_basis_points = u16::from_le_bytes(data[offset..offset + 2].try_into().unwrap());
     offset += 2;
-    let vault_target_bps = u16::from_le_bytes(data[offset..offset + 2].try_into().unwrap());
-    offset += 2;
     let request_counter = u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
     offset += 8;
-    let disabled = data[offset];
-    offset += 1;
     let bump = data[offset];
+    offset += 1;
+    let vault_target_bps = u16::from_le_bytes(data[offset..offset + 2].try_into().unwrap());
+    offset += 2;
+    let disabled = data[offset];
     RedemptionOfferData {
         offer,
         token_in_mint: tin,

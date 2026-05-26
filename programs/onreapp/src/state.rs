@@ -26,10 +26,10 @@ pub struct State {
     pub bump: u8,
     /// Optional maximum supply cap for ONyc token minting (0 = no cap)
     pub max_supply: u64,
-    /// Optional maximum amount allowed in one mint operation (0 = no cap)
-    pub max_mint_amount: u64,
     /// Admin account authorized to manage ONr token mints and redemptions
     pub redemption_admin: Pubkey,
+    /// Optional maximum amount allowed in one mint operation (0 = no cap)
+    pub max_mint_amount: u64,
     /// Main offer account used for market operations and price discovery
     pub main_offer: Pubkey,
     /// Reserved space for future program state extensions

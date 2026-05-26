@@ -14384,6 +14384,21 @@
             "type": "u16"
           },
           {
+            "name": "request_counter",
+            "docs": [
+              "Counter for sequential redemption request numbering",
+              "Increments with each new redemption request created"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed for account derivation"
+            ],
+            "type": "u8"
+          },
+          {
             "name": "vault_target_bps",
             "docs": [
               "Target stable-token balance for the redemption vault as basis points of TVL.",
@@ -14394,24 +14409,9 @@
             "type": "u16"
           },
           {
-            "name": "request_counter",
-            "docs": [
-              "Counter for sequential redemption request numbering",
-              "Increments with each new redemption request created"
-            ],
-            "type": "u64"
-          },
-          {
             "name": "disabled",
             "docs": [
               "Whether the redemption offer is disabled by targeted emergency controls (0 = false, 1 = true)"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "bump",
-            "docs": [
-              "PDA bump seed for account derivation"
             ],
             "type": "u8"
           },
@@ -15011,18 +15011,18 @@
             "type": "u64"
           },
           {
-            "name": "max_mint_amount",
-            "docs": [
-              "Optional maximum amount allowed in one mint operation (0 = no cap)"
-            ],
-            "type": "u64"
-          },
-          {
             "name": "redemption_admin",
             "docs": [
               "Admin account authorized to manage ONr token mints and redemptions"
             ],
             "type": "pubkey"
+          },
+          {
+            "name": "max_mint_amount",
+            "docs": [
+              "Optional maximum amount allowed in one mint operation (0 = no cap)"
+            ],
+            "type": "u64"
           },
           {
             "name": "main_offer",
