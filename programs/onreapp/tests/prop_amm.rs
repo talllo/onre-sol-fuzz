@@ -1674,6 +1674,79 @@ fn test_quote_and_open_swap_support_sell_side() {
 }
 
 #[test]
+fn test_open_swap_sell_refreshes_market_stats_before_hard_wall_target() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    let current_time = get_clock_time(&ctx.svm);
+
+    let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let ix = build_add_offer_vector_ix(
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        Some(current_time),
+        current_time,
+        1_000_000_000,
+        0,
+        86_400,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    configure_minimum_sell_haircut(&mut ctx, 0);
+
+    let ix = build_make_redemption_offer_ix(
+        &boss,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        0,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    let ix =
+        build_update_redemption_offer_vault_target_ix(&boss, &ctx.onyc_mint, &ctx.usdc_mint, 5_000);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
+    create_token_account(
+        &mut ctx.svm,
+        &ctx.usdc_mint,
+        &redemption_vault_authority,
+        10_000_000_000,
+    );
+    create_token_account(
+        &mut ctx.svm,
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        2_000_000_000,
+    );
+
+    let (market_stats_pda, _) = find_market_stats_pda();
+    assert!(ctx.svm.get_account(&market_stats_pda).is_none());
+
+    let sell_amount = 100_000_000;
+    let ix = build_open_swap_sell_ix(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        sell_amount,
+        0,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
+
+    let market_stats = read_market_stats(&ctx.svm);
+    assert_eq!(
+        market_stats.circulating_supply,
+        get_mint_supply(&ctx.svm, &ctx.onyc_mint)
+    );
+}
+
+#[test]
 fn test_quote_swap_sell_caps_hard_wall_reserve_by_vault_target() {
     let mut ctx = setup_prop_amm();
     let boss = ctx.payer.pubkey();

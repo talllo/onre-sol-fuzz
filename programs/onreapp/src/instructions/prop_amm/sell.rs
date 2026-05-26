@@ -177,6 +177,22 @@ fn execute_open_swap_sell<'info>(
         ctx.accounts.market_stats.key(),
         crate::OnreError::InvalidMarketStatsPda
     );
+    let main_offer = load_main_offer(
+        ctx.program_id,
+        &ctx.accounts.main_offer.to_account_info(),
+        &ctx.accounts.state,
+    )?;
+    refresh_market_stats_pda(
+        &main_offer,
+        &ctx.accounts.token_in_mint,
+        &ctx.accounts
+            .circulating_supply_excluded_balance
+            .to_account_info(),
+        &ctx.accounts.market_stats.to_account_info(),
+        &ctx.accounts.user.to_account_info(),
+        &ctx.accounts.system_program.to_account_info(),
+        ctx.program_id,
+    )?;
     let redemption_config = redemption_offer_config(
         ctx.program_id,
         &ctx.accounts.redemption_offer,
@@ -355,11 +371,6 @@ fn execute_open_swap_sell<'info>(
     }
 
     if should_refresh_market_stats {
-        let main_offer = load_main_offer(
-            ctx.program_id,
-            &ctx.accounts.main_offer.to_account_info(),
-            &ctx.accounts.state,
-        )?;
         ctx.accounts.token_in_mint.reload()?;
         refresh_market_stats_pda(
             &main_offer,
