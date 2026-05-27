@@ -70,7 +70,7 @@ export function registerOfferCommands(program: Command): void {
         .option("-o, --token-out <mint>", "Token out mint")
         .option("--base-time <timestamp>", "Base time (ISO date or unix timestamp)")
         .option("--base-price <price>", "Base price (scaled by 1e9)")
-        .option("--apr <value>", "APR in basis points (36500 = 3.65%)")
+        .option("--apr <value>", "APR value (scale=6, so 10000 = 1%)")
         .option("--duration <seconds>", "Price fix duration in seconds")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;

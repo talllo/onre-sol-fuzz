@@ -8,7 +8,7 @@ export type ParamType =
     | "mint" // Mint selection (usdc, onyc, usdg, or custom)
     | "amount" // Token amount (raw integer, fits in JS number < 2^53)
     | "u64" // Large token amount as string (supports values >= 2^53)
-    | "basisPoints" // Fee in basis points (0-10000)
+    | "basisPoints" // Fee in basis points (0-1000)
     | "apr" // APR value (scaled by 1_000_000)
     | "timestamp" // Unix timestamp or date string
     | "duration" // Duration in seconds

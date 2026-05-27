@@ -54,12 +54,11 @@ export class ScriptHelper {
         mintAuthorityPda: PublicKey;
         bufferStatePda: PublicKey;
         reserveVaultAuthorityPda: PublicKey;
-        managementFeeVaultAuthorityPda: PublicKey;
-        performanceFeeVaultAuthorityPda: PublicKey;
+        managementFeeVaultPda: PublicKey;
+        performanceFeeVaultPda: PublicKey;
         redemptionVaultAuthorityPda: PublicKey;
         marketStatsPda: PublicKey;
         circulatingSupplyExcludedBalancePda: PublicKey;
-        redemptionFeeVaultAuthorityPda: PublicKey;
     };
 
     private constructor(program: Program<Onreapp>, connection: Connection, networkConfig: NetworkConfig, wallet: Wallet, walletSource?: string) {
@@ -77,12 +76,11 @@ export class ScriptHelper {
             mintAuthorityPda: PublicKey.findProgramAddressSync([Buffer.from("mint_authority")], program.programId)[0],
             bufferStatePda: PublicKey.findProgramAddressSync([Buffer.from("buffer_state")], program.programId)[0],
             reserveVaultAuthorityPda: PublicKey.findProgramAddressSync([Buffer.from("reserve_vault_authority")], program.programId)[0],
-            managementFeeVaultAuthorityPda: PublicKey.findProgramAddressSync([Buffer.from("management_fee_vault_authority")], program.programId)[0],
-            performanceFeeVaultAuthorityPda: PublicKey.findProgramAddressSync([Buffer.from("performance_fee_vault_authority")], program.programId)[0],
+            managementFeeVaultPda: PublicKey.findProgramAddressSync([Buffer.from("configurable_vault"), Buffer.from("management_fee")], program.programId)[0],
+            performanceFeeVaultPda: PublicKey.findProgramAddressSync([Buffer.from("configurable_vault"), Buffer.from("performance_fee")], program.programId)[0],
             redemptionVaultAuthorityPda: PublicKey.findProgramAddressSync([Buffer.from("redemption_offer_vault_authority")], program.programId)[0],
             marketStatsPda: PublicKey.findProgramAddressSync([Buffer.from("market_stats")], program.programId)[0],
             circulatingSupplyExcludedBalancePda: PublicKey.findProgramAddressSync([Buffer.from("circ_supply_excl_balance")], program.programId)[0],
-            redemptionFeeVaultAuthorityPda: PublicKey.findProgramAddressSync([Buffer.from("redemption_fee_vault_authority")], program.programId)[0],
         };
     }
 
@@ -192,11 +190,11 @@ export class ScriptHelper {
     }
 
     getManagementFeeVaultAta(onycMint: PublicKey): PublicKey {
-        return getAssociatedTokenAddressSync(onycMint, this.pdas.managementFeeVaultAuthorityPda, true, TOKEN_PROGRAM_ID);
+        return getAssociatedTokenAddressSync(onycMint, this.pdas.managementFeeVaultPda, true, TOKEN_PROGRAM_ID);
     }
 
     getPerformanceFeeVaultAta(onycMint: PublicKey): PublicKey {
-        return getAssociatedTokenAddressSync(onycMint, this.pdas.performanceFeeVaultAuthorityPda, true, TOKEN_PROGRAM_ID);
+        return getAssociatedTokenAddressSync(onycMint, this.pdas.performanceFeeVaultPda, true, TOKEN_PROGRAM_ID);
     }
 
     getMarketStatsPda(): PublicKey {
@@ -461,9 +459,9 @@ export class ScriptHelper {
                 bufferState: this.pdas.bufferStatePda,
                 reserveVaultAuthority: this.pdas.reserveVaultAuthorityPda,
                 reserveVaultOnycAccount: this.getBufferVaultAta(params.onycMint),
-                managementFeeVaultAuthority: this.pdas.managementFeeVaultAuthorityPda,
+                managementFeeVault: this.pdas.managementFeeVaultPda,
                 managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(params.onycMint),
-                performanceFeeVaultAuthority: this.pdas.performanceFeeVaultAuthorityPda,
+                performanceFeeVault: this.pdas.performanceFeeVaultPda,
                 performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(params.onycMint),
                 tokenProgram: TOKEN_PROGRAM_ID,
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -496,23 +494,27 @@ export class ScriptHelper {
 
     async buildSetBufferFeeConfigIx(params: {
         managementFeeBasisPoints: number;
-        managementFeeWallet: PublicKey;
         performanceFeeBasisPoints: number;
-        performanceFeeWallet: PublicKey;
         boss: PublicKey;
+        mainOffer: PublicKey;
+        onycMint: PublicKey;
     }) {
         return await this.program.methods
-            .setBufferFeeConfig(
-                params.managementFeeBasisPoints,
-                params.managementFeeWallet,
-                params.performanceFeeBasisPoints,
-                params.performanceFeeWallet,
-            )
+            .setBufferFeeConfig(params.managementFeeBasisPoints, params.performanceFeeBasisPoints)
             .accountsPartial({
                 bufferAccounts: {
                     bufferState: this.pdas.bufferStatePda,
+                    reserveVaultOnycAccount: this.getBufferVaultAta(params.onycMint),
+                    managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(params.onycMint),
+                    performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(params.onycMint),
                 },
                 boss: params.boss,
+                mainOffer: params.mainOffer,
+                onycMint: params.onycMint,
+                offerVaultAuthority: this.pdas.offerVaultAuthorityPda,
+                mintAuthority: this.pdas.mintAuthorityPda,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
                 marketStats: this.pdas.marketStatsPda,
                 circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
             })
@@ -530,49 +532,15 @@ export class ScriptHelper {
                 offerVaultAuthority: this.pdas.offerVaultAuthorityPda,
                 reserveVaultAuthority: this.pdas.reserveVaultAuthorityPda,
                 reserveVaultOnycAccount: this.getBufferVaultAta(params.onycMint),
-                managementFeeVaultAuthority: this.pdas.managementFeeVaultAuthorityPda,
+                managementFeeVault: this.pdas.managementFeeVaultPda,
                 managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(params.onycMint),
-                performanceFeeVaultAuthority: this.pdas.performanceFeeVaultAuthorityPda,
+                performanceFeeVault: this.pdas.performanceFeeVaultPda,
                 performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(params.onycMint),
                 mintAuthority: this.pdas.mintAuthorityPda,
                 marketStats: this.pdas.marketStatsPda,
                 circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
                 tokenProgram: TOKEN_PROGRAM_ID,
                 systemProgram: anchor.web3.SystemProgram.programId,
-            })
-            .instruction();
-    }
-
-    async buildWithdrawManagementFeesIx(params: { boss: PublicKey; onycMint: PublicKey; amount: number }) {
-        return await this.program.methods
-            .withdrawManagementFees(new BN(params.amount))
-            .accountsPartial({
-                bufferState: this.pdas.bufferStatePda,
-                managementFeeVaultAuthority: this.pdas.managementFeeVaultAuthorityPda,
-                managementFeeRecipient: params.boss,
-                onycMint: params.onycMint,
-                managementFeeRecipientOnycAccount: getAssociatedTokenAddressSync(params.onycMint, params.boss, false, TOKEN_PROGRAM_ID),
-                managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(params.onycMint),
-                boss: params.boss,
-                tokenProgram: TOKEN_PROGRAM_ID,
-                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-            })
-            .instruction();
-    }
-
-    async buildWithdrawPerformanceFeesIx(params: { boss: PublicKey; onycMint: PublicKey; amount: number }) {
-        return await this.program.methods
-            .withdrawPerformanceFees(new BN(params.amount))
-            .accountsPartial({
-                bufferState: this.pdas.bufferStatePda,
-                performanceFeeVaultAuthority: this.pdas.performanceFeeVaultAuthorityPda,
-                performanceFeeRecipient: params.boss,
-                onycMint: params.onycMint,
-                performanceFeeRecipientOnycAccount: getAssociatedTokenAddressSync(params.onycMint, params.boss, false, TOKEN_PROGRAM_ID),
-                performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(params.onycMint),
-                boss: params.boss,
-                tokenProgram: TOKEN_PROGRAM_ID,
-                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
             })
             .instruction();
     }
@@ -750,8 +718,8 @@ export class ScriptHelper {
                 bufferAccounts: {
                     bufferState: this.pdas.bufferStatePda,
                     reserveVaultOnycAccount: getAssociatedTokenAddressSync(onycMint, this.pdas.reserveVaultAuthorityPda, true, TOKEN_PROGRAM_ID),
-                    managementFeeVaultOnycAccount: getAssociatedTokenAddressSync(onycMint, this.pdas.managementFeeVaultAuthorityPda, true, TOKEN_PROGRAM_ID),
-                    performanceFeeVaultOnycAccount: getAssociatedTokenAddressSync(onycMint, this.pdas.performanceFeeVaultAuthorityPda, true, TOKEN_PROGRAM_ID),
+                    managementFeeVaultOnycAccount: getAssociatedTokenAddressSync(onycMint, this.pdas.managementFeeVaultPda, true, TOKEN_PROGRAM_ID),
+                    performanceFeeVaultOnycAccount: getAssociatedTokenAddressSync(onycMint, this.pdas.performanceFeeVaultPda, true, TOKEN_PROGRAM_ID),
                 },
                 marketStats: this.pdas.marketStatsPda,
                 circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
@@ -857,36 +825,6 @@ export class ScriptHelper {
             .accountsPartial({
                 redemptionOffer: params.redemptionOfferPda,
                 boss: params.boss,
-            })
-            .instruction();
-    }
-
-    async buildSetRedemptionFeeDestinationIx(params: {
-        feeDestination: PublicKey;
-        boss: PublicKey;
-    }) {
-        return await this.program.methods
-            .setRedemptionFeeDestination(params.feeDestination)
-            .accountsPartial({
-                boss: params.boss
-            })
-            .instruction();
-    }
-
-    async buildWithdrawRedemptionFeesIx(params: {
-        tokenInMint: PublicKey;
-        tokenInProgram: PublicKey;
-        destination: PublicKey;
-        amount: BN;
-        boss: PublicKey;
-    }) {
-        return await this.program.methods
-            .withdrawRedemptionFees(params.amount)
-            .accountsPartial({
-                boss: params.boss,
-                destination: params.destination,
-                tokenInMint: params.tokenInMint,
-                tokenInProgram: params.tokenInProgram
             })
             .instruction();
     }

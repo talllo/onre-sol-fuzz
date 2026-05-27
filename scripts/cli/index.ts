@@ -30,7 +30,7 @@ async function main() {
     const program = new Command();
 
     program
-        .name("npm run cli --")
+        .name("pnpm cli")
         .description("CLI tool for managing OnRE tokenized (re)insurance pool")
         .version("1.0.0")
         .option("-n, --network <network>", "Network to use (mainnet-prod, mainnet-test, mainnet-dev, devnet-test, devnet-dev)")
@@ -72,19 +72,19 @@ async function main() {
         `
 ${chalk.bold("Examples:")}
   ${chalk.gray("# Get program state")}
-  $ npm run cli -- state get
+  $ pnpm cli state get
 
   ${chalk.gray("# Get NAV with JSON output")}
-  $ npm run cli -- market nav --json
+  $ pnpm cli market nav --json
 
   ${chalk.gray("# Create an offer on testnet")}
-  $ npm run cli -- -n mainnet-test offer make
+  $ pnpm cli -n mainnet-test offer make
 
   ${chalk.gray("# Add a pricing vector")}
-  $ npm run cli -- offer add-vector --token-in usdc --token-out onyc
+  $ pnpm cli offer add-vector --token-in usdc --token-out onyc
 
   ${chalk.gray("# Fetch offer details")}
-  $ npm run cli -- offer fetch -i usdc -o onyc
+  $ pnpm cli offer fetch -i usdc -o onyc
 
 ${chalk.bold("Networks:")}
   mainnet-prod   Production mainnet with real tokens (default)

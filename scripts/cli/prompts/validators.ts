@@ -16,14 +16,14 @@ export function validatePublicKey(value: string): boolean | string {
 }
 
 /**
- * Validate basis points (0-10000)
+ * Validate fee basis points (0-1000)
  */
 export function validateBasisPoints(value: number): boolean | string {
     if (value === undefined || value === null || isNaN(value)) {
         return "Basis points value is required";
     }
-    if (value < 0 || value > 10000) {
-        return "Basis points must be between 0 and 10000";
+    if (value < 0 || value > 1000) {
+        return "Basis points must be between 0 and 1000";
     }
     if (!Number.isInteger(value)) {
         return "Basis points must be a whole number";

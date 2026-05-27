@@ -24,7 +24,7 @@ export async function executeRedemptionFulfill(opts: GlobalOptions & Record<stri
                 if (!state.redemptionAdmin || state.redemptionAdmin.equals(PublicKey.default)) {
                     throw new Error(
                         "Redemption admin is not set in program state. " +
-                            "Please set a redemption admin first using: npm run cli -- state set-redemption-admin",
+                            "Please set a redemption admin first using: pnpm cli state set-redemption-admin",
                     );
                 }
 
