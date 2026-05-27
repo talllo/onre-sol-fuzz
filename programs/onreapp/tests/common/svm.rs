@@ -1,5 +1,6 @@
 use super::*;
 
+#[allow(clippy::result_large_err)]
 pub fn send_tx(
     svm: &mut LiteSVM,
     ixs: &[Instruction],

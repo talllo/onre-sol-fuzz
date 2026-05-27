@@ -20,12 +20,11 @@ fn test_boss_can_close_state() {
     let (state_pda, _) = find_state_pda();
     let account = svm.get_account(&state_pda);
     // After close, account should either not exist or be owned by system program
-    match account {
-        Some(acc) => assert_ne!(
+    if let Some(acc) = account {
+        assert_ne!(
             acc.owner, PROGRAM_ID,
             "state should no longer be owned by program"
-        ),
-        None => {} // Account was fully removed
+        );
     }
 }
 

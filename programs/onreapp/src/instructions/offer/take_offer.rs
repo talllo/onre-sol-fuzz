@@ -29,7 +29,7 @@ use anchor_spl::{
 };
 use solana_instructions_sysvar::ID as INSTRUCTIONS_SYSVAR_ID;
 
-/// Shared offer-execution event definitions.
+// Shared offer-execution event definitions.
 
 /// Event emitted when an offer is successfully taken
 ///
@@ -75,7 +75,7 @@ pub struct TakeOffer<'info> {
         seeds = [seeds::STATE],
         bump = state.bump,
         has_one = boss @ crate::OnreError::InvalidBoss,
-        constraint = state.is_killed == false @ crate::OnreError::KillSwitchActivated
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
     )]
     pub state: Box<Account<'info, State>>,
 
@@ -220,7 +220,7 @@ pub struct TakeOfferV2<'info> {
     #[account(
         seeds = [seeds::STATE],
         bump = state.bump,
-        constraint = state.is_killed == false @ crate::OnreError::KillSwitchActivated
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
     )]
     pub state: Box<Account<'info, State>>,
 

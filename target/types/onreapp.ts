@@ -13189,16 +13189,6 @@ export type Onreapp = {
     {
       "name": "mintAuthorityTransferredToBossEvent",
       "docs": [
-        "Handles transferring mint authority from program PDA back to the boss account",
-        "",
-        "This instruction serves as an emergency recovery mechanism allowing the boss to regain",
-        "direct control of mint authority. Common use cases include emergency recovery, temporary",
-        "manual token operations, program maintenance, or returning to pre-program authority setup.",
-        "",
-        "# Security",
-        "- Only the current boss can initiate the transfer",
-        "- Program PDA must currently hold mint authority",
-        "- Uses program-derived signatures for authorization",
         "Event emitted when mint authority is successfully transferred from program PDA to boss",
         "",
         "Provides transparency for tracking mint authority changes and emergency recovery operations."
@@ -13233,16 +13223,6 @@ export type Onreapp = {
     {
       "name": "mintAuthorityTransferredToProgramEvent",
       "docs": [
-        "Handles transferring mint authority from the boss account to a program PDA",
-        "",
-        "This enables burn/mint token architecture allowing the program to mint tokens directly",
-        "instead of transferring from pre-minted vaults. Essential for controlled token supply",
-        "management and programmatic minting operations.",
-        "",
-        "# Security",
-        "- Only the current boss can transfer mint authority",
-        "- Boss must be the current mint authority for the token",
-        "- Authority can be recovered using `transfer_mint_authority_to_boss`",
         "Event emitted when mint authority is successfully transferred from boss to program PDA",
         "",
         "Provides transparency for tracking mint authority changes and enabling programmatic control."
@@ -13523,7 +13503,6 @@ export type Onreapp = {
     {
       "name": "offerTakenEvent",
       "docs": [
-        "Shared offer-execution event definitions.",
         "Event emitted when an offer is successfully taken",
         "",
         "Provides transparency for tracking offer execution and token exchange details."
@@ -13572,7 +13551,6 @@ export type Onreapp = {
     {
       "name": "offerTakenPermissionlessEvent",
       "docs": [
-        "Shared permissionless offer-execution event definitions.",
         "Event emitted when an offer is successfully executed via permissionless flow",
         "",
         "Provides transparency for tracking permissionless offer execution with intermediary routing."

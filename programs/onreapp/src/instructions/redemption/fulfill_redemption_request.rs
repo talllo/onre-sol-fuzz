@@ -168,7 +168,7 @@ pub struct FulfillRedemptionRequest<'info> {
 /// # Arguments
 /// * `ctx`    - The instruction context containing validated accounts
 /// * `amount` - Amount of token_in to process in this call. Must be > 0 and ≤ remaining
-///              unfulfilled balance (`request.amount - request.fulfilled_amount`).
+///   unfulfilled balance (`request.amount - request.fulfilled_amount`).
 ///
 /// # Returns
 /// * `Ok(())` - If the (partial) redemption is successfully processed

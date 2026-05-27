@@ -46,7 +46,7 @@ pub struct OpenSwapBuy<'info> {
     #[account(
         seeds = [crate::constants::seeds::STATE],
         bump = state.bump,
-        constraint = state.is_killed == false @ crate::OnreError::KillSwitchActivated
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
     )]
     pub state: Box<Account<'info, State>>,
 
@@ -298,7 +298,7 @@ fn execute_open_swap_buy<'info>(
             &ctx.accounts.state,
             &ctx.accounts.buffer_accounts,
             &*ctx.accounts.offer.load()?,
-            &mut ctx.accounts.token_out_mint,
+            &ctx.accounts.token_out_mint,
             ctx.accounts.mint_authority.to_account_info(),
             mint_authority_bump,
             &ctx.accounts.token_out_program,

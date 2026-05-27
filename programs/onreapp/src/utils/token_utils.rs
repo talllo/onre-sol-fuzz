@@ -42,7 +42,7 @@ pub fn get_associated_token_account<'info>(
         token_program_id,
         invalid_account_error,
     )?;
-    InterfaceAccount::try_from(&*ata_account)
+    InterfaceAccount::try_from(ata_account)
 }
 
 pub struct EnsureAtaParams<'info> {
@@ -85,7 +85,7 @@ pub fn get_or_create_associated_token_account(
         ))?;
     }
 
-    InterfaceAccount::try_from(&*params.ata_account)
+    InterfaceAccount::try_from(params.ata_account)
 }
 
 /// Generic token transfer function that handles both regular and PDA-signed transfers
@@ -282,6 +282,7 @@ pub fn validate_max_supply(current_supply: u64, amount: u64, max_supply: u64) ->
 /// Mints tokens with max-supply and per-mint amount validation.
 ///
 /// `max_supply == 0` or `max_mint_amount == 0` disables that respective cap.
+#[allow(clippy::too_many_arguments)]
 pub fn mint_tokens<'info>(
     token_program: &Interface<'info, TokenInterface>,
     mint: &InterfaceAccount<'info, Mint>,

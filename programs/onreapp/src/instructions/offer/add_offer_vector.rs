@@ -93,7 +93,7 @@ pub struct AddOfferVector<'info> {
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
 /// * `start_time` - Optional Unix timestamp when the vector becomes active. If not provided,
-/// max(base_time, current_time) is used.
+///   max(base_time, current_time) is used.
 /// * `base_time` - Unix timestamp used as the elapsed-time baseline for price growth
 /// * `base_price` - Initial price with scale=9 (1_000_000_000 = 1.0)
 /// * `apr` - Annual Percentage Rate scaled by 1,000,000 (0.01 = 1% APR = 10_000)

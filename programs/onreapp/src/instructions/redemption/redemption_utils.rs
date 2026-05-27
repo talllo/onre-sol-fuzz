@@ -8,7 +8,7 @@ use crate::utils::{
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
-/// Common error codes for redemption processing operations
+// Common error codes for redemption processing operations.
 
 /// Result structure containing redemption processing calculations
 pub struct RedemptionProcessResult {
@@ -163,6 +163,7 @@ pub struct ExecuteRedemptionOpsParams<'a, 'info> {
     pub token_out_max_mint_amount: u64,
 }
 
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use crate::utils::calculate_fees;

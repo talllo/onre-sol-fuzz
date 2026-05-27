@@ -678,7 +678,7 @@ fn test_clean_old_past_vectors() {
             &token_out,
             None,
             current_time + (i * 1000),
-            i as u64 * 1_000_000,
+            i * 1_000_000,
             5000,
             3600,
         );

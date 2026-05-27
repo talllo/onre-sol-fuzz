@@ -28,7 +28,7 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use solana_instructions_sysvar::ID as INSTRUCTIONS_SYSVAR_ID;
 
-/// Shared permissionless offer-execution event definitions.
+// Shared permissionless offer-execution event definitions.
 
 /// Event emitted when an offer is successfully executed via permissionless flow
 ///
@@ -73,7 +73,7 @@ pub struct TakeOfferPermissionless<'info> {
     #[account(
         seeds = [seeds::STATE],
         bump = state.bump,
-        constraint = state.is_killed == false @ crate::OnreError::KillSwitchActivated,
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated,
         has_one = boss @ crate::OnreError::InvalidBoss
     )]
     pub state: Box<Account<'info, State>>,
@@ -227,7 +227,7 @@ pub struct TakeOfferPermissionlessV2<'info> {
     #[account(
         seeds = [seeds::STATE],
         bump = state.bump,
-        constraint = state.is_killed == false @ crate::OnreError::KillSwitchActivated,
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated,
     )]
     pub state: Box<Account<'info, State>>,
 
@@ -536,6 +536,7 @@ pub fn take_offer_permissionless_v2<'info>(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn execute_take_offer_permissionless<'info>(
     program_id: &Pubkey,
     offer_account: &AccountLoader<'info, Offer>,

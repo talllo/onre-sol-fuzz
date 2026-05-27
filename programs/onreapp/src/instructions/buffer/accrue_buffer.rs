@@ -29,6 +29,7 @@ pub(crate) struct BufferAccrualResult {
     pub reserve_vault_balance_after_accrual: u64,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn accrue_buffer<'info>(
     state: &Account<'info, State>,
     buffer_state: &mut BufferState,
@@ -169,6 +170,7 @@ pub(crate) fn accrue_buffer<'info>(
     Ok(result)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn accrue_buffer_from_accounts<'info>(
     program_id: &Pubkey,
     state: &Account<'info, State>,

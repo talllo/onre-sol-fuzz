@@ -48,7 +48,7 @@ pub(crate) fn utilization_power_scaled(u: u128, exponent_scaled: u32) -> Result<
     if u == HARD_WALL_SCALE {
         return Ok(HARD_WALL_SCALE);
     }
-    if exponent_scaled % CURVE_EXPONENT_SCALE == 0 {
+    if exponent_scaled.is_multiple_of(CURVE_EXPONENT_SCALE) {
         return Ok(integer_utilization_power_scaled(
             u,
             exponent_scaled / CURVE_EXPONENT_SCALE,
@@ -70,7 +70,7 @@ pub(crate) fn validate_curve_exponent_scaled(exponent_scaled: u32) -> Result<()>
         crate::OnreError::InvalidAmount
     );
     require!(
-        exponent_scaled % CURVE_EXPONENT_STEP == 0,
+        exponent_scaled.is_multiple_of(CURVE_EXPONENT_STEP),
         crate::OnreError::InvalidAmount
     );
     Ok(())

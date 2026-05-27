@@ -372,7 +372,7 @@ fn test_refresh_market_stats_succeeds_without_recent_purchases() {
         setup_onyc_offer_with_supply(0, 1_000_000_000, 86_400, 7_000_000_000, 1_500_000_000);
 
     let ix = build_refresh_market_stats_ix(&payer.pubkey(), &token_in, &onyc_mint);
-    send_tx(&mut svm, &[ix.clone()], &[&payer]).unwrap();
+    send_tx(&mut svm, std::slice::from_ref(&ix), &[&payer]).unwrap();
     let initial = read_market_stats(&svm);
 
     advance_clock_by(&mut svm, 86_400);

@@ -183,7 +183,7 @@ pub fn calculate_apy_from_apr(apr_scaled: u64) -> Result<u64> {
         .checked_mul(apr)
         .ok_or_else(|| error!(crate::OnreError::Overflow))?;
     let den = EXT_SCALE
-        .checked_mul(N as u128)
+        .checked_mul(N)
         .ok_or_else(|| error!(crate::OnreError::Overflow))?;
     let incr = num
         .checked_add(den / 2)

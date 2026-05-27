@@ -5,17 +5,16 @@ use anchor_spl::token_2022::spl_token_2022::instruction::AuthorityType;
 use anchor_spl::token_interface::{set_authority, SetAuthority};
 use anchor_spl::token_interface::{Mint, TokenInterface};
 
-/// Handles transferring mint authority from program PDA back to the boss account
-///
-/// This instruction serves as an emergency recovery mechanism allowing the boss to regain
-/// direct control of mint authority. Common use cases include emergency recovery, temporary
-/// manual token operations, program maintenance, or returning to pre-program authority setup.
-///
-/// # Security
-/// - Only the current boss can initiate the transfer
-/// - Program PDA must currently hold mint authority
-/// - Uses program-derived signatures for authorization
-
+// Handles transferring mint authority from program PDA back to the boss account.
+//
+// This instruction serves as an emergency recovery mechanism allowing the boss to regain
+// direct control of mint authority. Common use cases include emergency recovery, temporary
+// manual token operations, program maintenance, or returning to pre-program authority setup.
+//
+// Security:
+// - Only the current boss can initiate the transfer
+// - Program PDA must currently hold mint authority
+// - Uses program-derived signatures for authorization
 /// Event emitted when mint authority is successfully transferred from program PDA to boss
 ///
 /// Provides transparency for tracking mint authority changes and emergency recovery operations.

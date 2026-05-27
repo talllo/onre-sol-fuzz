@@ -59,7 +59,7 @@ pub struct QuoteSwapBuy<'info> {
     #[account(
         seeds = [seeds::STATE],
         bump = state.bump,
-        constraint = state.is_killed == false @ crate::OnreError::KillSwitchActivated
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
     )]
     pub state: Box<Account<'info, State>>,
 
@@ -91,7 +91,7 @@ pub struct QuoteSwapSell<'info> {
     #[account(
         seeds = [seeds::STATE],
         bump = state.bump,
-        constraint = state.is_killed == false @ crate::OnreError::KillSwitchActivated
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
     )]
     pub state: Box<Account<'info, State>>,
 
@@ -670,6 +670,7 @@ fn preview_current_sell_trade_count(
     Ok(prop_amm_pair_state.curr_sell_trade_count)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_swap_buy_quote(
     program_id: &Pubkey,
     state: &State,
@@ -716,6 +717,7 @@ pub fn build_swap_buy_quote(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_swap_sell_quote(
     program_id: &Pubkey,
     state: &State,

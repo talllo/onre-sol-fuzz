@@ -5,17 +5,16 @@ use anchor_spl::token_2022::spl_token_2022::instruction::AuthorityType;
 use anchor_spl::token_interface::{set_authority, SetAuthority};
 use anchor_spl::token_interface::{Mint, TokenInterface};
 
-/// Handles transferring mint authority from the boss account to a program PDA
-///
-/// This enables burn/mint token architecture allowing the program to mint tokens directly
-/// instead of transferring from pre-minted vaults. Essential for controlled token supply
-/// management and programmatic minting operations.
-///
-/// # Security
-/// - Only the current boss can transfer mint authority
-/// - Boss must be the current mint authority for the token
-/// - Authority can be recovered using `transfer_mint_authority_to_boss`
-
+// Handles transferring mint authority from the boss account to a program PDA.
+//
+// This enables burn/mint token architecture allowing the program to mint tokens directly
+// instead of transferring from pre-minted vaults. Essential for controlled token supply
+// management and programmatic minting operations.
+//
+// Security:
+// - Only the current boss can transfer mint authority
+// - Boss must be the current mint authority for the token
+// - Authority can be recovered using `transfer_mint_authority_to_boss`
 /// Event emitted when mint authority is successfully transferred from boss to program PDA
 ///
 /// Provides transparency for tracking mint authority changes and enabling programmatic control.

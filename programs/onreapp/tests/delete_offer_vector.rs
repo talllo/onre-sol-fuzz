@@ -112,7 +112,7 @@ fn test_delete_specific_keeps_others() {
             &token_out,
             None,
             current_time + (i * 1000),
-            i as u64 * 1_000_000,
+            i * 1_000_000,
             5000,
             3600,
         );
@@ -273,7 +273,7 @@ fn test_delete_allows_future_vector() {
             &token_out,
             None,
             current_time + (i * 10),
-            i as u64 * 1_000_000,
+            i * 1_000_000,
             5000,
             3600,
         );

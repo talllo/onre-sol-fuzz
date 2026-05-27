@@ -125,11 +125,11 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         ctx.accounts.program_data.as_ref().map(|v| v.as_ref()),
     )?;
 
-    if upgrade_authority.is_some() {
+    if let Some(upgrade_authority) = upgrade_authority {
         // Check that the boss is the upgrade authority
         require_keys_eq!(
             ctx.accounts.boss.key(),
-            upgrade_authority.unwrap(),
+            upgrade_authority,
             crate::OnreError::WrongOwner
         );
     }

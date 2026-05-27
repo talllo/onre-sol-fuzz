@@ -102,6 +102,7 @@ pub struct ConfigurePropAmm<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn configure_prop_amm(
     ctx: Context<ConfigurePropAmm>,
     enabled: bool,
@@ -124,7 +125,7 @@ pub fn configure_prop_amm(
         crate::OnreError::InvalidAmount
     );
     require!(
-        curve_exponent_scaled % CURVE_EXPONENT_STEP == 0,
+        curve_exponent_scaled.is_multiple_of(CURVE_EXPONENT_STEP),
         crate::OnreError::InvalidAmount
     );
     require!(
@@ -132,7 +133,7 @@ pub fn configure_prop_amm(
         crate::OnreError::InvalidAmount
     );
     require!(
-        min_cadence_exponent_scaled % CURVE_EXPONENT_STEP == 0,
+        min_cadence_exponent_scaled.is_multiple_of(CURVE_EXPONENT_STEP),
         crate::OnreError::InvalidAmount
     );
     require!(cadence_threshold > 0, crate::OnreError::InvalidAmount);

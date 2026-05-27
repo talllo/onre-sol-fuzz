@@ -1,4 +1,5 @@
 #![allow(unexpected_cfgs)]
+#![allow(clippy::diverging_sub_expression)]
 
 use anchor_lang::prelude::*;
 use instructions::*;
@@ -18,7 +19,7 @@ const _ENV_FEATURE_COUNT: usize = cfg!(feature = "mainnet-test") as usize
     + cfg!(feature = "devnet-dev") as usize;
 
 const _: () = assert!(
-    _ENV_FEATURE_COUNT <= 1,
+    _ENV_FEATURE_COUNT < 2,
     "Environment features are mutually exclusive: enable at most one of 'mainnet-test', 'devnet-test', or 'devnet-dev'. Mainnet is the default when no environment feature is set."
 );
 
@@ -499,6 +500,7 @@ pub mod onreapp {
         state_operations::set_main_offer(ctx)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn configure_prop_amm(
         ctx: Context<ConfigurePropAmm>,
         enabled: bool,
