@@ -13,6 +13,59 @@ The important distinction is that buys and sells use different mechanics:
 
 Prop AMM configuration and pressure tracking are per canonical offer pair. A pair is enabled by its `PropAmmPairState` PDA, derived from the canonical `asset -> ONYC` offer.
 
+## Formula History
+
+The first hard-wall implementation in commit `d93b231` used the blended
+endpoint penalty from the original spec:
+
+```text
+effective_liquidity = min(actual_liquidity, hard_wall_reserve)
+u = raw / effective_liquidity
+w = linear_weight_bps / 10_000
+penalty(u) = w * u + (1 - w) * u^base_exponent
+liquidity_factor = max(0, 1 - penalty(u))
+out = raw * liquidity_factor
+```
+
+That version had these Prop AMM state fields:
+
+```text
+pool_target_bps
+linear_weight_bps
+base_exponent
+```
+
+The older Notion-style notation sometimes wrote the linear weight as
+`linear_weight / 500`. That is not how the Rust implementation stored it:
+the implemented `linear_weight_bps` was divided by `10_000`. With the old
+defaults, `linear_weight_bps = 2_000` and `base_exponent = 3`, so:
+
+```text
+penalty(u) = 0.20u + 0.80u^3
+```
+
+Commit `880be62` replaced that blended penalty model with dynamic-wall
+pricing. It removed `linear_weight_bps` and `base_exponent`, added sell/buy
+pressure tracking, and changed the curve to:
+
+```text
+effective_volume = decayed_previous_sell_pressure + current_net_sell_pressure + raw
+W = actual_liquidity / (1 + wall_sensitivity * effective_volume / actual_liquidity)
+u = raw / W
+haircut(u) = min_liquidation_haircut + curve_peg_haircut * u^curve_exponent
+out = raw * max(0, 1 - haircut(u))
+```
+
+Commit `5e86ebe` then removed `min_liquidation_haircut`, leaving only the
+curve peg haircut. Commit `2f91c58` added cadence pricing by reducing the
+curve exponent as current-epoch sell count rises. Later commits moved the
+Prop AMM state to per-pair PDAs and changed the fixed reserve target source
+from Prop AMM config to `redemption_offer.vault_target_bps`.
+
+The current implemented formula is therefore not the original blended
+`linear + nonlinear` penalty. It is the dynamic-wall, cadence-adjusted
+haircut described in the rest of this document.
+
 ## Variables
 
 | Symbol | Code variable | Meaning |
