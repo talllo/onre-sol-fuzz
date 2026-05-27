@@ -331,7 +331,7 @@ fn test_get_apy_fails_no_active_vector() {
 
 #[test]
 fn test_refresh_market_stats_permissionless_creates_and_updates_pda() {
-    let (mut svm, payer, token_in, onyc_mint) =
+    let (mut svm, _payer, token_in, onyc_mint) =
         setup_onyc_offer_with_supply(36_500, 1_000_000_000, 86_400, 5_000_000_000, 2_000_000_000);
     let caller = Keypair::new();
     svm.airdrop(&caller.pubkey(), INITIAL_LAMPORTS).unwrap();

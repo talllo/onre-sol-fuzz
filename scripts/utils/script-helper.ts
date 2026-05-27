@@ -469,15 +469,6 @@ export class ScriptHelper {
         return await builder.instruction();
     }
 
-    async buildSetBufferMainOfferIx(params: { offer: PublicKey; boss: PublicKey }) {
-        return await this.program.methods
-            .setMainOffer()
-            .accountsPartial({
-                offer: params.offer,
-            })
-            .instruction();
-    }
-
     async buildSetBufferGrossYieldIx(params: { grossYield: number; boss: PublicKey }) {
         return await this.program.methods
             .setBufferGrossApr(new BN(params.grossYield))
@@ -486,35 +477,6 @@ export class ScriptHelper {
                     bufferState: this.pdas.bufferStatePda,
                 },
                 boss: params.boss,
-                marketStats: this.pdas.marketStatsPda,
-                circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
-            })
-            .instruction();
-    }
-
-    async buildSetBufferFeeConfigIx(params: {
-        managementFeeBasisPoints: number;
-        performanceFeeBasisPoints: number;
-        boss: PublicKey;
-        mainOffer: PublicKey;
-        onycMint: PublicKey;
-    }) {
-        return await this.program.methods
-            .setBufferFeeConfig(params.managementFeeBasisPoints, params.performanceFeeBasisPoints)
-            .accountsPartial({
-                bufferAccounts: {
-                    bufferState: this.pdas.bufferStatePda,
-                    reserveVaultOnycAccount: this.getBufferVaultAta(params.onycMint),
-                    managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(params.onycMint),
-                    performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(params.onycMint),
-                },
-                boss: params.boss,
-                mainOffer: params.mainOffer,
-                onycMint: params.onycMint,
-                offerVaultAuthority: this.pdas.offerVaultAuthorityPda,
-                mintAuthority: this.pdas.mintAuthorityPda,
-                tokenProgram: TOKEN_PROGRAM_ID,
-                systemProgram: anchor.web3.SystemProgram.programId,
                 marketStats: this.pdas.marketStatsPda,
                 circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
             })
@@ -778,16 +740,6 @@ export class ScriptHelper {
                 tokenInMint: params.tokenInMint,
                 redeemer: params.redeemer,
                 tokenProgram: params.tokenProgram ?? TOKEN_PROGRAM_ID,
-            })
-            .instruction();
-    }
-
-    async buildSetOfferDisabledIx(params: { offerPda: PublicKey; disabled: boolean; signer: PublicKey }) {
-        return await this.program.methods
-            .setOfferDisabled(params.disabled)
-            .accountsPartial({
-                offer: params.offerPda,
-                signer: params.signer,
             })
             .instruction();
     }

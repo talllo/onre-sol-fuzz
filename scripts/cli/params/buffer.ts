@@ -19,17 +19,6 @@ export const bufferInitParams: ParamDefinition[] = [
     },
 ];
 
-export const bufferOnycMintParam: ParamDefinition[] = [
-    {
-        name: "onycMint",
-        type: "mint",
-        description: "ONyc mint address",
-        required: true,
-        flag: "--onyc-mint",
-        default: (cfg: NetworkConfig) => cfg.mints.onyc,
-    },
-];
-
 export const bufferGrossYieldParams: ParamDefinition[] = [
     {
         name: "grossYield",
@@ -37,16 +26,6 @@ export const bufferGrossYieldParams: ParamDefinition[] = [
         description: "Gross yield (scale=1e6; 100000 = 10%)",
         required: true,
         flag: "--gross-yield",
-    },
-];
-
-export const bufferOfferParam: ParamDefinition[] = [
-    {
-        name: "offer",
-        type: "publicKey",
-        description: "Main offer PDA used by BUFFER",
-        required: true,
-        flag: "--offer",
     },
 ];
 
