@@ -4,13 +4,17 @@ This document describes the BUFFER accrual model and the expected state transiti
 
 ## State Fields
 
-BUFFER accrual uses these fields from `BufferState`:
+BUFFER accrual reads and updates these `BufferState` fields:
 
-- `lowest_supply`
+- `onyc_mint`
+- `gross_apr`
+- `previous_supply`
+- `management_fee_basis_points`
+- `performance_fee_basis_points`
 - `last_accrual_timestamp`
 - `performance_fee_high_watermark`
 
-`lowest_supply` is the stored supply baseline for the next unpaid accrual interval.
+`previous_supply` is the stored supply baseline for the next unpaid accrual interval.
 
 `last_accrual_timestamp` is the start timestamp of that unpaid interval.
 
@@ -18,10 +22,10 @@ BUFFER accrual uses these fields from `BufferState`:
 
 Each accrual interval is handled as:
 
-1. Read `lowest_supply`
+1. Read `previous_supply`
 2. Read `last_accrual_timestamp`
 3. Compute elapsed time from `last_accrual_timestamp` to `now`
-4. Compute BUFFER accrual using `lowest_supply`
+4. Compute BUFFER accrual using `previous_supply`
 5. Mint the accrual
 6. Set a new baseline for the next interval
 
@@ -39,53 +43,64 @@ Any BUFFER-aware instruction performs one full accrual cycle before applying its
 
 Inputs:
 
-- stored `lowest_supply`
+- stored `previous_supply`
 - stored `last_accrual_timestamp`
 - current ONyc mint supply before any accrual mint
-- current NAV from the main offer
+- current NAV from the offer supplied to the accrual path
 
 Steps:
 
-1. Load `previous_lowest_supply`
+1. Load `old_previous_supply`
 2. Load `current_supply_before_mint`
 3. Compute `seconds_elapsed = now - last_accrual_timestamp`
 4. Compute `gross_mint_amount`, discounting by the target NAV growth already earned over the interval
-5. Split `gross_mint_amount` into:
-   - buffer mint
+5. Enforce `State.max_mint_amount` against the total `gross_mint_amount` when the cap is nonzero
+6. Split `gross_mint_amount` into:
+   - reserve mint
    - management fee mint
    - performance fee mint
-6. Mint all parts
-7. Update:
+7. Mint all parts
+8. Update:
    - `performance_fee_high_watermark`
-   - `lowest_supply = current_supply_before_mint + gross_mint_amount`
+   - `previous_supply = current_supply_before_mint + gross_mint_amount`
    - `last_accrual_timestamp = now`
 
-If `lowest_supply == 0`, the accrual path initializes the baseline:
+If `previous_supply == 0`, the accrual path initializes the baseline:
 
-- `lowest_supply = current_supply_before_mint`
+- `previous_supply = current_supply_before_mint`
 - `last_accrual_timestamp = now`
 - `performance_fee_high_watermark = current_nav`
 
 and performs no accrual mint or performance fee mint.
 
-## Any Other ONyc Supply Change
+## BUFFER-Aware ONyc Supply Changes
 
-Any instruction that changes ONyc supply should be handled as:
+Implemented BUFFER-aware ONyc supply-changing paths first settle pending accrual,
+then apply their own mint or burn, then store the post-change supply and the
+accrual timestamp as the next baseline.
+
+This currently applies when the buffer is initialized and the program controls
+the ONyc mint, for:
+
+- `mint_to` when `State.main_offer` is set
+- `take_offer_v2` and `take_offer_permissionless_v2` when token out is ONyc
+- Prop AMM buy when token out is ONyc
+- redemption fulfillment when token in is ONyc and the net amount is burned
+- Prop AMM sell when token in is ONyc and the net amount is burned
+- `burn_for_nav_increase`
+
+Legacy `take_offer` and `take_offer_permissionless` do not update the BUFFER
+baseline, and offer executions that only burn ONyc as token in are not wired
+into the BUFFER baseline path.
+
+The baseline update is:
 
 1. Accrue pending BUFFER from stored baseline up to `now`
 2. Perform the ONyc mint or burn
 3. Read or derive the post-change ONyc supply
 4. Set:
-   - `lowest_supply = post_change_supply`
+   - `previous_supply = post_change_supply`
    - `last_accrual_timestamp = now`
-
-This applies to:
-
-- manual ONyc mint
-- offer execution when ONyc is minted
-- offer execution when ONyc is burned
-- redemption fulfillment when ONyc is burned
-- `burn_for_nav_increase`
 
 ## Supply Baseline Update
 
@@ -100,20 +115,20 @@ Examples:
 
 ## Example 1: Initialize BUFFER
 
-Initial state:
+Initial state after `initialize_buffer` at `T0`:
 
-- `lowest_supply = 0`
-- `last_accrual_timestamp = 0`
+- `previous_supply = 0`
+- `last_accrual_timestamp = T0`
 - ONyc supply = `1,000`
 
-Call any BUFFER-aware instruction at `T1`.
+Call a BUFFER accrual path at `T1`.
 
 Steps:
 
 1. Read current supply `1,000`
-2. Since `lowest_supply == 0`, do not accrue
+2. Since `previous_supply == 0`, do not accrue
 3. Set:
-   - `lowest_supply = 1,000`
+   - `previous_supply = 1,000`
    - `last_accrual_timestamp = T1`
    - `performance_fee_high_watermark = current_nav_at_T1`
 
@@ -127,7 +142,7 @@ Result:
 
 Initial state:
 
-- `lowest_supply = 1,000`
+- `previous_supply = 1,000`
 - `last_accrual_timestamp = T1`
 - current ONyc supply before accrual mint = `1,000`
 
@@ -135,7 +150,7 @@ At `T2`, computed accrual is:
 
 - `gross_mint_amount = 50`
 - split into:
-  - buffer = `35`
+  - reserve = `35`
   - management fee = `5`
   - performance fee = `10`
 
@@ -145,7 +160,7 @@ Steps:
 2. Mint total `50`
 3. Post-accrual supply becomes `1,050`
 4. Set:
-   - `lowest_supply = 1,050`
+   - `previous_supply = 1,050`
    - `last_accrual_timestamp = T2`
 
 Result:
@@ -153,11 +168,16 @@ Result:
 - interval `T1 -> T2` is settled
 - next unpaid interval starts at `T2` with baseline `1,050`
 
+The gross accrual is one logical mint operation for `max_mint_amount` purposes,
+even though the resulting tokens can be minted to three destinations. A cap of
+`80` rejects a gross accrual of `95`, even if the reserve, management-fee, and
+performance-fee pieces are each below `80`.
+
 ## Example 3: Accrual, Then User Buy
 
 State after prior accrual:
 
-- `lowest_supply = 1,050`
+- `previous_supply = 1,050`
 - `last_accrual_timestamp = T2`
 - ONyc supply = `1,050`
 
@@ -171,7 +191,7 @@ Sequence:
 4. User buy mints `200`
 5. Post-buy supply becomes `1,270`
 6. Set:
-   - `lowest_supply = 1,270`
+   - `previous_supply = 1,270`
    - `last_accrual_timestamp = T3`
 
 Result:
@@ -183,7 +203,7 @@ Result:
 
 Starting state:
 
-- `lowest_supply = 1,270`
+- `previous_supply = 1,270`
 - `last_accrual_timestamp = T3`
 - ONyc supply = `1,270`
 
@@ -197,7 +217,7 @@ Sequence:
 4. User A buy mints `100`
 5. Supply becomes `1,400`
 6. Set:
-   - `lowest_supply = 1,400`
+   - `previous_supply = 1,400`
    - `last_accrual_timestamp = T4`
 
 At `T5`, user B buys `50`.
@@ -210,14 +230,14 @@ Sequence:
 4. User B buy mints `50`
 5. Supply becomes `1,460`
 6. Set:
-   - `lowest_supply = 1,460`
+   - `previous_supply = 1,460`
    - `last_accrual_timestamp = T5`
 
 ## Example 5: Accrual, Then Redemption Burn
 
 State:
 
-- `lowest_supply = 1,460`
+- `previous_supply = 1,460`
 - `last_accrual_timestamp = T5`
 - ONyc supply = `1,460`
 
@@ -231,14 +251,14 @@ Sequence:
 4. Redemption burns `120`
 5. Supply becomes `1,355`
 6. Set:
-   - `lowest_supply = 1,355`
+   - `previous_supply = 1,355`
    - `last_accrual_timestamp = T6`
 
 ## Example 6: Accrual, Then NAV Burn
 
 State:
 
-- `lowest_supply = 1,355`
+- `previous_supply = 1,355`
 - `last_accrual_timestamp = T6`
 - ONyc supply = `1,355`
 
@@ -252,14 +272,14 @@ Sequence:
 4. NAV burn burns `100`
 5. Supply becomes `1,267`
 6. Set:
-   - `lowest_supply = 1,267`
+   - `previous_supply = 1,267`
    - `last_accrual_timestamp = T7`
 
 ## Example 7: Mint, Burn, Mint Across Multiple Operations
 
 Starting state:
 
-- `lowest_supply = 2,000`
+- `previous_supply = 2,000`
 - `last_accrual_timestamp = T10`
 - ONyc supply = `2,000`
 
@@ -273,7 +293,7 @@ Sequence:
 4. Manual mint adds `300`
 5. Supply becomes `2,340`
 6. Set:
-   - `lowest_supply = 2,340`
+   - `previous_supply = 2,340`
    - `last_accrual_timestamp = T11`
 
 At `T12`, redemption burns `90`.
@@ -286,7 +306,7 @@ Sequence:
 4. Redemption burn removes `90`
 5. Supply becomes `2,258`
 6. Set:
-   - `lowest_supply = 2,258`
+   - `previous_supply = 2,258`
    - `last_accrual_timestamp = T12`
 
 At `T13`, user buy mints `60`.
@@ -299,14 +319,14 @@ Sequence:
 4. User buy mints `60`
 5. Supply becomes `2,323`
 6. Set:
-   - `lowest_supply = 2,323`
+   - `previous_supply = 2,323`
    - `last_accrual_timestamp = T13`
 
 ## Example 8: Two Operations At The Same Timestamp
 
 Starting state:
 
-- `lowest_supply = 5,000`
+- `previous_supply = 5,000`
 - `last_accrual_timestamp = T20`
 
 At `T21`, operation A changes supply, and operation B changes supply again in the same block timestamp.
@@ -318,7 +338,7 @@ Operation A:
 3. Perform supply change A, for example mint `100`
 4. If starting supply was `5,000`, post-op supply becomes `5,125`
 5. Set:
-   - `lowest_supply = 5,125`
+   - `previous_supply = 5,125`
    - `last_accrual_timestamp = T21`
 
 Operation B at the same `T21`:
@@ -328,14 +348,14 @@ Operation B at the same `T21`:
 3. Perform supply change B, for example burn `20`
 4. Supply becomes `5,105`
 5. Set:
-   - `lowest_supply = 5,105`
+   - `previous_supply = 5,105`
    - `last_accrual_timestamp = T21`
 
 ## Operational Summary
 
 For each supply-changing instruction:
 
-1. Settle the unpaid interval using stored `lowest_supply`
+1. Settle the unpaid interval using stored `previous_supply`
 2. Execute the ONyc mint or burn
-3. Store the post-change supply as the next `lowest_supply`
+3. Store the post-change supply as the next `previous_supply`
 4. Store `now` as the next `last_accrual_timestamp`

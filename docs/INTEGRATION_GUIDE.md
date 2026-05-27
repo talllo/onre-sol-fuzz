@@ -8,7 +8,7 @@ Simple guide for integrating NAV and APY queries into your application.
 
 The Onre program provides **read-only view instructions** to query market data. Use the program IDL and standard Anchor client libraries to make these calls.
 
-For BUFFER integrations, keep in mind that BUFFER accrual does not accept a caller-provided current yield. Instead, `current_yield` is derived from the active APR on `state.main_offer`.
+For BUFFER integrations, keep in mind that BUFFER accrual does not accept a caller-provided current yield. Instead, `current_yield` is derived from the active APR on the offer supplied to the accrual path.
 
 **Program ID (Mainnet):** `onreuGhHHgVzMWSkj2oQDLDtvvGvoepBPkqyaubFcwe`
 
@@ -111,46 +111,39 @@ console.log(`APY: ${apyPercent.toFixed(2)}%`); // e.g., 10.50%
 
 ### 3. Get TVL (Total Value Locked)
 
-**Instruction:** `get_tvl`
+**Recommended instruction:** `get_tvl_v2`
 
-**Returns:** Total tokens locked in vault (raw amount with token decimals)
+**Returns:** `circulating_supply * current_price / 10^9`
 
 **Accounts:**
 ```typescript
 {
-  offer: PublicKey,               // PDA: ["offer", tokenInMint, tokenOutMint]
+  offer: PublicKey,          // PDA: ["offer", tokenInMint, tokenOutMint]
   tokenInMint: PublicKey,
   tokenOutMint: PublicKey,
-  vaultTokenOutAccount: PublicKey, // ATA: (tokenOutMint, vaultAuthority)
-  tokenOutProgram: PublicKey       // Usually TOKEN_PROGRAM_ID
+  state: PublicKey,          // PDA: ["state"]
+  excludedBalance: PublicKey // PDA: ["circ_supply_excl_balance"]
 }
 ```
 
 **Example:**
 ```typescript
-import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-
-// Derive vault authority PDA
-const [vaultAuthority] = PublicKey.findProgramAddressSync(
-  [Buffer.from("offer_vault_authority")],
+const [excludedBalance] = PublicKey.findProgramAddressSync(
+  [Buffer.from("circ_supply_excl_balance")],
+  program.programId
+);
+const [statePda] = PublicKey.findProgramAddressSync(
+  [Buffer.from("state")],
   program.programId
 );
 
-// Derive vault token account
-const vaultTokenOutAccount = getAssociatedTokenAddressSync(
-  tokenOutMint,
-  vaultAuthority,
-  true,
-  TOKEN_PROGRAM_ID
-);
-
 const tvl = await program.methods
-  .getTvl()
+  .getTvlV2()
   .accounts({
     tokenInMint,
     tokenOutMint,
-    vaultTokenOutAccount,
-    tokenOutProgram: TOKEN_PROGRAM_ID
+    state: statePda,
+    excludedBalance
   })
   .view();
 
@@ -161,7 +154,7 @@ console.log(`TVL: ${tvl.toString()}`);
 
 ### 4. Get Circulating Supply
 
-**Instruction:** `get_circulating_supply`
+**Recommended instruction:** `get_circulating_supply_v2`
 
 **Returns:** Current circulating supply of ONyc
 
@@ -170,8 +163,7 @@ console.log(`TVL: ${tvl.toString()}`);
 {
   state: PublicKey,           // PDA: ["state"]
   onycMint: PublicKey,        // From state.onyc_mint
-  onycVaultAccount: PublicKey, // ATA: (onycMint, vaultAuthority)
-  tokenProgram: PublicKey      // Usually TOKEN_PROGRAM_ID
+  excludedBalance: PublicKey  // PDA: ["circ_supply_excl_balance"]
 }
 ```
 
@@ -187,30 +179,26 @@ const [statePda] = PublicKey.findProgramAddressSync(
 const state = await program.account.state.fetch(statePda);
 const onycMint = state.onycMint;
 
-// Derive vault authority
-const [vaultAuthority] = PublicKey.findProgramAddressSync(
-  [Buffer.from("offer_vault_authority")],
+const [excludedBalance] = PublicKey.findProgramAddressSync(
+  [Buffer.from("circ_supply_excl_balance")],
   program.programId
 );
 
-// Derive ONyc vault account
-const onycVaultAccount = getAssociatedTokenAddressSync(
-  onycMint,
-  vaultAuthority,
-  true,
-  TOKEN_PROGRAM_ID
-);
-
 const supply = await program.methods
-  .getCirculatingSupply()
+  .getCirculatingSupplyV2()
   .accounts({
-    onycVaultAccount,
-    tokenProgram: TOKEN_PROGRAM_ID
+    state: statePda,
+    onycMint,
+    excludedBalance
   })
   .view();
 
 console.log(`Circulating Supply: ${supply.toString()}`);
 ```
+
+`get_tvl` and `get_circulating_supply` remain legacy views that subtract the
+offer-vault and boss ATAs directly. The V2 views use the cached excluded-balance
+PDA, which is also what `refresh_market_stats` and the Prop AMM paths use.
 
 ---
 
@@ -253,24 +241,24 @@ const [vaultAuthority] = PublicKey.findProgramAddressSync(
 If your integration touches BUFFER:
 
 - `initialize_buffer` must be given an offer account, and that offer's `token_out_mint` must be the ONyc mint
-- `set_main_offer` changes which offer is used as the source of APR for BUFFER
-- `set_buffer_gross_apr` only updates `gross_apr`
-- BUFFER accrual reads `current_yield` from the active vector APR on `state.main_offer`
+- `set_main_offer` changes the offer used by `initialize_buffer`, `set_buffer_gross_apr`, and ONYC market-stat refresh paths that need the canonical offer
+- `set_buffer_gross_apr` first settles pending BUFFER accrual and refreshes market stats, then updates `gross_apr`
+- BUFFER accrual reads `current_yield` from the active vector APR on the offer supplied to that accrual path
 
 ### Recommended BUFFER Rollout
 
 Recommended rollout sequence for enabling BUFFER on an already-running deployment:
 
 1. upgrade the program
-2. let integrators/backend switch to the extended instruction paths
-3. stop using the legacy fulfillment paths
+2. let integrators/backend switch to the BUFFER-aware instruction account sets
+3. stop using clients built against the legacy fulfillment account set
 4. upgrade the program again to remove or disable the legacy paths
 5. initialize BUFFER
 
 Operational note:
 
-- `fulfill_redemption_request_extended` is designed to work before BUFFER is initialized
-- before BUFFER initialization, the extended path behaves as a no-accrual redemption flow
+- `fulfill_redemption_request` is designed to work before BUFFER is initialized
+- before BUFFER initialization, the BUFFER-aware path behaves as a no-accrual redemption flow
 - after BUFFER is initialized, set `gross_apr` deliberately as part of activation so accrual starts only when you intend it to
 
 ### Vault Token Accounts (ATAs)
@@ -362,4 +350,4 @@ getMarketData();
 
 Check the full IDL for all available instructions and account structures.
 
-**Reference Scripts:** `scripts/market_info/get-nav.ts`, `scripts/market_info/get-apy.ts`
+For operational examples, use the CLI under `scripts/cli/` or the smoke/vault scripts listed in `README.md`.

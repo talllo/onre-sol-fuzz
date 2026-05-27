@@ -10,7 +10,7 @@ Granular fees are applied to both directions to capture protocol revenue and man
 
 **Buy Quote (`token_out_amount`):**
 
-Prop AMM buys use the normal offer engine. The active offer vector determines the current price, the offer fee is deducted from the stablecoin input, and the net input is converted into ONYC output.
+Prop AMM buys use the normal offer engine. The active offer vector determines the current price, the offer fee is deducted from the asset input, and the net input is converted into ONYC output. A buy quote can exist even when buy execution later rejects because the offer's permissionless mode is disabled.
 
 $$
 \mathrm{buy\_net} = \mathrm{token\_in\_amount} - \left\lceil \frac{\mathrm{token\_in\_amount} \times \mathrm{offer\_fee\_bps}}{10,000} \right\rceil
@@ -22,33 +22,41 @@ $$
 
 **Raw Sell Value (`raw_sell_value_stable`):**
 
-Before hard-wall dampening, the sell path applies the redemption offer fee:
+Before hard-wall dampening, the sell path applies the greater of the redemption offer fee and `minimum_sell_haircut_onyc`:
 
 $$
-\mathrm{sell\_net} = \mathrm{token\_in\_amount} - \left\lceil \frac{\mathrm{token\_in\_amount} \times \mathrm{redemption\_fee\_bps}}{10,000} \right\rceil
+\mathrm{pct\_fee} = \left\lceil \frac{\mathrm{token\_in\_amount} \times \mathrm{redemption\_fee\_bps}}{10,000} \right\rceil
+$$
+
+$$
+\mathrm{token\_in\_fee} = \max(\mathrm{pct\_fee}, \mathrm{minimum\_sell\_haircut\_onyc})
+$$
+
+$$
+\mathrm{sell\_net} = \mathrm{token\_in\_amount} - \mathrm{token\_in\_fee}
 $$
 
 $$
 \mathrm{raw\_sell\_value} = \frac{\mathrm{sell\_net} \times \mathrm{current\_offer\_price} \times 10^{\mathrm{token\_out\_decimals}}}{10^{\mathrm{token\_in\_decimals}} \times 10^9}
 $$
 
-If the redemption offer PDA is valid but uninitialized, `redemption_fee_bps = 0`.
+If the redemption offer PDA is valid but uninitialized, `redemption_fee_bps = 0` and `vault_target_bps = 0`. If the redemption offer exists but is disabled, sells reject. A zero redemption fee does not bypass `minimum_sell_haircut_onyc`.
 
-ONYC has 9 decimals. Stablecoins have 6 decimals. Volume tracking is normalized to stablecoin base units:
+ONYC has 9 decimals. Volume tracking is normalized to the pair asset mint's base units. USDC examples assume 6 decimals:
 
 ```text
-1 ONYC at NAV = 1.00 stable
+1 ONYC at NAV = 1.00 pair asset
 ONYC base amount = 1_000_000_000
-stable base value = 1_000_000
+asset base value = 1_000_000
 ```
 
-So `curr_sell_value_stable`, `curr_buy_value_stable`, `prev_net_sell_value_stable`, and `raw_sell_value_stable` are all stablecoin-denominated values. This keeps the wall formula compatible with the redemption vault balance, which is also in stablecoin base units.
+So `curr_sell_value_stable`, `curr_buy_value_stable`, `prev_net_sell_value_stable`, and `raw_sell_value_stable` are all denominated in the pair asset mint's base units. This keeps the wall formula compatible with the redemption vault balance for that asset.
 
 ---
 
 ### 2.2 TVL-Anchored Hard-Wall Reserve
 
-The sell output is anchored to the actual redemption vault balance and current net sell pressure. The TVL reserve target still exists for buy-side refill policy and for disabled-sensitivity fallback behavior.
+The sell output is anchored to the actual redemption vault balance, the redemption market's TVL reserve target, and current net sell pressure. The actual vault balance remains the solvency guard. When `vault_target_bps > 0`, the TVL-derived target can only reduce the effective hard-wall reserve; it can never let the curve price against more liquidity than the vault actually holds.
 
 **Step 1: Calculate Hard-Wall Reserve (`R`)**
 
@@ -56,19 +64,31 @@ $$
 R = TVL \times \frac{\mathrm{pool\_target\_bps}}{10,000}
 $$
 
-Where:
+For example, with a configured target of 1,500 bps:
 
 $$
 \mathrm{pool\_target\_bps} = 1,500
 $$
 
-So by default:
+then:
 
 $$
 R = TVL \times 0.15
 $$
 
 `R` is converted into the output token decimals before being used.
+
+The effective fixed reserve is:
+
+$$
+R_{\mathrm{effective}} =
+\begin{cases}
+L, & \text{if } \mathrm{vault\_target\_bps} = 0 \\
+\min(L, R), & \text{otherwise}
+\end{cases}
+$$
+
+where `L` is the current redemption vault token-out balance.
 
 ---
 
@@ -81,7 +101,7 @@ curr_net = max(0, curr_sell_value_stable - curr_buy_value_stable)
 effective_volume = decayed_prev_net + curr_net + raw_sell_value_stable
 ```
 
-The current ONYC sell's own raw stable value is included in `effective_volume`, so the sell pays against the pressure it creates. ONYC buys add their net stablecoin input to `curr_buy_value_stable`, which can reduce current-epoch pressure but cannot create negative pressure.
+The current ONYC sell's own raw pair-asset value is included in `effective_volume`, so the sell pays against the pressure it creates. ONYC buys add their net pair-asset input to `curr_buy_value_stable`, which can reduce current-epoch pressure but cannot create negative pressure. The code uses field names ending in `_stable`, but the stored unit is the canonical pair asset's base units.
 
 ---
 
@@ -93,7 +113,7 @@ $$
 L = \mathrm{actual\_liquidity}
 $$
 
-Where `actual_liquidity` is the current redemption vault balance for the output stablecoin.
+Where `actual_liquidity` is the current redemption vault balance for the output pair asset.
 
 The wall is:
 
@@ -101,7 +121,13 @@ $$
 \mathrm{wall} = \frac{L}{1 + \mathrm{wall\_sensitivity} \times \frac{\mathrm{effective\_volume}}{L}}
 $$
 
-The program uses this wall as effective liquidity while dynamic wall sensitivity is enabled.
+The program caps this wall by the fixed reserve:
+
+$$
+\mathrm{effective\_liquidity} = \min(\mathrm{wall}, R_{\mathrm{effective}})
+$$
+
+So sell pressure can move the wall below the target, and a configured target can cap surplus vault liquidity above the intended TVL percentage.
 
 ---
 
@@ -121,7 +147,7 @@ $$
 
 means this order consumes 10% of effective liquidity before dampening, and:
 
-When `u >= 1`, the curve can dampen the sell to zero output. This is allowed as long as the raw stable value is not greater than the actual vault balance and the caller's `minimum_out` permits the final output.
+When `u >= 1`, the curve can dampen the sell to zero output. This is allowed as long as the raw pair-asset value is not greater than the actual vault balance and the caller's `minimum_out` permits the final output.
 
 ---
 
@@ -171,10 +197,14 @@ $$
 \mathrm{haircut}(u) = h_{\mathrm{peg}} \times u^{e_{\mathrm{effective}}}
 $$
 
-Default parameters:
+The current sell's raw value is included in pressure immediately. Its
+sell-trade-count cadence effect starts with later sells because the trade count
+is recorded after the curve and `minimum_out` check.
+
+Curve parameters:
 
 $$
-\mathrm{pool\_target\_bps} = 1,500
+\mathrm{vault\_target\_bps} = \mathrm{redemption\_offer.vault\_target\_bps}
 $$
 
 $$
@@ -205,11 +235,27 @@ $$
 \mathrm{wall\_sensitivity\_scaled} = 20,000
 $$
 
+$$
+\mathrm{minimum\_sell\_haircut\_onyc} = 5,000,000,000
+$$
+
 With no cadence adjustment, the default haircut curve is:
 
 $$
 \mathrm{haircut}(u) = 0.07u^{2.5}
 $$
+
+The on-chain implementation computes the fractional power as:
+
+$$
+u^e = 2^{e \times \log_2(u)}
+$$
+
+using fixed-point Q40 intermediate math. Integer exponents use repeated
+fixed-point multiplication. Fractional exponents approximate `log2` with an
+atanh/log series and approximate `exp(frac * ln(2))` with a short Taylor
+series. This avoids a lookup table or generic nth-root calculation while keeping
+the curve close to the intended fractional exponent.
 
 ---
 
@@ -232,7 +278,7 @@ So, in code terms:
 ```text
 effective_liquidity = min(actual_liquidity, hard_wall_reserve)
 if dynamic wall sensitivity is enabled:
-  effective_liquidity = dynamic_wall_position
+  effective_liquidity = min(dynamic_wall_position, hard_wall_reserve)
 u = raw_sell_value_stable / effective_liquidity
 haircut = curve_peg_haircut * u^effective_curve_exponent
 final_output = raw_sell_value_stable * max(0, 1 - haircut)
@@ -241,14 +287,16 @@ final_output = raw_sell_value_stable * max(0, 1 - haircut)
 The actual redemption vault balance is the hard solvency guard:
 
 ```text
+reject if actual_liquidity == 0
+reject if hard_wall_reserve == 0
 reject if raw_sell_value_stable > actual_liquidity
 ```
 
 The dynamic wall is a pricing input, not a rejection threshold. If pressure pushes `effective_liquidity` far below the order's raw value, the final output can saturate at zero.
 
-The code also contains a legacy fallback where `wall_sensitivity_scaled = 0` uses `min(actual_liquidity, hard_wall_reserve)`, but normal Prop AMM configuration rejects zero wall sensitivity.
+The code also contains a fallback where `wall_sensitivity_scaled = 0` uses `min(actual_liquidity, hard_wall_reserve)`, but normal Prop AMM configuration rejects zero wall sensitivity.
 
-Normal Prop AMM configuration also requires `curve_exponent_scaled` to be between `1,000` and `100,000` in `1,000` increments, `min_cadence_exponent_scaled` to be between `1,000` and `10,000` in `1,000` increments, `cadence_threshold > 0`, `cadence_sensitivity_scaled <= 100,000`, and `epoch_duration_seconds > 0`.
+Normal Prop AMM configuration also requires `curve_exponent_scaled` to be between `1,000` and `100,000` in `1,000` increments, `min_cadence_exponent_scaled` to be between `1,000` and `10,000` in `1,000` increments, `cadence_threshold > 0`, `cadence_sensitivity_scaled <= 100,000`, `epoch_duration_seconds > 0`, and `minimum_sell_haircut_onyc` denominated in ONYC base units.
 
 This is intentionally simple and cheap to compute.
 

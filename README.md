@@ -8,8 +8,8 @@ A Solana smart contract built with [Anchor](https://www.anchor-lang.com/) that m
 # Build the program
 anchor build
 
-# Run Rust tests
-cargo test -p onreapp
+# Run the Rust LiteSVM integration tests
+anchor build && cargo test --manifest-path programs/onreapp/Cargo.toml --tests
 
 # Update program ID after changing keypair
 anchor keys sync && anchor build
@@ -26,12 +26,15 @@ programs/onreapp/src/
 └── instructions/
     ├── initialization/       # initialize, initialize_permissionless_authority
     ├── buffer/               # BUFFER state, accrual, fee accounting, burn support
-    ├── offer/                # make/take/close offers, manage price vectors, fees
+    ├── configurable_vault/   # Shared accounting vault destinations and withdrawals
+    ├── offer/                # make/take/disable offers, manage price vectors, fees
+    ├── prop_amm/             # Prop AMM configuration, quotes, buy/sell execution
     ├── redemption/           # redemption offers, requests, fulfillment, cancellation
     ├── state_operations/     # Boss transfer, admin/approver management, kill switch, max supply
     ├── vault_operations/     # Deposit/withdraw tokens to offer and redemption vaults
     ├── mint_authority/       # Transfer mint authority to/from program PDA, mint_to
-    └── market_info/          # Read-only queries: NAV, APY, TVL, circulating supply, NAV adjustment
+    ├── market_info/          # Market stats refresh, exclusions, and NAV/APY/TVL/supply queries
+    └── targeted_disable.rs   # Token-pair targeted disable controls
 ```
 
 ## Key Concepts
@@ -51,7 +54,7 @@ Offers use up to 10 `OfferVector` entries with APR-based compound interest. Pric
 
 ### Token Support
 
-The program supports both **SPL Token** and **Token-2022**.
+Most token movement paths use the SPL Token interface and can work with **SPL Token** or **Token-2022** mints. Redemption token-in/ONYC request setup and market-stats recomputation for ONYC require the classic SPL Token program.
 
 `take_offer` and redemption payout paths reject Token-2022 mints with non-zero transfer fees.
 
@@ -62,9 +65,9 @@ The BUFFER module stores two separate inputs for accrual:
 | Field | Source |
 |------|--------|
 | `gross_apr` | Set explicitly by `set_buffer_gross_apr` |
-| `current_yield` | Read from the active APR on `state.main_offer` during buffer accrual |
+| `current_yield` | Read from the active APR on the offer supplied to the accrual path |
 
-`state.main_offer` must be set before `initialize_buffer`. It can be updated later with `set_main_offer`, and it must always point to an offer whose `token_out_mint` is ONyc.
+`state.main_offer` must be set before `initialize_buffer` because initialization validates its offer account. It can be updated later with `set_main_offer`, and it must always point to an offer whose `token_out_mint` is ONyc. Runtime accrual uses the offer supplied by the executing path; `set_buffer_gross_apr` uses `state.main_offer`.
 
 Typical on-chain BUFFER setup order:
 
@@ -87,30 +90,32 @@ Typical on-chain BUFFER setup order:
 
 **Initialization**: `initialize`, `initialize_permissionless_authority`
 
-**BUFFER**: `initialize_buffer`, `set_main_offer`, `set_buffer_gross_apr`, `set_buffer_fee_config`, `burn_for_nav_increase`, `withdraw_management_fees`, `withdraw_performance_fees`
+**BUFFER**: `initialize_buffer`, `set_buffer_gross_apr`, `set_buffer_fee_config`, `burn_for_nav_increase`, `deposit_reserve_vault`, `withdraw_reserve_vault`
 
-**Offers**: `make_offer`, `add_offer_vector`, `delete_offer_vector`, `delete_all_offer_vectors`, `update_offer_fee`, `take_offer`, `take_offer_permissionless`
+**Prop AMM**: `configure_prop_amm`, `quote_swap_buy`, `quote_swap_sell`, `open_swap_buy`, `open_swap_sell`
 
-**Redemption**: `make_redemption_offer`, `create_redemption_request`, `fulfill_redemption_request`, `cancel_redemption_request`, `update_redemption_offer_fee`
+**Offers**: `make_offer`, `add_offer_vector`, `delete_offer_vector`, `delete_all_offer_vectors`, `update_offer_fee`, `set_offer_disabled`, `take_offer`, `take_offer_v2`, `take_offer_permissionless`, `take_offer_permissionless_v2`
 
-**State Operations**: `propose_boss`, `accept_boss`, `add_admin`, `remove_admin`, `clear_admins`, `set_kill_switch`, `set_onyc_mint`, `set_redemption_admin`, `add_approver`, `remove_approver`, `configure_max_supply`, `close_state`
+**Redemption**: `make_redemption_offer`, `set_redemption_offer_disabled`, `create_redemption_request`, `fulfill_redemption_request`, `cancel_redemption_request`, `update_redemption_offer_fee`, `update_redemption_offer_vault_target`
 
-**Vault Operations**: `offer_vault_deposit`, `offer_vault_withdraw`, `redemption_vault_deposit`, `redemption_vault_withdraw`
+**State Operations**: `propose_boss`, `accept_boss`, `add_admin`, `remove_admin`, `clear_admins`, `set_kill_switch`, `set_onyc_mint`, `set_redemption_admin`, `set_main_offer`, `add_approver`, `remove_approver`, `configure_max_supply`, `configure_max_mint_amount`, `close_state`
+
+**Vault Operations**: `offer_vault_deposit`, `offer_vault_withdraw`, `redemption_vault_deposit`, `redemption_vault_withdraw`, `set_configurable_vault_destination`, `withdraw_configurable_vault`
 
 **Mint Authority**: `transfer_mint_authority_to_program`, `transfer_mint_authority_to_boss`, `mint_to`
 
-**Market Info** (read-only): `get_nav`, `get_apy`, `get_nav_adjustment`, `get_tvl`, `get_circulating_supply`
+**Market Info**: `get_nav`, `get_apy`, `get_nav_adjustment`, `get_tvl`, `get_tvl_v2`, `get_circulating_supply`, `get_circulating_supply_v2`, `refresh_market_stats`, `set_circulating_supply_excluded_accounts`, `update_circulating_supply_excluded_balance`
 
 ## CLI Tool
 
 An interactive CLI for managing deployed programs on mainnet/devnet.
 
 ```bash
-# Run the CLI
-pnpm cli
+# Show CLI help
+pnpm cli --help
 
-# Or with a specific network
-pnpm script:mainnet-prod tsx scripts/cli/index.ts
+# Run a command against a specific network
+pnpm cli -n mainnet-prod state get
 ```
 
 ### Network Environments
@@ -123,11 +128,11 @@ pnpm script:mainnet-prod tsx scripts/cli/index.ts
 | `devnet-test` | Devnet | Test program on devnet |
 | `devnet-dev` | Devnet | Dev program on devnet |
 
-Select via `NETWORK` env variable or the `-n` / `--network` flag. Convenience scripts:
+The CLI accepts `NETWORK` or the `-n` / `--network` flag. Standalone scripts read `NETWORK`; the package convenience scripts set it and then run `tsx`:
 
 ```bash
-pnpm script:mainnet-prod tsx scripts/some-script.ts
-pnpm script:devnet-dev tsx scripts/some-script.ts
+pnpm script:mainnet-prod scripts/smoke/smoke_tests.ts
+pnpm script:devnet-dev scripts/vault_operations/check-all-vault-balances.ts
 ```
 
 ### Standalone Scripts
@@ -135,9 +140,9 @@ pnpm script:devnet-dev tsx scripts/some-script.ts
 Scripts can also be run directly with `tsx`:
 
 ```bash
-tsx scripts/utils/get-state.ts
-tsx scripts/offer/fetch-offer.ts
-tsx scripts/market_info/get-nav.ts
+NETWORK=mainnet-prod pnpm exec tsx scripts/smoke/smoke_tests.ts
+NETWORK=mainnet-prod pnpm exec tsx scripts/vault_operations/check-all-vault-balances.ts
+NETWORK=mainnet-prod pnpm exec tsx scripts/vault_operations/check-redemption-vault-balance.ts
 ```
 
 ### BUFFER CLI Notes
@@ -146,46 +151,72 @@ The current CLI exposes only a subset of the on-chain BUFFER flow:
 
 - available commands: `buffer get`, `buffer initialize`, `buffer set-gross-yield`, `buffer burn`
 - `buffer initialize` requires `--offer` and `--onyc-mint`
-- `current_yield` is not set manually; it is derived from the active APR on the main offer during accrual
+- `current_yield` is not set manually; it is derived from the active APR on the offer supplied to the accrual path
 
 The CLI does not currently expose the full administrative BUFFER flow. In particular, README examples should not assume CLI support for:
 
 - `set_main_offer`
 - `set_buffer_fee_config`
-- `withdraw_management_fees`
-- `withdraw_performance_fees`
+- management/performance fee vault withdrawals through `withdraw_configurable_vault`
 
-Scripts that modify state output base58-encoded transactions for signing via Squad multisig. Read-only scripts print results directly.
+CLI commands that modify state can either sign locally and send, or output a base58-encoded transaction for external signing such as Squad multisig. Read-only scripts print results directly.
 
 ## Tests
 
-Tests use Rust integration tests with **LiteSVM** for fast local testing without a validator.
+Tests are Rust integration tests with **LiteSVM** for fast local testing without a validator. There is no TypeScript test suite configured in this repo; TypeScript is used for CLI and operational scripts.
 
-For the Rust program integration suite, use `anchor test`. The LiteSVM harness in
-`programs/onreapp/tests/common/svm.rs` embeds `target/deploy/onreapp.so`, so plain
-`cargo test` can exercise a stale program binary. If you do run a targeted Rust test
-directly, wait for `anchor build` to finish first and do not run build and test in parallel.
+The LiteSVM harness in `programs/onreapp/tests/common/svm.rs` embeds
+`target/deploy/onreapp.so`, so always build before running Rust tests. Do not run
+the build and test commands in parallel.
 
 ```bash
 # Run all tests
-cargo test -p onreapp
+anchor build && cargo test --manifest-path programs/onreapp/Cargo.toml --tests
 
 # Run a single test file
-cargo test -p onreapp --test redemption
+anchor build && cargo test --manifest-path programs/onreapp/Cargo.toml --test redemption
 ```
 
-Test structure mirrors the instruction layout:
+Tests live under `programs/onreapp/tests/`. Shared LiteSVM setup and helpers are in `common/`; the instruction tests are flat Rust test files, not nested folders.
 
 ```
 programs/onreapp/tests/
 ├── common/                     # LiteSVM setup, builders, readers, token helpers
-├── offer instruction tests
-├── redemption instruction tests
-├── state operation tests
-├── vault operation tests
-├── mint authority tests
-└── market info query tests
+├── buffer.rs
+├── market_info.rs
+├── mint_authority.rs
+├── prop_amm.rs
+├── redemption.rs
+├── state_operations.rs
+├── take_offer.rs
+├── take_offer_permissionless.rs
+└── vault_operations.rs
 ```
+
+## Coverage
+
+Coverage uses the Rust LiteSVM trace flow documented in `COVERAGE.md`. It requires external tools:
+
+```bash
+cargo install sbpf-coverage
+brew install lcov
+```
+
+Run the coverage flow from the repo root:
+
+```bash
+rm -rf sbf_trace_dir coverage
+cargo build-sbf --debug --tools-version v1.52 --arch v1
+SBF_TRACE_DIR=$PWD/sbf_trace_dir cargo test -p onreapp --tests -- --nocapture
+sbpf-coverage \
+  --src-path=$PWD/programs/onreapp/src \
+  --sbf-path=$PWD/target/deploy \
+  --sbf-trace-dir=$PWD/sbf_trace_dir
+genhtml --output-directory coverage sbf_trace_dir/*.lcov --rc branch_coverage=1
+open coverage/index.html
+```
+
+Generated `sbf_trace_dir/` and `coverage/` directories are local build artifacts.
 
 ## Cross-Chain Transfers
 
@@ -199,10 +230,6 @@ anchor keys sync
 anchor build
 ```
 
-Program ID convenience scripts:
-
-```bash
-pnpm set-program:dev
-pnpm set-program:test
-pnpm set-program:prod
-```
+There are no package-level `set-program:*` scripts. After copying the keypair,
+run `anchor keys sync` and review the resulting `declare_id!` / Anchor metadata
+diff before rebuilding.

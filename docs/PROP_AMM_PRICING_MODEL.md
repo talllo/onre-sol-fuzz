@@ -8,8 +8,8 @@ This document explains the current Prop AMM pricing path implemented in:
 
 The important distinction is that buys and sells use different mechanics:
 
-- Buy: normal offer pricing is used. The only Prop AMM change is where incoming stablecoins are routed.
-- Sell: normal redemption pricing is used first, then the hard-wall reserve curve converts the raw sell value into the actual stablecoin output.
+- Buy: normal offer pricing is used. The only Prop AMM change is where incoming pair assets are routed.
+- Sell: normal redemption pricing is used first, then the hard-wall reserve curve converts the raw sell value into the actual pair-asset output.
 
 Prop AMM configuration and pressure tracking are per canonical offer pair. A pair is enabled by its `PropAmmPairState` PDA, derived from the canonical `asset -> ONYC` offer.
 
@@ -18,40 +18,41 @@ Prop AMM configuration and pressure tracking are per canonical offer pair. A pai
 | Symbol | Code variable | Meaning |
 | --- | --- | --- |
 | `TVL` | `market_stats.tvl` | Protocol TVL from the market stats PDA, stored in ONYC/base precision. |
-| `target_bps` | `redemption_offer.vault_target_bps` | Target redemption liquidity as basis points of TVL. Defaults to `0`, which disables automatic redemption-vault refill and sends net stablecoin inflow to proceeds. |
-| `R` | `hard_wall_reserve` | TVL-derived hard-wall reserve target, converted into the output token decimals. |
-| `L` | `actual_liquidity` | Current redemption vault balance for the stablecoin being paid out. |
+| `target_bps` | `redemption_offer.vault_target_bps` | Target redemption liquidity as basis points of TVL. Defaults to `0`, which disables automatic redemption-vault refill and sends net pair-asset inflow to proceeds. |
+| `R` | `hard_wall_reserve` | Effective hard-wall reserve. If `vault_target_bps == 0`, this is the actual vault balance. Otherwise it is `min(actual vault balance, TVL-derived target)`, converted into output token decimals. |
+| `L` | `actual_liquidity` | Current redemption vault balance for the pair asset being paid out. |
 | `V` | effective sell volume | Previous epoch pressure after decay plus current net sell pressure plus this sell's raw value. |
 | `W` | dynamic wall position | Vault-based effective pool size after applying net sell pressure. |
-| `raw` | `result.token_out_amount` before hard wall | Stablecoin output from normal redemption pricing after redemption fee. |
-| `out` | final `result.token_out_amount` | Actual stablecoin output transferred to the seller. |
+| `raw` | `result.token_out_amount` before hard wall | Pair-asset output from normal redemption pricing after redemption fee. |
+| `out` | final `result.token_out_amount` | Actual pair-asset output transferred to the seller. |
 | `h_peg` | `curve_peg_haircut_bps / 10_000` | Additional haircut when utilization is exactly 1. Default is `700`, or 7%. |
 | `e_base` | `curve_exponent_scaled / 10_000` | Base haircut curve exponent. Default is `25_000`, or 2.5. |
 | `e_effective` | `effective_curve_exponent_scaled(...) / 10_000` | Cadence-adjusted exponent used by the sell curve. It can be reduced during high sell cadence, down to `min_cadence_exponent_scaled`. |
+| `min_sell_fee` | `minimum_sell_haircut_onyc` | Minimum token-in fee for Prop AMM sells, denominated in ONYC base units. Default is `5_000_000_000`, or 5 ONYC. |
 | `S` | `HARD_WALL_SCALE` | Fixed-point scale, currently `1_000_000_000_000`. |
 
 All on-chain math is integer fixed-point math. In formulas below, values are shown as real numbers for readability.
 
-ONYC always uses 9 decimals and supported stablecoins use 6 decimals. The dynamic wall tracker stores pressure in stablecoin base units, not ONYC base units:
+ONYC always uses 9 decimals. The dynamic wall tracker stores pressure in the pair asset mint's base units, not ONYC base units. USDC examples assume 6 decimals:
 
 ```text
-1 ONYC at NAV = 1.00 stable
+1 ONYC at NAV = 1.00 pair asset
 ONYC amount = 1_000_000_000
-stable value = 1_000_000
+asset value = 1_000_000
 ```
 
 So:
 
-- selling ONYC records the raw stablecoin redemption value before dampening
-- buying ONYC records the net stablecoin input used to buy ONYC
-- both sides are comparable because both are stored in stablecoin base units
+- selling ONYC records the raw asset redemption value before dampening
+- buying ONYC records the net asset input used to buy ONYC
+- both sides are comparable because both are stored in the pair asset mint's base units
 
 ## Buy Flow
 
 The buy quote is unchanged:
 
 ```text
-stablecoin input -> process_offer_core(...) -> ONYC output
+pair asset input -> process_offer_core(...) -> ONYC output
 ```
 
 In formula form, the offer engine deducts the offer fee from the input first:
@@ -62,7 +63,10 @@ token_out_amount = buy_net * 10^(token_out_decimals + 9)
                  / (current_offer_price * 10^token_in_decimals)
 ```
 
-The buy execution does change the routing of incoming stablecoins.
+The buy execution does change the routing of incoming assets. A buy quote can
+exist even when buy execution later rejects because the offer's permissionless
+mode is disabled: `open_swap_buy` requires `offer.allow_permissionless()`, while
+`quote_swap_buy` only validates pricing.
 
 ### Step 1: Calculate Target Redemption Liquidity
 
@@ -72,11 +76,11 @@ The target is based on TVL:
 target_in_onyc_decimals = TVL * target_bps / 10_000
 ```
 
-Then the target is converted from ONYC decimals into the stablecoin input mint decimals:
+Then the target is converted from ONYC decimals into the asset input mint decimals:
 
 ```text
 target_liquidity = target_in_onyc_decimals
-                 * 10^stablecoin_decimals
+                 * 10^asset_decimals
                  / 10^onyc_decimals
 ```
 
@@ -102,16 +106,16 @@ If the redemption vault is below target:
 
 ```text
 deficit = target_liquidity - current_redemption_vault_balance
-refill_amount = min(deficit, buy_net_stablecoin_amount)
+refill_amount = min(deficit, buy_net_asset_amount)
 ```
 
-Any remaining net stablecoin goes to the boss/treasury:
+Any remaining net asset goes to the Prop AMM proceeds vault:
 
 ```text
-boss_net_amount = buy_net_stablecoin_amount - refill_amount
+proceeds_amount = buy_net_asset_amount - refill_amount
 ```
 
-So buys self-heal the redemption vault until the TVL-based hard-wall target is reached. The buy net stablecoin amount is also recorded as current-epoch buy relief. It can reduce net sell pressure, but it cannot create negative pressure.
+So buys self-heal the redemption vault until the TVL-based hard-wall target is reached. The buy net asset amount is also recorded as current-epoch buy relief. It can reduce net sell pressure, but it cannot create negative pressure.
 
 ## Sell Flow Overview
 
@@ -131,13 +135,19 @@ raw = process_redemption_core(
 ).token_out_amount
 ```
 
-The redemption fee comes from the redemption offer if initialized. If the redemption offer PDA is the correct derived address but uninitialized, the fee is treated as zero.
+The redemption fee comes from the redemption offer if initialized and enabled.
+If the redemption offer PDA is the correct derived address but uninitialized,
+the fee and target are treated as zero. If the redemption offer exists but is
+disabled, the sell rejects. A zero redemption fee does not bypass
+`minimum_sell_haircut_onyc`.
 
 Conceptually:
 
 ```text
-redemption_fee = ceil(token_in_amount * redemption_fee_bps / 10_000)
-token_in_net = token_in_amount - redemption_fee
+pct_fee = ceil(token_in_amount * redemption_fee_bps / 10_000)
+token_in_fee = max(pct_fee, minimum_sell_haircut_onyc)
+reject if token_in_amount < token_in_fee
+token_in_net = token_in_amount - token_in_fee
 raw = token_in_net * current_offer_price * 10^token_out_decimals
     / (10^token_in_decimals * 10^9)
 ```
@@ -147,6 +157,7 @@ Example:
 ```text
 User sells: 1 ONYC
 Redemption fee: 500 bps = 5%
+Minimum sell haircut: 0 ONYC for this example
 NAV/offer price: 1 ONYC = 1 USDC
 
 token_in_net = 1.00 * (1 - 0.05)
@@ -166,7 +177,7 @@ curr_net = max(0, curr_sell_value_stable - curr_buy_value_stable)
 effective_volume = decayed_prev_net + curr_net + raw
 ```
 
-The current sell's own `raw` stable value is included in `effective_volume`, so the order pays against the pressure it creates. ONYC buy pressure relief is the stablecoin net input paid by the buyer, not the 9-decimal ONYC amount minted.
+The current sell's own `raw` pair-asset value is included in `effective_volume`, so the order pays against the pressure it creates. ONYC buy pressure relief is the pair-asset net input paid by the buyer, not the 9-decimal ONYC amount minted. The code uses field names ending in `_stable` for this value, but the unit is the canonical pair asset's base units.
 
 If an epoch rolls over, current net sell pressure moves into `prev_net_sell_value_stable`; if two or more epochs elapsed, pressure resets to zero. Previous pressure decays linearly through the next epoch.
 
@@ -182,16 +193,24 @@ With the default `wall_sensitivity_scaled = 20_000`, `wall_sensitivity = 2.0`.
 
 ### Step 4: Calculate the TVL Hard-Wall Reserve
 
-The sell path reads `market_stats.tvl` and calculates the hard-wall reserve:
+When `target_bps > 0`, the sell path reads `market_stats.tvl` and calculates the hard-wall reserve:
 
 ```text
 R = TVL * target_bps / 10_000
 ```
 
-Then it converts from ONYC decimals to the output stablecoin decimals:
+Then it converts from ONYC decimals to the output pair-asset decimals:
 
 ```text
 R = R_onyc_decimals * 10^token_out_decimals / 10^onyc_decimals
+```
+
+For non-USDC assets, `token_out_decimals` is the actual output asset mint's
+decimals:
+
+```text
+target_asset = floor(floor(TVL * target_bps / 10_000)
+               * 10^asset_decimals / 10^ONYC_decimals)
 ```
 
 Example:
@@ -204,17 +223,29 @@ R = 66,666.666666666 * 0.15
   = 10,000 USDC
 ```
 
-Here `R = 10,000 USDC` means the fixed hard-wall reserve target is `10,000 USDC`. When dynamic wall sensitivity is enabled, the dynamic wall `W` is the denominator used by the sell curve. The fixed reserve still guards the target calculation and preserves the disabled-sensitivity fallback behavior.
+Here `R = 10,000 USDC` means the fixed hard-wall reserve target is `10,000 USDC`.
+
+The effective hard-wall reserve used by the curve is:
+
+```text
+hard_wall_reserve =
+  if target_bps == 0:
+    L
+  else:
+    min(L, R)
+```
+
+This means extra redemption-vault balance above the configured target does not loosen the sell curve. When the target is zero, the curve uses the actual vault balance.
 
 ### Step 5: Apply Endpoint Dampening
 
 This is the core hard-wall logic:
 
 ```text
-effective_liquidity = W
+effective_liquidity = min(W, hard_wall_reserve)
 u = raw / effective_liquidity
 haircut = h_peg * u^e_effective
-liquidity_factor = 1 - haircut
+liquidity_factor = max(0, 1 - haircut)
 out = raw * liquidity_factor
 ```
 
@@ -232,13 +263,13 @@ This is still an endpoint formula, so it is not mathematically split-proof. The 
 
 ## Effective Liquidity
 
-With dynamic wall sensitivity enabled, effective liquidity is the pressure-adjusted wall:
+With dynamic wall sensitivity enabled, effective liquidity is the pressure-adjusted wall capped by the hard-wall reserve:
 
 ```text
-effective_liquidity = dynamic_wall_position
+effective_liquidity = min(dynamic_wall_position, hard_wall_reserve)
 ```
 
-When sensitivity is disabled, the legacy fixed hard-wall behavior is:
+When sensitivity is disabled, the fixed hard-wall behavior is:
 
 ```text
 effective_liquidity = min(actual_liquidity, hard_wall_reserve)
@@ -296,7 +327,11 @@ effective_curve_exponent_scaled =
 e_effective = effective_curve_exponent_scaled / 10_000
 ```
 
-The cadence adjustment is based on the current epoch sell trade count. With no cadence adjustment, current defaults are:
+The cadence adjustment is based on already-recorded current-epoch sell trades.
+The current sell's raw value is included in pressure immediately, but its
+sell-trade-count cadence effect starts with later sells.
+
+With no cadence adjustment, current defaults are:
 
 ```text
 vault_target_bps = redemption_offer.vault_target_bps
@@ -307,6 +342,7 @@ cadence_threshold = 20
 cadence_sensitivity_scaled = 10,000
 epoch_duration_seconds = 86,400
 wall_sensitivity_scaled = 20,000
+minimum_sell_haircut_onyc = 5,000,000,000
 ```
 
 So:
@@ -314,6 +350,35 @@ So:
 ```text
 haircut(u) = 0.07u^2.5
 ```
+
+### Power Approximation
+
+The program computes fractional powers without a table:
+
+```text
+u^e = 2^(e * log2(u))
+```
+
+`u` is fixed-point scaled by `HARD_WALL_SCALE = 1e12`. Integer exponents use
+repeated fixed-point multiplication with saturation at extreme values. Fractional exponents use Q40
+intermediate math:
+
+```text
+log2(u) = log2(u_scaled) - log2(HARD_WALL_SCALE)
+```
+
+The logarithm normalizes the input into a mantissa `m` and approximates:
+
+```text
+ln(m) = 2 * (z + z^3/3 + z^5/5 + ...)
+z = (m - 1) / (m + 1)
+```
+
+using seven odd terms total (`z` through `z^13/13`), then multiplies by `log2_e`. The exponent step splits
+`e * log2(u)` into integer and fractional parts, approximates
+`exp(frac * ln(2))` with ten Taylor terms, and applies the integer power-of-two
+shift. This is the cheap approximation used instead of an on-chain nth-root
+calculation.
 
 Examples:
 
@@ -418,7 +483,10 @@ Five sells with raw budget 1,000 each
 The current model prices each order independently:
 
 ```text
-effective_liquidity = dynamic_wall_position(current_vault, effective_sell_volume, wall_sensitivity)
+effective_liquidity = min(
+  dynamic_wall_position(current_vault, effective_sell_volume, wall_sensitivity),
+  hard_wall_reserve
+)
 out = raw * f(raw / effective_liquidity)
 ```
 
@@ -440,4 +508,5 @@ cadence_threshold > 0
 cadence_sensitivity_scaled <= 100,000
 epoch_duration_seconds > 0
 wall_sensitivity_scaled > 0
+minimum_sell_haircut_onyc is denominated in ONYC base units
 ```

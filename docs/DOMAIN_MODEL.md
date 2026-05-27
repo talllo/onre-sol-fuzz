@@ -76,7 +76,7 @@ flowchart TD
 | Prop AMM pair | Automated liquidity configuration attached to an asset offer. |
 | Redemption vault | Actual token liquidity used by redemptions and Prop AMM sell payouts. |
 | Accounting vault | Configurable destination for fees or proceeds by business source. |
-| Market snapshot | Cached TVL, NAV, APY and circulating supply. |
+| Market snapshot | Cached TVL, NAV, NAV adjustment, APY and circulating supply. |
 | Buffer reserve | Separate reserve used by buffer operations. |
 
 ## Authority Model
@@ -140,7 +140,7 @@ flowchart TD
     OptionalPropAmm --> SellPath[Automated sell path]
 
     BuyPath --> RefillRule[May refill redemption vault up to target]
-    SellPath --> ReserveRule[Quotes against actual redemption vault balance]
+    SellPath --> ReserveRule[Quotes against actual balance capped by TVL target]
 ```
 
 ## Value Domains
@@ -187,7 +187,7 @@ flowchart TD
 | Value bucket | Business source | Purpose |
 | --- | --- | --- |
 | Offer fee vault | Take-offer and redemption fulfillment fees | Fee accounting for regular offer and redemption activity. |
-| Offer proceeds vault | Net offer inflow not routed to redemption liquidity | Accounting destination for normal offer proceeds. |
+| Offer proceeds vault | Net offer inflow and non-burned redemption token-in not routed to redemption liquidity | Accounting destination for normal offer proceeds and redemption fulfillment proceeds. |
 | Prop AMM fee vault | Prop AMM buy and sell fees | Fee accounting for Prop AMM activity. |
 | Prop AMM proceeds vault | Net Prop AMM inflow not routed to redemption liquidity | Accounting destination for Prop AMM proceeds. |
 | Redemption vault | Redemption requests, redemption payouts, and capped refill inflows | Liquidity pool used by redemption and Prop AMM sell paths. |
@@ -223,16 +223,18 @@ The redemption vault target belongs to the `RedemptionOffer`.
 
 ```text
 target = TVL * vault_target_bps / 10_000
-refill = min(net_inflow, max(0, target - current_redemption_vault_balance))
+target_in_token_in_decimals = target * 10^token_in_decimals / 10^token_out_decimals
+headroom = max(0, target_in_token_in_decimals - current_redemption_vault_balance)
+refill = min(net_inflow, headroom)
 overflow = net_inflow - refill
 ```
 
 Business consequence:
 
 - `vault_target_bps = 0` means no automatic refill; net inflow goes to proceeds.
-- A positive target caps how much net stable inflow can refill the redemption vault.
+- A positive target caps how much net asset inflow can refill the redemption vault.
 - Fees are never part of the refill amount.
-- Prop AMM sell pricing does not use the target; it uses the actual redemption vault balance.
+- Prop AMM sell pricing is always capped by the actual redemption vault balance. When `vault_target_bps > 0`, surplus balance above the TVL-derived target is ignored by the hard-wall curve.
 
 ## Prop AMM Pricing Boundary
 
@@ -241,8 +243,7 @@ flowchart LR
     PairState[Prop AMM pair state] --> Curve[Curve and cadence parameters]
     PairState --> Pressure[Buy and sell pressure]
     RedemptionVault[Actual redemption vault balance] --> HardReserve[Available sell reserve]
-    RedemptionOffer[Redemption offer target] --> RefillOnly[Refill cap only]
-    RedemptionOffer --> NotQuoteInput[Not a quote input]
+    RedemptionOffer[Redemption offer target] --> HardReserve
 
     Curve --> Quote[Prop AMM quote]
     Pressure --> Quote
@@ -252,8 +253,8 @@ flowchart LR
 The important boundary is:
 
 - `PropAmmPairState` configures the curve.
-- `RedemptionOffer.vault_target_bps` configures refill routing.
-- The actual redemption vault token balance is the sell-side reserve.
+- `RedemptionOffer.vault_target_bps` configures capped refill routing and, when nonzero, caps sell-side hard-wall reserve to the target percentage of TVL.
+- The actual redemption vault token balance is still the sell-side solvency limit.
 
 ## Buffer And Market Reporting
 
@@ -274,7 +275,7 @@ flowchart TD
     FeeConfig --> PerformanceFeeVault[Performance fee vault]
 ```
 
-The market snapshot is the shared reporting surface for TVL, NAV, APY and circulating supply. Circulating supply can exclude configured owners and uses a cached excluded balance. Buffer state tracks reserve accrual inputs, previous supply, fee configuration and the performance-fee high watermark.
+The market snapshot is the shared reporting surface for TVL, NAV, NAV adjustment, APY and circulating supply. Circulating supply can exclude configured owners and uses a cached excluded balance. Buffer state tracks reserve accrual inputs, previous supply, fee configuration and the performance-fee high watermark.
 
 ## Operational Controls
 
@@ -285,7 +286,7 @@ The market snapshot is the shared reporting surface for TVL, NAV, APY and circul
 | Redemption offer disabled flag | Targeted disable for one redemption market. |
 | Prop AMM pair enabled flag | Enables or disables automated liquidity for one offer pair. |
 | Max supply | Optional global ONYC supply cap. |
-| Max mint amount | Optional cap on a single mint operation. |
+| Max mint amount | Optional cap on one logical ONYC mint operation. Buffer accrual applies it to the total gross accrual before splitting reserve and fee mints. |
 | Fee limits | Offer and redemption fees are bounded by program limits. |
 | Approval mode | Offer execution can require off-chain approval signatures. |
 | Permissionless mode | Offer execution can be allowed through the permissionless authority path. |
@@ -300,10 +301,10 @@ The market snapshot is the shared reporting surface for TVL, NAV, APY and circul
 | Redemption setup | Redemption admin or boss opens the ONYC-to-asset redemption market. |
 | Redemption request | User locks ONYC into the redemption vault and receives a request claim. |
 | Redemption fulfillment | Admin fulfills the request, charges fees, burns or routes ONYC, and pays the output asset. |
-| Prop AMM buy | User buys ONYC through automated pricing; net stable inflow can refill redemption liquidity. |
+| Prop AMM buy | User buys ONYC through automated pricing; net asset inflow can refill redemption liquidity. |
 | Prop AMM sell | User sells ONYC through automated pricing; output is bounded by actual redemption vault liquidity. |
 | Buffer accrual | Buffer state mints reserve growth and splits management and performance fees. |
-| Market refresh | Market statistics recompute TVL, NAV, APY and circulating supply. |
+| Market refresh | Market statistics recompute TVL, NAV, NAV adjustment, APY and circulating supply. |
 
 ## Token Movement Rules
 
@@ -312,7 +313,7 @@ The program has two custody modes depending on mint authority:
 - If the program controls the relevant mint, flows can mint or burn through the mint authority PDA.
 - If the program does not control the mint, flows transfer from or to pre-funded vault token accounts.
 - Fees route to fee vaults before net inflow routing.
-- Net stable inflow can refill the redemption vault only up to the redemption market target; overflow goes to the relevant proceeds vault.
+- Net asset inflow can refill the redemption vault only up to the redemption market target; overflow goes to the relevant proceeds vault.
 
 ## Technical Mapping
 
@@ -382,5 +383,5 @@ flowchart TD
 - Offer markets, redemption markets, Prop AMM settings, and accounting vaults are separate concepts.
 - A redemption offer is the redemption market linked to an offer.
 - Offer and Prop AMM accounting are separated into different fee and proceeds vaults.
-- The redemption vault target controls capped refill routing only.
-- Prop AMM sell quotes cannot price against a target balance; they price against actual redemption vault liquidity.
+- The redemption vault target controls capped refill routing and can cap Prop AMM sell-side effective liquidity.
+- Prop AMM sell quotes cannot price against more than actual redemption vault liquidity; configured targets only reduce available curve liquidity.
