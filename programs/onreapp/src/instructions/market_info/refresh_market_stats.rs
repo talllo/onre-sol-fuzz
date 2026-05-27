@@ -57,6 +57,10 @@ pub struct RefreshMarketStats<'info> {
 }
 
 /// Recomputes and writes the canonical market-stats PDA without requiring admin access.
+///
+/// Circulating supply uses the cached excluded-balance PDA. Call
+/// `update_circulating_supply_excluded_balance` first when excluded owner
+/// balances need to be included in the next market-stats snapshot.
 pub fn refresh_market_stats(ctx: Context<RefreshMarketStats>) -> Result<()> {
     let main_offer = load_main_offer(
         ctx.program_id,

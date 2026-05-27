@@ -19,16 +19,16 @@ pub struct RedemptionOfferCreatedEvent {
     pub token_in_mint: Pubkey,
     /// The output token mint for redemptions (e.g., USDC)
     pub token_out_mint: Pubkey,
-    /// Fee in basis points (10000 = 100%) charged when fulfilling redemption requests
+    /// Fee in basis points, capped at 1000 bps (10%), charged when fulfilling redemption requests.
     pub fee_basis_points: u16,
-    /// Target stable-token vault balance as basis points of TVL.
+    /// Target token-out vault balance as basis points of TVL.
     pub vault_target_bps: u16,
 }
 
 /// Account structure for creating a redemption offer
 ///
 /// This struct defines the accounts required to initialize a redemption offer
-/// where users can redeem ONyc tokens for stable tokens at the current NAV price.
+/// where users can redeem ONyc tokens for the paired output asset at the current NAV price.
 /// The redemption offer is the inverse of the standard Offer.
 #[derive(Accounts)]
 pub struct MakeRedemptionOffer<'info> {
@@ -98,7 +98,7 @@ pub struct MakeRedemptionOffer<'info> {
 
     /// Vault account for storing output tokens (e.g., USDC) for redemption payouts
     ///
-    /// Created automatically if needed. Used for distributing stable tokens to redeemers.
+    /// Created automatically if needed. Used for distributing output tokens to redeemers.
     #[account(
         init_if_needed,
         payer = signer,
@@ -140,7 +140,7 @@ pub struct MakeRedemptionOffer<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Creates a redemption offer for converting ONyc back to stable tokens
+/// Creates a redemption offer for converting ONyc back to the paired output asset.
 ///
 /// This instruction initializes a new redemption offer that allows users to redeem
 /// input tokens for output tokens (e.g., USDC) at the current NAV price. The redemption
@@ -149,12 +149,12 @@ pub struct MakeRedemptionOffer<'info> {
 ///
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
-/// * `fee_basis_points` - Fee in basis points (10000 = 100%) charged when fulfilling redemption requests
+/// * `fee_basis_points` - Fee in basis points charged when fulfilling redemption requests
 ///
 /// # Returns
 /// * `Ok(())` - If the redemption offer is successfully created
 /// * `Err(crate::OnreError::Unauthorized)` - If caller is neither boss nor redemption_admin (validated in accounts)
-/// * `Err(crate::OnreError::InvalidFee)` - If fee_basis_points exceeds 10000
+/// * `Err(crate::OnreError::InvalidFee)` - If fee_basis_points exceeds 1000 basis points (10%)
 ///
 /// # Access Control
 /// - Only the boss or redemption_admin can call this instruction

@@ -61,7 +61,7 @@ pub struct SetOnycMint<'info> {
 /// - Affects future market calculations and operations
 ///
 /// # Events
-/// * `ONycMintUpdated` - Emitted with old and new ONyc mint addresses
+/// * `ONycMintUpdatedEvent` - Emitted with old and new ONyc mint addresses
 pub fn set_onyc_mint(ctx: Context<SetOnycMint>) -> Result<()> {
     let state = &mut ctx.accounts.state;
 

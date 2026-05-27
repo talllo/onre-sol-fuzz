@@ -29,7 +29,7 @@ use anchor_spl::{
 };
 use solana_instructions_sysvar::ID as INSTRUCTIONS_SYSVAR_ID;
 
-/// Error codes specific to the take_offer instruction
+/// Shared offer-execution event definitions.
 
 /// Event emitted when an offer is successfully taken
 ///
@@ -188,8 +188,8 @@ pub struct TakeOffer<'info> {
 
     /// Instructions sysvar for approval signature verification
     ///
-    /// Required for cryptographic verification of approval messages
-    /// when offers require boss approval for execution.
+    /// Required for cryptographic verification of approval messages when offers
+    /// require a signature from state.approver1 or state.approver2.
     /// CHECK: Validated through address constraint to instructions sysvar
     pub instructions_sysvar: UncheckedAccount<'info>,
 
@@ -358,7 +358,7 @@ pub struct TakeOfferV2<'info> {
 /// - Approval verification against trusted authority when needed
 ///
 /// # Events
-/// * `TakeOfferEvent` - Emitted with execution details and token amounts
+/// * `OfferTakenEvent` - Emitted with execution details and token amounts
 pub fn take_offer<'info>(
     ctx: Context<'info, TakeOffer<'info>>,
     token_in_amount: u64,

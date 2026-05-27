@@ -16,11 +16,11 @@ pub struct Offer {
     pub token_out_mint: Pubkey,
     /// Array of pricing vectors defining price evolution over time
     pub vectors: [OfferVector; MAX_VECTORS],
-    /// Fee in basis points (10000 = 100%) charged when taking the offer
+    /// Fee in basis points, capped at 1000 bps (10%), charged when taking the offer.
     pub fee_basis_points: u16,
     /// PDA bump seed for account derivation
     pub bump: u8,
-    /// Whether the offer requires boss approval for taking (0 = false, 1 = true)
+    /// Whether taking the offer requires a signature from state.approver1 or state.approver2.
     needs_approval: u8,
     /// Whether the offer allows permissionless operations (0 = false, 1 = true)
     allow_permissionless: u8,
@@ -31,7 +31,7 @@ pub struct Offer {
 }
 
 impl Offer {
-    /// Returns whether the offer requires boss approval for taking
+    /// Returns whether taking the offer requires a configured approver signature.
     pub fn needs_approval(&self) -> bool {
         self.needs_approval != 0
     }
@@ -91,9 +91,9 @@ impl Offer {
 #[repr(C)]
 #[derive(Default, InitSpace)]
 pub struct OfferVector {
-    /// Calculated activation time: max(base_time, current_time) when vector was added
+    /// Activation time. If omitted during insertion, defaults to max(base_time, current_time).
     pub start_time: u64,
-    /// Original requested activation time before current_time adjustment
+    /// Base timestamp used for elapsed-time price growth.
     pub base_time: u64,
     /// Initial price with scale=9 (1_000_000_000 = 1.0) at vector start
     pub base_price: u64,

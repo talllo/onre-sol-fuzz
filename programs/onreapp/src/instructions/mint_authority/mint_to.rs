@@ -127,7 +127,7 @@ pub struct MintTo<'info> {
 /// - Boss account must match the one stored in program state
 ///
 /// # Events
-/// * `OnycTokensMinted` - Emitted on successful minting with details
+/// * `OnycTokensMintedEvent` - Emitted on successful minting with details
 pub fn mint_to(ctx: Context<MintTo>, amount: u64) -> Result<()> {
     let offer = if ctx.accounts.state.main_offer == Pubkey::default() {
         None

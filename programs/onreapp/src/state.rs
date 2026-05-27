@@ -24,11 +24,12 @@ pub struct State {
     pub approver2: Pubkey,
     /// PDA bump seed for account derivation
     pub bump: u8,
-    /// Optional maximum supply cap for ONyc token minting (0 = no cap)
+    /// Optional supply cap for program-controlled minting paths (0 = no cap)
     pub max_supply: u64,
-    /// Admin account authorized to manage ONr token mints and redemptions
+    /// Admin account authorized to manage redemption offers and fulfillment
     pub redemption_admin: Pubkey,
-    /// Optional maximum amount allowed in one mint operation (0 = no cap)
+    /// Optional maximum amount allowed in one logical program mint operation (0 = no cap).
+    /// BUFFER accrual applies this to the total gross accrual before fee splitting.
     pub max_mint_amount: u64,
     /// Main offer account used for market operations and price discovery
     pub main_offer: Pubkey,
@@ -63,7 +64,7 @@ pub struct MarketStats {
     pub nav: u64,
     /// Latest signed NAV adjustment value using the market-info precision.
     pub nav_adjustment: i64,
-    /// Latest total value locked across tracked vaults.
+    /// Latest TVL computed as circulating ONyc supply multiplied by NAV, divided by the price scale.
     pub tvl: u64,
     /// Unix timestamp of the most recent successful recomputation.
     pub last_updated_at: i64,
@@ -103,7 +104,7 @@ pub struct CirculatingSupplyExcludedBalance {
     pub reserved: [u8; 31],
 }
 
-/// Fee vault selector used for deriving shared configurable vault PDAs.
+/// Configurable accounting vault selector used for deriving shared vault PDAs.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigurableVaultKind {
     OfferFee,
@@ -138,7 +139,7 @@ impl ConfigurableVaultKind {
     }
 }
 
-/// Program-owned configurable fee vault authority.
+/// Program-owned configurable accounting vault authority.
 #[account]
 #[derive(InitSpace)]
 pub struct ConfigurableVault {

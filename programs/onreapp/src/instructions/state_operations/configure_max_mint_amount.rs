@@ -2,7 +2,7 @@ use crate::constants::seeds;
 use crate::state::State;
 use anchor_lang::prelude::*;
 
-/// Event emitted when the ONyc per-mint amount cap is configured.
+/// Event emitted when the per-mint amount cap is configured.
 #[event]
 pub struct MaxMintAmountConfiguredEvent {
     /// The previous per-mint cap (0 = no cap)

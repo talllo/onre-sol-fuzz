@@ -16,11 +16,11 @@ pub struct OfferMadeEvent {
     pub token_in_mint: Pubkey,
     /// The output token mint for the offer
     pub token_out_mint: Pubkey,
-    /// Fee in basis points (10000 = 100%) charged when taking the offer
+    /// Fee in basis points, capped at 1000 bps (10%), charged when taking the offer.
     pub fee_basis_points: u16,
     /// The boss account that created and owns the offer
     pub boss: Pubkey,
-    /// Whether the offer requires boss approval for taking
+    /// Whether taking the offer requires a signature from state.approver1 or state.approver2
     pub needs_approval: bool,
     /// Whether the offer allows permissionless operations
     pub allow_permissionless: bool,
@@ -29,7 +29,7 @@ pub struct OfferMadeEvent {
 /// Account structure for creating an offer
 ///
 /// This struct defines the accounts required to initialize a token exchange offer
-/// where the boss provides token_in in exchange for token_out. Pricing is configured
+/// where users provide token_in in exchange for token_out. Pricing is configured
 /// separately using pricing vectors after offer creation.
 #[derive(Accounts)]
 pub struct MakeOffer<'info> {
@@ -98,7 +98,7 @@ pub struct MakeOffer<'info> {
 
 /// Creates a token exchange offer
 ///
-/// This instruction initializes a new offer where the boss provides token_in in exchange
+/// This instruction initializes a new offer where users provide token_in in exchange
 /// for token_out. The offer is created with basic configuration parameters, and pricing
 /// is configured separately using add_offer_vector instructions for dynamic pricing.
 ///
@@ -107,13 +107,13 @@ pub struct MakeOffer<'info> {
 ///
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
-/// * `fee_basis_points` - Fee in basis points (10000 = 100%) charged when taking the offer
-/// * `needs_approval` - Whether the offer requires boss approval for taking
+/// * `fee_basis_points` - Fee in basis points charged when taking the offer
+/// * `needs_approval` - Whether taking the offer requires a configured approver signature
 /// * `allow_permissionless` - Whether the offer allows permissionless operations
 ///
 /// # Returns
 /// * `Ok(())` - If the offer is successfully created
-/// * `Err(crate::OnreError::InvalidFee)` - If fee_basis_points exceeds 10000
+/// * `Err(crate::OnreError::InvalidFee)` - If fee_basis_points exceeds 1000 basis points (10%)
 ///
 /// # Access Control
 /// - Only the boss can call this instruction
@@ -132,7 +132,7 @@ pub fn make_offer(
     needs_approval: bool,
     allow_permissionless: bool,
 ) -> Result<()> {
-    // Validate fee is within valid range (0-10000 basis points = 0-100%)
+    // Validate fee is within valid range (0-1000 basis points = 0-10%)
     require!(
         fee_basis_points <= MAX_ALLOWED_FEE_BPS,
         crate::OnreError::InvalidFee

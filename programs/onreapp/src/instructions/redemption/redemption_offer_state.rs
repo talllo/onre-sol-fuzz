@@ -2,11 +2,11 @@ use crate::constants::seeds;
 use crate::utils::load_optional_pda_account;
 use anchor_lang::prelude::*;
 
-/// Redemption offer for converting ONyc tokens back to stable tokens
+/// Redemption offer for converting ONyc tokens back to a paired output asset.
 ///
 /// Manages the redemption process where users can exchange ONyc (in-token)
-/// for stable tokens like USDC (out-token) at the current NAV price.
-/// This is the inverse of the standard Offer which exchanges stable tokens for ONyc.
+/// for the original offer's input asset (out-token) at the current NAV price.
+/// This is the inverse of the standard Offer which exchanges that asset for ONyc.
 #[account]
 #[derive(InitSpace)]
 pub struct RedemptionOffer {
@@ -18,13 +18,15 @@ pub struct RedemptionOffer {
     pub token_out_mint: Pubkey,
     /// Cumulative total of all executed redemptions over the contract's lifetime
     ///
-    /// This tracks the total amount of ONyc that has been redeemed and burned.
-    /// Uses u128 because cumulative redemptions can exceed the current total supply.
+    /// This tracks the cumulative gross token_in amount fulfilled across redemption
+    /// requests, before fee deduction. Net token_in may be burned or transferred
+    /// to proceeds depending on mint authority.
+    /// Uses u128 for aggregate accounting across requests.
     pub executed_redemptions: u128,
     /// Total amount of pending redemption requests
     ///
     /// This tracks ONyc tokens that are locked in pending redemption requests.
-    /// Uses u64 because pending redemptions cannot exceed the token's total supply.
+    /// Uses u128 for aggregate accounting across requests.
     pub requested_redemptions: u128,
     /// Fee in basis points (1000 = 10%) charged when fulfilling redemption requests
     pub fee_basis_points: u16,
@@ -33,7 +35,7 @@ pub struct RedemptionOffer {
     pub request_counter: u64,
     /// PDA bump seed for account derivation
     pub bump: u8,
-    /// Target stable-token balance for the redemption vault as basis points of TVL.
+    /// Target token-out balance for the redemption vault as basis points of TVL.
     ///
     /// A value of 0 disables automatic inflow into the redemption vault; net inflow
     /// goes to the configured proceeds vault instead.

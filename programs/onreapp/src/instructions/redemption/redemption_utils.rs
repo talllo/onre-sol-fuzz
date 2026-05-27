@@ -34,7 +34,9 @@ pub struct RedemptionProcessResult {
 /// * `token_in_amount` - Amount of token_in being redeemed by the user
 /// * `token_in_mint` - The token_in mint for decimal information (what user is redeeming)
 /// * `token_out_mint` - The token_out mint for decimal information (what user receives)
-/// * `redemption_fee_basis_points` - Fee in basis points (10000 = 100%)
+/// * `redemption_fee_basis_points` - Fee in basis points.
+/// * `minimum_token_in_fee_amount` - Minimum token-in fee amount; Prop AMM sells pass
+///   `minimum_sell_haircut_onyc` here.
 ///
 /// # Returns
 /// * `Ok(RedemptionProcessResult)` - Containing price, fees, and token_out amount
@@ -43,7 +45,8 @@ pub struct RedemptionProcessResult {
 /// # Price Calculation
 /// Uses the formula: `token_out = (token_in_net * price * 10^token_out_decimals) / (10^token_in_decimals * 10^9)`
 /// Price has 9 decimal places, so we divide by 10^9 to account for this.
-/// Fees are calculated as: `fee = token_in_amount * fee_basis_points / 10000`
+/// Fees are calculated with ceiling division, then floored by the configured minimum:
+/// `fee = max(ceil(token_in_amount * fee_basis_points / 10000), minimum_token_in_fee_amount)`.
 ///
 /// # Example
 /// - Offer price: 2.0 USDC per ONyc (2_000_000_000 with 9 decimals)

@@ -9,12 +9,6 @@ pub struct BufferInitializedEvent {
 }
 
 #[event]
-pub struct BufferMainOfferUpdatedEvent {
-    pub old_main_offer: Pubkey,
-    pub new_main_offer: Pubkey,
-}
-
-#[event]
 pub struct BufferGrossYieldUpdatedEvent {
     pub gross_yield: u64,
 }
@@ -25,15 +19,6 @@ pub struct BufferFeeConfigUpdatedEvent {
     pub new_management_fee_basis_points: u16,
     pub old_performance_fee_basis_points: u16,
     pub new_performance_fee_basis_points: u16,
-}
-
-#[event]
-pub struct BufferLowestSupplyUpdatedEvent {
-    pub old_previous_supply: u64,
-    pub new_previous_supply: u64,
-    pub current_supply: u64,
-    pub updated: bool,
-    pub timestamp: i64,
 }
 
 #[event]

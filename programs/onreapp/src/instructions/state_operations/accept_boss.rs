@@ -55,7 +55,7 @@ pub struct AcceptBoss<'info> {
 /// - Updates the program state's boss field to the new boss
 /// - Clears the proposed_boss field (resets to default)
 /// - Transfers all program authority to the new boss
-/// - Emits BossUpdatedEvent for transparency
+/// - Emits BossAcceptedEvent for transparency
 ///
 /// # Events
 /// * `BossAcceptedEvent` - Emitted with old and new boss public keys

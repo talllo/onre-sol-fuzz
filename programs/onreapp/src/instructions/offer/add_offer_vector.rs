@@ -13,9 +13,9 @@ use std::cmp::max;
 pub struct OfferVectorAddedEvent {
     /// The PDA address of the offer to which the vector was added
     pub offer_pda: Pubkey,
-    /// Calculated start time when the vector becomes active (max(base_time, current_time))
+    /// Start time when the vector becomes active.
     pub start_time: u64,
-    /// Original base time specified for the vector
+    /// Base timestamp used for elapsed-time price growth.
     pub base_time: u64,
     /// Base price with 9 decimal precision at the vector start
     pub base_price: u64,
@@ -94,7 +94,7 @@ pub struct AddOfferVector<'info> {
 /// * `ctx` - The instruction context containing validated accounts
 /// * `start_time` - Optional Unix timestamp when the vector becomes active. If not provided,
 /// max(base_time, current_time) is used.
-/// * `base_time` - Unix timestamp when the vector should become active
+/// * `base_time` - Unix timestamp used as the elapsed-time baseline for price growth
 /// * `base_price` - Initial price with scale=9 (1_000_000_000 = 1.0)
 /// * `apr` - Annual Percentage Rate scaled by 1,000,000 (0.01 = 1% APR = 10_000)
 /// * `price_fix_duration` - Duration in seconds for each discrete pricing step

@@ -145,7 +145,7 @@ pub struct CreateRedemptionRequest<'info> {
 /// - Redeemer pays for the redemption request PDA rent
 ///
 /// # Effects
-/// - Creates new redemption request account (PDA derived from offer and counter)
+/// - Creates new redemption request account (PDA derived from redemption offer and request counter)
 /// - Transfers token_in tokens from redeemer to redemption vault (locking them)
 /// - Increments counter on RedemptionOffer for next request
 /// - Updates requested_redemptions in RedemptionOffer

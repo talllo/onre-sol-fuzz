@@ -106,7 +106,7 @@ pub struct Initialize<'info> {
 /// - `is_killed`: Set to false (normal operations enabled)
 /// - `onyc_mint`: Set to the provided mint account
 /// - `admins`: Array of default pubkeys (no admins initially)
-/// - `approver`: Default pubkey (must be set separately via set_approver)
+/// - `approvers`: Default pubkeys (must be set separately via add_approver)
 /// - `bump`: PDA bump seed for account validation
 /// - `reserved`: Zero-filled bytes for future use
 ///

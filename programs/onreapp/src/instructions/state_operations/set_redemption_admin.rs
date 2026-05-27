@@ -38,7 +38,7 @@ pub struct SetRedemptionAdmin<'info> {
 /// Configures the redemption admin address in program state
 ///
 /// This instruction allows the boss to set or update the redemption admin that
-/// the program recognizes for managing ONr token mints and redemptions.
+/// the program recognizes for managing redemption offers and fulfillment.
 ///
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts

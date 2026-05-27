@@ -4,6 +4,25 @@ use super::config::{CURVE_EXPONENT_SCALE, CURVE_EXPONENT_STEP};
 
 pub const HARD_WALL_SCALE: u128 = 1_000_000_000_000;
 
+// Prop AMM sell dampening needs `u^e`, where:
+//   u = raw_sell_value / effective_liquidity
+//   e = curve_exponent_scaled / CURVE_EXPONENT_SCALE
+//
+// Both `u` and the return value are scaled by HARD_WALL_SCALE. Integer exponents
+// use repeated fixed-point multiplication with saturation at extreme values.
+// Fractional exponents use:
+//   u^e = 2^(e * log2(u))
+//
+// The approximation is intentionally table-free:
+// - `log2_integer_q` normalizes the input to mantissa `m` in [1, 2), then uses
+//   ln(m) = 2 * (z + z^3/3 + z^5/5 + ...), z = (m - 1) / (m + 1), converted by
+//   log2_e. Seven odd terms total are used: z through z^13/13.
+// - `exp2_hard_wall_scaled_q` splits the exponent into integer and fractional
+//   parts, computes exp(frac * ln(2)) with ten Taylor terms, then applies the
+//   integer power-of-two shift.
+//
+// Q40 is used inside the approximation to keep enough precision while staying
+// cheap in compute units compared with generic nth-root or table interpolation.
 const POW_APPROX_Q_SHIFT: u32 = 40;
 const POW_APPROX_Q: u128 = 1_u128 << POW_APPROX_Q_SHIFT;
 const POW_APPROX_LN2_Q: u128 = 762_123_384_786;

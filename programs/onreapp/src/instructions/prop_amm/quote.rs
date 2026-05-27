@@ -251,6 +251,9 @@ pub(crate) fn resolve_hard_wall_reserve(
         return Ok(actual_liquidity);
     }
 
+    // The sell curve cannot use liquidity that is not actually in the redemption
+    // vault. If operators configure a target below the vault's current balance,
+    // surplus balance is ignored for pricing by taking min(actual, TVL target).
     let market_stats = read_market_stats_account(&market_stats_account.to_account_info())?;
     let target_reserve = hard_wall_reserve_from_tvl(
         market_stats.tvl,
@@ -290,6 +293,17 @@ pub fn apply_hard_wall_liquidity_factor_at_time(
         token_out_amount <= actual_liquidity,
         crate::OnreError::InsufficientBalance
     );
+
+    // Final sell output is:
+    //   effective_liquidity = min(dynamic_wall(actual, sell_pressure), hard_wall_reserve)
+    //   utilization = token_out_amount / effective_liquidity
+    //   haircut = peg_haircut * utilization^effective_exponent
+    //   output = token_out_amount * max(0, 1 - haircut)
+    //
+    // `actual_liquidity` is the solvency bound. `hard_wall_reserve` is either the
+    // same actual balance or min(actual balance, TVL target), depending on
+    // redemption-offer configuration. The exponent power is approximated in
+    // hard_wall_math.rs.
     let effective_liquidity = dynamic_wall_liquidity_at_time(
         token_out_amount,
         actual_liquidity,
@@ -456,6 +470,11 @@ pub fn dynamic_wall_position(
         return Ok(actual_liquidity);
     }
 
+    // W = L / (1 + sensitivity * V / L)
+    //
+    // `L` is the current redemption-vault balance and `V` is decayed sell
+    // pressure plus this order's raw sell value. Larger sell pressure lowers W,
+    // making the same raw sell amount consume more of the wall.
     let sensitivity_component = (wall_sensitivity_scaled as u128)
         .checked_mul(effective_sell_volume as u128)
         .ok_or(crate::OnreError::MathOverflow)?

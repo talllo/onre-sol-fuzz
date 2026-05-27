@@ -10,9 +10,9 @@ use anchor_lang::prelude::*;
 pub struct RedemptionOfferFeeUpdatedEvent {
     /// The PDA address of the redemption offer whose fee was updated
     pub redemption_offer_pda: Pubkey,
-    /// Previous fee in basis points (10000 = 100%)
+    /// Previous fee in basis points.
     pub old_fee_basis_points: u16,
-    /// New fee in basis points (10000 = 100%)
+    /// New fee in basis points, capped at 1000 bps (10%).
     pub new_fee_basis_points: u16,
     /// The boss account that authorized the fee update
     pub boss: Pubkey,
@@ -28,11 +28,11 @@ pub struct RedemptionOfferVaultTargetUpdatedEvent {
 
 /// Account structure for updating a redemption offer's fee configuration
 ///
-/// This struct defines the accounts required to modify the fee basis points
-/// charged when fulfilling redemption requests. Only the boss can update redemption offer fees.
+/// This struct defines the accounts required to modify a redemption offer's fee
+/// or vault target. Only the boss can update these redemption offer settings.
 #[derive(Accounts)]
 pub struct UpdateRedemptionOfferFee<'info> {
-    /// The redemption offer account whose fee will be updated
+    /// The redemption offer account whose configuration will be updated.
     #[account(
         mut,
         seeds = [
@@ -65,11 +65,11 @@ pub struct UpdateRedemptionOfferFee<'info> {
 ///
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
-/// * `new_fee_basis_points` - New fee in basis points (10000 = 100%, 500 = 5%)
+/// * `new_fee_basis_points` - New fee in basis points (1000 = 10%, 500 = 5%)
 ///
 /// # Returns
 /// * `Ok(())` - If the fee is successfully updated
-/// * `Err(crate::OnreError::InvalidFee)` - If fee exceeds 10000 basis points
+/// * `Err(crate::OnreError::InvalidFee)` - If fee exceeds 1000 basis points (10%)
 /// * `Err(crate::OnreError::Unauthorized)` - If caller is not the boss
 ///
 /// # Access Control

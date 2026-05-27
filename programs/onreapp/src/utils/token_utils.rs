@@ -122,7 +122,7 @@ pub fn transfer_tokens<'info>(
 }
 
 /// Calculates token_out_amount based on token_in_amount, price, and decimals.
-/// This formula is used in both single and dual redemption offers.
+/// This formula is used by offer pricing paths where `price` is token_in per ONyc.
 ///
 /// Formula: token_out_amount = (token_in_amount * 10^(token_out_decimals + 9)) / (price * 10^token_in_decimals)
 ///
@@ -257,31 +257,13 @@ pub fn calculate_fees(token_in_amount: u64, fee_basis_points: u16) -> Result<Cal
     })
 }
 
-/// Mint tokens with maximum supply and per-mint amount validation
+/// Validates that adding `amount` to `current_supply` does not exceed `max_supply`.
 ///
-/// This function validates that minting the requested amount will not exceed
-/// the configured maximum supply cap (if set). If max_supply is 0, no cap is enforced.
+/// A `max_supply` of 0 disables the cap.
 ///
-/// # Arguments
-/// * `token_program` - The SPL Token program
-/// * `mint` - The token mint to mint from
-/// * `to_account` - Destination token account
-/// * `authority` - The mint authority (must be a PDA with signing capability)
-/// * `signer_seeds` - PDA seeds for program-signed minting
-/// * `amount` - Amount of tokens to mint
-/// * `max_supply` - Maximum supply cap (0 = no cap)
-/// * `max_mint_amount` - Maximum amount allowed in this mint operation (0 = no cap)
-///
-/// # Returns
-/// * `Ok(())` - If minting completes successfully and doesn't exceed max supply
-/// * `Err(crate::OnreError::MaxSupplyExceeded)` - If minting would exceed the cap
-/// * `Err(_)` - If token minting operation fails
-///
-/// # Security
-/// - Validates amount <= max_mint_amount (when max_mint_amount > 0)
-/// - Validates current supply + amount <= max_supply (when max_supply > 0)
-/// - Uses checked token instructions for decimal validation
-/// - Prevents unbounded inflation when max supply is configured
+/// # Errors
+/// * `MathOverflow` - If `current_supply + amount` overflows.
+/// * `MaxSupplyExceeded` - If the resulting supply would exceed `max_supply`.
 pub fn validate_max_supply(current_supply: u64, amount: u64, max_supply: u64) -> Result<()> {
     if max_supply > 0 {
         let new_supply = current_supply
@@ -297,6 +279,9 @@ pub fn validate_max_supply(current_supply: u64, amount: u64, max_supply: u64) ->
     Ok(())
 }
 
+/// Mints tokens with max-supply and per-mint amount validation.
+///
+/// `max_supply == 0` or `max_mint_amount == 0` disables that respective cap.
 pub fn mint_tokens<'info>(
     token_program: &Interface<'info, TokenInterface>,
     mint: &InterfaceAccount<'info, Mint>,
@@ -380,9 +365,9 @@ pub struct ExecTokenOpsParams<'a, 'info> {
     pub token_in_source_signer_seeds: Option<&'a [&'a [&'a [u8]]]>,
     /// PDA seeds for vault authority operations
     pub vault_authority_signer_seeds: Option<&'a [&'a [&'a [u8]]]>,
-    /// Source account for token_in (user's account)
+    /// Source account for token_in.
     pub token_in_source_account: &'a InterfaceAccount<'info, TokenAccount>,
-    /// Destination account for token_in (boss's account)
+    /// Primary destination account for net token_in.
     pub token_in_destination_account: &'a InterfaceAccount<'info, TokenAccount>,
     /// Optional alternate destination for part of the net token_in amount.
     pub token_in_refill_destination_account: Option<&'a InterfaceAccount<'info, TokenAccount>>,
@@ -404,7 +389,7 @@ pub struct ExecTokenOpsParams<'a, 'info> {
     pub token_out_authority: &'a AccountInfo<'info>,
     /// Source account for token_out transfers (vault account)
     pub token_out_source_account: &'a InterfaceAccount<'info, TokenAccount>,
-    /// Destination account for token_out (user's account)
+    /// Destination account for token_out.
     pub token_out_destination_account: &'a InterfaceAccount<'info, TokenAccount>,
     /// PDA for mint authority operations
     pub mint_authority_pda: &'a AccountInfo<'info>,
@@ -427,7 +412,8 @@ pub struct ExecTokenOpsParams<'a, 'info> {
 /// - If program has mint authority:
 ///   - Transfers net amount (after fees) to vault → burns only net amount
 ///   - Transfers fee amount directly to the configured fee destination
-/// - If program lacks mint authority: transfers net amount to the configured proceeds destination
+/// - If program lacks mint authority: transfers any refill amount to the redemption vault destination
+///   and the remaining net amount to the configured proceeds destination
 ///
 /// # Token Out Processing
 /// - Validates that token_out does not have Token-2022 transfer fees

@@ -42,9 +42,7 @@ pub mod seeds {
     /// Seed for the reserve vault authority account
     pub const RESERVE_VAULT_AUTHORITY: &[u8] = b"reserve_vault_authority";
 
-    /// Seed for the redemption fee vault authority PDA
-
-    /// Seed prefix for configurable fee vault authority accounts
+    /// Seed prefix for configurable accounting vault authority accounts
     pub const CONFIGURABLE_VAULT: &[u8] = b"configurable_vault";
 
     /// Seed suffix for offer fee vault authority

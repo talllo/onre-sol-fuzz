@@ -141,8 +141,8 @@ pub struct CancelRedemptionRequest<'info> {
 
 /// Cancels a redemption request
 ///
-/// This instruction cancels a pending redemption request. The request can be cancelled
-/// by the redeemer, redemption_admin, or boss. The request must be in pending state.
+/// This instruction cancels an unfulfilled or partially fulfilled redemption request.
+/// The request can be cancelled by the redeemer, redemption_admin, or boss.
 /// Upon cancellation, the redemption request account is closed and rent is returned
 /// to the redemption_admin.
 ///

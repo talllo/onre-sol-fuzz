@@ -28,7 +28,7 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use solana_instructions_sysvar::ID as INSTRUCTIONS_SYSVAR_ID;
 
-/// Error codes specific to the take_offer_permissionless instruction
+/// Shared permissionless offer-execution event definitions.
 
 /// Event emitted when an offer is successfully executed via permissionless flow
 ///
@@ -195,8 +195,8 @@ pub struct TakeOfferPermissionless<'info> {
 
     /// Instructions sysvar for approval signature verification
     ///
-    /// Required for cryptographic verification of approval messages
-    /// when offers require boss approval for execution.
+    /// Required for cryptographic verification of approval messages when offers
+    /// require a signature from state.approver1 or state.approver2.
     /// CHECK: Validated through address constraint to instructions sysvar
     pub instructions_sysvar: UncheckedAccount<'info>,
 
@@ -376,7 +376,7 @@ pub(crate) struct PermissionlessRedemptionVaultRefill<'a, 'info> {
 /// - Approval verification when required
 ///
 /// # Events
-/// * `TakeOfferPermissionlessEvent` - Emitted with execution details and routing information
+/// * `OfferTakenPermissionlessEvent` - Emitted with execution details and routing information
 #[inline(never)]
 pub fn take_offer_permissionless<'info>(
     ctx: Context<'info, TakeOfferPermissionless<'info>>,

@@ -23,7 +23,7 @@ pub struct SetKillSwitch<'info> {
     /// Program state account containing the kill switch flag
     ///
     /// Must be mutable to allow kill switch state modifications.
-    /// The kill switch prevents offer operations when enabled.
+    /// The kill switch prevents guarded execution paths when enabled.
     #[account(
         mut,
         seeds = [seeds::STATE],
@@ -38,7 +38,7 @@ pub struct SetKillSwitch<'info> {
 /// Controls the emergency kill switch for critical program operations
 ///
 /// This instruction manages the program's emergency kill switch which can halt
-/// offer operations when activated. The kill switch has asymmetric access control:
+/// guarded execution paths when activated. The kill switch has asymmetric access control:
 /// both boss and admins can enable it, but only the boss can disable it.
 ///
 /// # Arguments
@@ -56,7 +56,8 @@ pub struct SetKillSwitch<'info> {
 ///
 /// # Effects
 /// - Updates the program state's is_killed field
-/// - When enabled, prevents offer execution operations
+/// - When enabled, prevents guarded execution paths, including offer execution,
+///   redemption request create/fulfill/cancel, Prop AMM swaps, and configurable-vault withdrawals
 /// - Provides emergency halt capability for security incidents
 pub fn set_kill_switch(ctx: Context<SetKillSwitch>, enable: bool) -> Result<()> {
     let state = &mut ctx.accounts.state;

@@ -15,25 +15,27 @@ export type Onreapp = {
   "docs": [
     "The main program module for the Onre App.",
     "",
-    "This module defines the entry points for all program instructions. It facilitates the creation",
-    "and management of offers where a \"boss\" provides one or two types of buy tokens in exchange for",
-    "sell tokens. A key feature is the dynamic pricing model for offers, where the amount of",
-    "sell token required can change over the offer's duration based on predefined parameters.",
+    "This module defines the entry points for all program instructions. It facilitates",
+    "creation and management of offers where users provide `token_in` and receive",
+    "`token_out`. A key feature is the dynamic pricing model for offers, where the",
+    "`token_out` amount for a given `token_in` amount changes over time based on",
+    "configured pricing vectors.",
     "",
     "Core functionalities include:",
     "- Making offers with dynamic pricing (`make_offer`).",
     "- Taking offers with current market pricing (`take_offer`, `take_offer_permissionless`).",
     "- Managing offer vectors for price control (`add_offer_vector`, `delete_offer_vector`).",
-    "- Program state initialization and management (`initialize`, `set_boss`, `add_admin`, `remove_admin`).",
+    "- Program state initialization and management (`initialize`, `propose_boss`, `accept_boss`, `add_admin`, `remove_admin`).",
     "- Vault operations for token deposits and withdrawals (`offer_vault_deposit`, `offer_vault_withdraw`).",
     "- Market information queries (`get_nav`, `get_apy`, `get_tvl`, `get_circulating_supply`).",
     "- Mint authority management (`transfer_mint_authority_to_program`, `transfer_mint_authority_to_boss`).",
-    "- Emergency controls (`set_kill_switch`) and approval mechanisms (`set_approver`).",
+    "- Emergency controls (`set_kill_switch`) and approval mechanisms (`add_approver`, `remove_approver`).",
     "",
     "# Dynamic Pricing Model",
     "The price for offers is determined by time-based vectors with APR (Annual Percentage Rate) growth:",
-    "- `base_time`: The timestamp when the vector becomes active.",
-    "- `base_price`: The initial price at the base_time with 9 decimal precision.",
+    "- `start_time`: The timestamp when the vector becomes active.",
+    "- `base_time`: The timestamp used as the elapsed-time baseline for price growth.",
+    "- `base_price`: The price at `base_time` with 9 decimal precision.",
     "- `apr`: Annual percentage rate with scale=6 (e.g., 10_000 = 1%, 1_000_000 = 100%).",
     "- `price_fix_duration`: Duration in seconds for each discrete pricing step.",
     "The price increases over time based on the APR, calculated in discrete intervals.",
@@ -41,7 +43,7 @@ export type Onreapp = {
     "# Security",
     "- Access controls are enforced, for example, ensuring only the `boss` can create offers or update critical state.",
     "- PDA (Program Derived Address) accounts are used for offer and token authorities, ensuring ownership.",
-    "- Events are emitted for significant actions (e.g., `OfferMadeOne`, `OfferTakenTwo`) for off-chain traceability."
+    "- Events are emitted for significant actions (e.g., `OfferMadeEvent`, `OfferTakenEvent`) for off-chain traceability."
   ],
   "instructions": [
     {
@@ -106,7 +108,7 @@ export type Onreapp = {
       "docs": [
         "Adds a new admin to the state.",
         "",
-        "Delegates to `admin::add_admin` to add a new admin to the admin list.",
+        "Delegates to `state_operations::add_admin` to add a new admin to the admin list.",
         "Only the boss can call this instruction to add new admins.",
         "# Arguments",
         "- `ctx`: Context for `AddAdmin`.",
@@ -226,14 +228,15 @@ export type Onreapp = {
       "docs": [
         "Adds a time vector to an existing offer.",
         "",
-        "Delegates to `offer::add_offer_time_vector`.",
-        "Creates a new time vector with auto-generated vector_start_timestamp for the specified offer.",
-        "Emits a `OfferVectorAdded` event upon success.",
+        "Delegates to `offer::add_offer_vector`.",
+        "Creates a pricing vector for the specified offer. If `start_time` is not supplied,",
+        "the vector starts at `max(base_time, current_time)`.",
+        "Emits an `OfferVectorAddedEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `AddOfferVector`.",
         "- `start_time`: Unix timestamp when the vector becomes active.",
-        "- `base_time`: Unix timestamp when the vector becomes active.",
+        "- `base_time`: Unix timestamp used as the elapsed-time baseline for price growth.",
         "- `base_price`: Price at the beginning of the vector.",
         "- `apr`: Annual Percentage Rate (APR) (see OfferVector::apr for details).",
         "- `price_fix_duration`: Duration in seconds for each price interval."
@@ -352,7 +355,7 @@ export type Onreapp = {
     {
       "name": "burnForNavIncrease",
       "docs": [
-        "Burns ONyc from BUFFER vault to increase NAV according to provided target inputs.",
+        "Burns ONyc from the BUFFER reserve vault to preserve NAV after an asset-base adjustment.",
         "",
         "Callable by boss only."
       ],
@@ -765,10 +768,11 @@ export type Onreapp = {
         "Cancels a redemption request.",
         "",
         "Delegates to `redemption::cancel_redemption_request`.",
-        "This instruction cancels a pending redemption request. The request can be cancelled",
-        "by the redeemer, redemption_admin, or boss. Upon cancellation, the status is changed",
-        "to cancelled and the amount is subtracted from the redemption offer's requested_redemptions.",
-        "The redemption request account is NOT closed.",
+        "This instruction cancels an unfulfilled or partially fulfilled redemption request.",
+        "The request can be cancelled by the redeemer, redemption_admin, or boss. Upon",
+        "cancellation, the unfulfilled token_in amount is returned to the redeemer, that",
+        "returned amount is subtracted from the redemption offer's requested_redemptions,",
+        "and the redemption request account is closed.",
         "Emits a `RedemptionRequestCancelledEvent` upon success.",
         "",
         "# Arguments",
@@ -776,7 +780,7 @@ export type Onreapp = {
         "",
         "# Access Control",
         "- Signer must be one of: redeemer, redemption_admin, or boss",
-        "- Request must be in pending state (status = 0)"
+        "- Request must have an unfulfilled amount remaining."
       ],
       "discriminator": [
         77,
@@ -1074,7 +1078,7 @@ export type Onreapp = {
       "docs": [
         "Clears all admins from the state.",
         "",
-        "Delegates to `admin::clear_admins` to remove all admins from the admin list.",
+        "Delegates to `state_operations::clear_admins` to remove all admins from the admin list.",
         "Only the boss can call this instruction to clear all admins."
       ],
       "discriminator": [
@@ -1131,14 +1135,14 @@ export type Onreapp = {
         "Closes the program state account and returns the rent to the boss.",
         "",
         "Delegates to `state_operations::close_state`.",
-        "This instruction permanently deletes the program's main state account",
-        "and transfers its rent balance back to the boss. Once closed, the state",
-        "cannot be recovered and the program becomes effectively non-functional.",
+        "This instruction closes the current main state account, clears its data,",
+        "and transfers its rent balance back to the boss. The closed state data",
+        "cannot be recovered; the state PDA can be initialized again later.",
         "Only the boss can call this instruction.",
         "Emits a `StateClosedEvent` upon success.",
         "",
         "# Warning",
-        "This is a destructive operation that effectively disables the program.",
+        "This is a destructive operation for the current state configuration.",
         "Use with extreme caution.",
         "",
         "# Arguments",
@@ -1190,9 +1194,10 @@ export type Onreapp = {
     {
       "name": "configureMaxMintAmount",
       "docs": [
-        "Configures the maximum amount allowed in one ONyc mint operation.",
+        "Configures the maximum amount allowed in one logical program mint operation.",
         "",
-        "Setting to 0 removes the per-mint cap."
+        "Setting to 0 removes the cap. BUFFER accrual checks the cap against the",
+        "total gross accrual before splitting it across reserve and fee vaults."
       ],
       "discriminator": [
         7,
@@ -1241,12 +1246,12 @@ export type Onreapp = {
     {
       "name": "configureMaxSupply",
       "docs": [
-        "Configures the maximum supply cap for ONyc token minting.",
+        "Configures the maximum supply cap for program-controlled minting paths.",
         "",
         "Delegates to `state_operations::configure_max_supply`.",
         "This instruction allows the boss to set or update the maximum supply cap",
-        "that restricts ONyc token minting. Setting to 0 removes the cap.",
-        "Emits a `MaxSupplyConfigured` event upon success.",
+        "that restricts program-controlled token minting. Setting to 0 removes the cap.",
+        "Emits a `MaxSupplyConfiguredEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `ConfigureMaxSupply`.",
@@ -1910,7 +1915,7 @@ export type Onreapp = {
         "Delegates to `offer::delete_offer_vector`.",
         "Removes the specified time vector from the offer by setting it to default values.",
         "Only the boss can delete time vectors from offers.",
-        "Emits a `OfferVectorDeleted` event upon success.",
+        "Emits an `OfferVectorDeletedEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `DeleteOfferVector`.",
@@ -2567,15 +2572,15 @@ export type Onreapp = {
       "docs": [
         "Delegates to `market_info::get_circulating_supply`.",
         "This is a read-only instruction that calculates and returns the current circulating supply",
-        "for an offer based on the total token supply minus the vault amount.",
-        "circulating_supply = total_supply - vault_amount",
+        "based on total ONyc supply minus the offer-vault and boss ONyc ATA balances.",
+        "circulating_supply = total_supply - (vault_amount + boss_onyc_amount)",
         "Emits a `GetCirculatingSupplyEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `GetCirculatingSupply`.",
         "",
         "# Returns",
-        "- `Ok(circulating_supply)`: The calculated circulating supply for the offer in base units"
+        "- `Ok(circulating_supply)`: The calculated global ONyc circulating supply in base units"
       ],
       "discriminator": [
         132,
@@ -2789,8 +2794,9 @@ export type Onreapp = {
         "Gets the NAV adjustment (price change) for a specific offer.",
         "",
         "Delegates to `market_info::get_nav_adjustment`.",
-        "This is a read-only instruction that calculates the price difference",
-        "between the current vector and the previous vector at the current time.",
+        "This is a read-only instruction that calculates the price jump at the",
+        "active vector's start time by comparing the active vector's starting",
+        "price with the previous vector's price at that same transition timestamp.",
         "Returns a signed integer representing the price change.",
         "Emits a `GetNavAdjustmentEvent` upon success.",
         "",
@@ -2862,19 +2868,19 @@ export type Onreapp = {
     {
       "name": "getTvl",
       "docs": [
-        "Gets the current TVL (Total Value Locked) for a specific offer with 9 decimal precision",
+        "Gets the current TVL (Total Value Locked) for a specific offer.",
         "",
         "Delegates to `market_info::get_tvl`.",
-        "This is a read-only instruction that calculates and returns the current TVL",
-        "for an offer based on the token_out supply and current NAV (price).",
-        "TVL = token_out_supply * current_NAV",
+        "This legacy read-only instruction calculates TVL from circulating token_out supply:",
+        "total token_out mint supply minus the offer-vault token_out ATA and boss token_out ATA balances.",
+        "TVL = circulating_supply * current_NAV / 10^9.",
         "Emits a `GetTVLEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `GetTVL`.",
         "",
         "# Returns",
-        "- `Ok(tvl)`: The calculated TVL (mantissa) for the offer with scale=9"
+        "- `Ok(tvl)`: The calculated TVL in token_out base units"
       ],
       "discriminator": [
         88,
@@ -3736,9 +3742,8 @@ export type Onreapp = {
         "Creates an offer.",
         "",
         "Delegates to `offer::make_offer`.",
-        "The price of the token_out changes over time based on `base_price`,",
-        "`end_price`, and `price_fix_duration` within the offer's active time window.",
-        "Emits a `OfferMade` event upon success.",
+        "Initializes the offer account for a token pair; pricing vectors are added separately.",
+        "Emits an `OfferMadeEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `MakeOffer`.",
@@ -3986,7 +3991,7 @@ export type Onreapp = {
         "",
         "# Arguments",
         "- `ctx`: Context for `MakeRedemptionOffer`.",
-        "- `fee_basis_points`: Fee in basis points (10000 = 100%) charged when fulfilling redemption requests",
+        "- `fee_basis_points`: Fee in basis points, capped at 1000 bps (10%).",
         "",
         "# Access Control",
         "- Only the boss or redemption_admin can call this instruction"
@@ -4198,7 +4203,7 @@ export type Onreapp = {
           "docs": [
             "Vault account for storing output tokens (e.g., USDC) for redemption payouts",
             "",
-            "Created automatically if needed. Used for distributing stable tokens to redeemers."
+            "Created automatically if needed. Used for distributing output tokens to redeemers."
           ],
           "writable": true,
           "pda": {
@@ -4333,10 +4338,10 @@ export type Onreapp = {
       "docs": [
         "Mints ONyc tokens to the boss's account.",
         "",
-        "Delegates to `state_operations::mint_to` to mint ONyc tokens.",
+        "Delegates to `mint_authority::mint_to` to mint ONyc tokens.",
         "Only the boss can call this instruction to mint ONyc tokens to their account.",
         "The program must have mint authority for the ONyc token.",
-        "Emits a `OnycTokensMinted` event upon success.",
+        "Emits an `OnycTokensMintedEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `MintTo`.",
@@ -4560,9 +4565,8 @@ export type Onreapp = {
         "Deposits tokens into the offer vault.",
         "",
         "Delegates to `vault_operations::offer_vault_deposit`.",
-        "Transfers tokens from boss's account to offer vault's token account for the specified mint.",
+        "Transfers tokens from the depositor's token account to the offer vault token account for the specified mint.",
         "Creates vault token account if it doesn't exist using init_if_needed.",
-        "Only the boss can call this instruction.",
         "",
         "# Arguments",
         "- `ctx`: Context for `OfferVaultDeposit`.",
@@ -5978,9 +5982,8 @@ export type Onreapp = {
         "Deposits tokens into the redemption vault.",
         "",
         "Delegates to `vault_operations::redemption_vault_deposit`.",
-        "Transfers tokens from boss's account to redemption vault's token account for the specified mint.",
+        "Transfers tokens from the depositor's token account to the redemption vault token account for the specified mint.",
         "Creates vault token account if it doesn't exist using init_if_needed.",
-        "Only the boss can call this instruction.",
         "",
         "# Arguments",
         "- `ctx`: Context for `RedemptionVaultDeposit`.",
@@ -6596,7 +6599,7 @@ export type Onreapp = {
       "docs": [
         "Removes an admin from the state.",
         "",
-        "Delegates to `admin::remove_admin` to remove an admin from the admin list.",
+        "Delegates to `state_operations::remove_admin` to remove an admin from the admin list.",
         "Only the boss can call this instruction to remove admins.",
         "# Arguments",
         "- `ctx`: Context for `RemoveAdmin`.",
@@ -6875,7 +6878,7 @@ export type Onreapp = {
       "docs": [
         "Sets BUFFER gross yield.",
         "",
-        "Current yield is read from the main offer during BUFFER accrual."
+        "Settles pending BUFFER accrual using the main offer, refreshes market stats, then updates gross APR."
       ],
       "discriminator": [
         245,
@@ -7218,7 +7221,7 @@ export type Onreapp = {
       "docs": [
         "Enables or disables the kill switch.",
         "",
-        "Delegates to `kill_switch::kill_switch` to change the kill switch state.",
+        "Delegates to `state_operations::set_kill_switch` to change the kill switch state.",
         "When enabled (true), the kill switch can halt critical program operations.",
         "When disabled (false), normal program operations can proceed.",
         "",
@@ -7227,7 +7230,7 @@ export type Onreapp = {
         "- Only the boss can disable the kill switch",
         "",
         "# Arguments",
-        "- `ctx`: Context for `KillSwitch`.",
+        "- `ctx`: Context for `SetKillSwitch`.",
         "- `enable`: True to enable the kill switch, false to disable it."
       ],
       "discriminator": [
@@ -7247,7 +7250,7 @@ export type Onreapp = {
             "Program state account containing the kill switch flag",
             "",
             "Must be mutable to allow kill switch state modifications.",
-            "The kill switch prevents offer operations when enabled."
+            "The kill switch prevents guarded execution paths when enabled."
           ],
           "writable": true,
           "pda": {
@@ -7387,7 +7390,7 @@ export type Onreapp = {
         "",
         "Delegates to `state_operations::set_onyc_mint` to change the Onyc mint.",
         "Only the boss can call this instruction to set the Onyc mint.",
-        "Emits a `OnycMintSetEvent` upon success.",
+        "Emits an `ONycMintUpdatedEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `SetOnycMint`."
@@ -7596,11 +7599,11 @@ export type Onreapp = {
     {
       "name": "takeOffer",
       "docs": [
-        "Takes a offer.",
+        "Takes an offer.",
         "",
         "Delegates to `offer::take_offer`.",
         "Allows a user to exchange token_in for token_out based on the offer's dynamic price.",
-        "Emits a `TakeOfferEvent` upon success.",
+        "Emits an `OfferTakenEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `TakeOffer`.",
@@ -8044,8 +8047,8 @@ export type Onreapp = {
           "docs": [
             "Instructions sysvar for approval signature verification",
             "",
-            "Required for cryptographic verification of approval messages",
-            "when offers require boss approval for execution."
+            "Required for cryptographic verification of approval messages when offers",
+            "require a signature from state.approver1 or state.approver2."
           ]
         },
         {
@@ -8091,12 +8094,12 @@ export type Onreapp = {
     {
       "name": "takeOfferPermissionless",
       "docs": [
-        "Takes a offer using permissionless flow with intermediary accounts.",
+        "Takes an offer using permissionless flow with intermediary accounts.",
         "",
         "Delegates to `offer::take_offer_permissionless`.",
         "Similar to take_offer but routes token transfers through intermediary accounts",
         "owned by the program instead of direct user-to-boss and vault-to-user transfers.",
-        "Emits a `TakeOfferPermissionlessEvent` upon success.",
+        "Emits an `OfferTakenPermissionlessEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `TakeOfferPermissionless`.",
@@ -8516,8 +8519,8 @@ export type Onreapp = {
           "docs": [
             "Instructions sysvar for approval signature verification",
             "",
-            "Required for cryptographic verification of approval messages",
-            "when offers require boss approval for execution."
+            "Required for cryptographic verification of approval messages when offers",
+            "require a signature from state.approver1 or state.approver2."
           ]
         },
         {
@@ -9692,7 +9695,7 @@ export type Onreapp = {
         "",
         "# Arguments",
         "- `ctx`: Context for `UpdateOfferFee`.",
-        "- `new_fee_basis_points`: New fee in basis points (0-10000)."
+        "- `new_fee_basis_points`: New fee in basis points, capped at 1000 bps (10%)."
       ],
       "discriminator": [
         254,
@@ -9797,7 +9800,7 @@ export type Onreapp = {
         "",
         "# Arguments",
         "* `ctx` - The instruction context",
-        "* `new_fee_basis_points` - New fee in basis points (10000 = 100%, 500 = 5%)",
+        "* `new_fee_basis_points` - New fee in basis points, capped at 1000 bps (10%).",
         "",
         "# Access Control",
         "- Boss only"
@@ -9816,7 +9819,7 @@ export type Onreapp = {
         {
           "name": "redemptionOffer",
           "docs": [
-            "The redemption offer account whose fee will be updated"
+            "The redemption offer account whose configuration will be updated."
           ],
           "writable": true,
           "pda": {
@@ -9909,7 +9912,7 @@ export type Onreapp = {
         {
           "name": "redemptionOffer",
           "docs": [
-            "The redemption offer account whose fee will be updated"
+            "The redemption offer account whose configuration will be updated."
           ],
           "writable": true,
           "pda": {
@@ -10758,32 +10761,6 @@ export type Onreapp = {
         231,
         3,
         246
-      ]
-    },
-    {
-      "name": "bufferLowestSupplyUpdatedEvent",
-      "discriminator": [
-        194,
-        51,
-        246,
-        57,
-        251,
-        53,
-        168,
-        116
-      ]
-    },
-    {
-      "name": "bufferMainOfferUpdatedEvent",
-      "discriminator": [
-        100,
-        116,
-        101,
-        92,
-        111,
-        245,
-        238,
-        189
       ]
     },
     {
@@ -12437,50 +12414,6 @@ export type Onreapp = {
       }
     },
     {
-      "name": "bufferLowestSupplyUpdatedEvent",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "oldPreviousSupply",
-            "type": "u64"
-          },
-          {
-            "name": "newPreviousSupply",
-            "type": "u64"
-          },
-          {
-            "name": "currentSupply",
-            "type": "u64"
-          },
-          {
-            "name": "updated",
-            "type": "bool"
-          },
-          {
-            "name": "timestamp",
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "bufferMainOfferUpdatedEvent",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "oldMainOffer",
-            "type": "pubkey"
-          },
-          {
-            "name": "newMainOffer",
-            "type": "pubkey"
-          }
-        ]
-      }
-    },
-    {
       "name": "bufferState",
       "type": {
         "kind": "struct",
@@ -12670,7 +12603,7 @@ export type Onreapp = {
     {
       "name": "configurableVault",
       "docs": [
-        "Program-owned configurable fee vault authority."
+        "Program-owned configurable accounting vault authority."
       ],
       "type": {
         "kind": "struct",
@@ -12734,7 +12667,7 @@ export type Onreapp = {
     {
       "name": "configurableVaultKind",
       "docs": [
-        "Fee vault selector used for deriving shared configurable vault PDAs."
+        "Configurable accounting vault selector used for deriving shared vault PDAs."
       ],
       "type": {
         "kind": "enum",
@@ -13122,7 +13055,7 @@ export type Onreapp = {
           {
             "name": "tvl",
             "docs": [
-              "Latest total value locked across tracked vaults."
+              "Latest TVL computed as circulating ONyc supply multiplied by NAV, divided by the price scale."
             ],
             "type": "u64"
           },
@@ -13204,7 +13137,7 @@ export type Onreapp = {
     {
       "name": "maxMintAmountConfiguredEvent",
       "docs": [
-        "Event emitted when the ONyc per-mint amount cap is configured."
+        "Event emitted when the per-mint amount cap is configured."
       ],
       "type": {
         "kind": "struct",
@@ -13229,7 +13162,7 @@ export type Onreapp = {
     {
       "name": "maxSupplyConfiguredEvent",
       "docs": [
-        "Event emitted when the ONyc maximum supply is successfully configured",
+        "Event emitted when the maximum supply cap is successfully configured",
         "",
         "Provides transparency for tracking max supply configuration changes."
       ],
@@ -13417,7 +13350,7 @@ export type Onreapp = {
           {
             "name": "feeBasisPoints",
             "docs": [
-              "Fee in basis points (10000 = 100%) charged when taking the offer"
+              "Fee in basis points, capped at 1000 bps (10%), charged when taking the offer."
             ],
             "type": "u16"
           },
@@ -13431,7 +13364,7 @@ export type Onreapp = {
           {
             "name": "needsApproval",
             "docs": [
-              "Whether the offer requires boss approval for taking (0 = false, 1 = true)"
+              "Whether taking the offer requires a signature from state.approver1 or state.approver2."
             ],
             "type": "u8"
           },
@@ -13559,7 +13492,7 @@ export type Onreapp = {
           {
             "name": "feeBasisPoints",
             "docs": [
-              "Fee in basis points (10000 = 100%) charged when taking the offer"
+              "Fee in basis points, capped at 1000 bps (10%), charged when taking the offer."
             ],
             "type": "u16"
           },
@@ -13573,7 +13506,7 @@ export type Onreapp = {
           {
             "name": "needsApproval",
             "docs": [
-              "Whether the offer requires boss approval for taking"
+              "Whether taking the offer requires a signature from state.approver1 or state.approver2"
             ],
             "type": "bool"
           },
@@ -13590,7 +13523,7 @@ export type Onreapp = {
     {
       "name": "offerTakenEvent",
       "docs": [
-        "Error codes specific to the take_offer instruction",
+        "Shared offer-execution event definitions.",
         "Event emitted when an offer is successfully taken",
         "",
         "Provides transparency for tracking offer execution and token exchange details."
@@ -13639,7 +13572,7 @@ export type Onreapp = {
     {
       "name": "offerTakenPermissionlessEvent",
       "docs": [
-        "Error codes specific to the take_offer_permissionless instruction",
+        "Shared permissionless offer-execution event definitions.",
         "Event emitted when an offer is successfully executed via permissionless flow",
         "",
         "Provides transparency for tracking permissionless offer execution with intermediary routing."
@@ -13772,14 +13705,14 @@ export type Onreapp = {
           {
             "name": "startTime",
             "docs": [
-              "Calculated activation time: max(base_time, current_time) when vector was added"
+              "Activation time. If omitted during insertion, defaults to max(base_time, current_time)."
             ],
             "type": "u64"
           },
           {
             "name": "baseTime",
             "docs": [
-              "Original requested activation time before current_time adjustment"
+              "Base timestamp used for elapsed-time price growth."
             ],
             "type": "u64"
           },
@@ -13830,14 +13763,14 @@ export type Onreapp = {
           {
             "name": "startTime",
             "docs": [
-              "Calculated start time when the vector becomes active (max(base_time, current_time))"
+              "Start time when the vector becomes active."
             ],
             "type": "u64"
           },
           {
             "name": "baseTime",
             "docs": [
-              "Original base time specified for the vector"
+              "Base timestamp used for elapsed-time price growth."
             ],
             "type": "u64"
           },
@@ -14190,11 +14123,11 @@ export type Onreapp = {
     {
       "name": "redemptionOffer",
       "docs": [
-        "Redemption offer for converting ONyc tokens back to stable tokens",
+        "Redemption offer for converting ONyc tokens back to a paired output asset.",
         "",
         "Manages the redemption process where users can exchange ONyc (in-token)",
-        "for stable tokens like USDC (out-token) at the current NAV price.",
-        "This is the inverse of the standard Offer which exchanges stable tokens for ONyc."
+        "for the original offer's input asset (out-token) at the current NAV price.",
+        "This is the inverse of the standard Offer which exchanges that asset for ONyc."
       ],
       "type": {
         "kind": "struct",
@@ -14225,8 +14158,10 @@ export type Onreapp = {
             "docs": [
               "Cumulative total of all executed redemptions over the contract's lifetime",
               "",
-              "This tracks the total amount of ONyc that has been redeemed and burned.",
-              "Uses u128 because cumulative redemptions can exceed the current total supply."
+              "This tracks the cumulative gross token_in amount fulfilled across redemption",
+              "requests, before fee deduction. Net token_in may be burned or transferred",
+              "to proceeds depending on mint authority.",
+              "Uses u128 for aggregate accounting across requests."
             ],
             "type": "u128"
           },
@@ -14236,7 +14171,7 @@ export type Onreapp = {
               "Total amount of pending redemption requests",
               "",
               "This tracks ONyc tokens that are locked in pending redemption requests.",
-              "Uses u64 because pending redemptions cannot exceed the token's total supply."
+              "Uses u128 for aggregate accounting across requests."
             ],
             "type": "u128"
           },
@@ -14265,7 +14200,7 @@ export type Onreapp = {
           {
             "name": "vaultTargetBps",
             "docs": [
-              "Target stable-token balance for the redemption vault as basis points of TVL.",
+              "Target token-out balance for the redemption vault as basis points of TVL.",
               "",
               "A value of 0 disables automatic inflow into the redemption vault; net inflow",
               "goes to the configured proceeds vault instead."
@@ -14335,14 +14270,14 @@ export type Onreapp = {
           {
             "name": "feeBasisPoints",
             "docs": [
-              "Fee in basis points (10000 = 100%) charged when fulfilling redemption requests"
+              "Fee in basis points, capped at 1000 bps (10%), charged when fulfilling redemption requests."
             ],
             "type": "u16"
           },
           {
             "name": "vaultTargetBps",
             "docs": [
-              "Target stable-token vault balance as basis points of TVL."
+              "Target token-out vault balance as basis points of TVL."
             ],
             "type": "u16"
           }
@@ -14389,14 +14324,14 @@ export type Onreapp = {
           {
             "name": "oldFeeBasisPoints",
             "docs": [
-              "Previous fee in basis points (10000 = 100%)"
+              "Previous fee in basis points."
             ],
             "type": "u16"
           },
           {
             "name": "newFeeBasisPoints",
             "docs": [
-              "New fee in basis points (10000 = 100%)"
+              "New fee in basis points, capped at 1000 bps (10%)."
             ],
             "type": "u16"
           },
@@ -14870,21 +14805,22 @@ export type Onreapp = {
           {
             "name": "maxSupply",
             "docs": [
-              "Optional maximum supply cap for ONyc token minting (0 = no cap)"
+              "Optional supply cap for program-controlled minting paths (0 = no cap)"
             ],
             "type": "u64"
           },
           {
             "name": "redemptionAdmin",
             "docs": [
-              "Admin account authorized to manage ONr token mints and redemptions"
+              "Admin account authorized to manage redemption offers and fulfillment"
             ],
             "type": "pubkey"
           },
           {
             "name": "maxMintAmount",
             "docs": [
-              "Optional maximum amount allowed in one mint operation (0 = no cap)"
+              "Optional maximum amount allowed in one logical program mint operation (0 = no cap).",
+              "BUFFER accrual applies this to the total gross accrual before fee splitting."
             ],
             "type": "u64"
           },
