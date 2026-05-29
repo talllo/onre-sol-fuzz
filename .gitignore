@@ -31,6 +31,11 @@ tests/fixtures/
 coverage/
 sbf_trace_dir/
 
+# Local simulator and analysis outputs
+.surfpool/
+graphify-out/
+**/graphify-out/
+
 .idea
 *.iml
 
