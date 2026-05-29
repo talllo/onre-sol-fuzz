@@ -17,7 +17,7 @@ pub struct KillSwitchToggledEvent {
 /// Account structure for controlling the program kill switch
 ///
 /// This struct defines the accounts required to enable or disable the emergency
-/// kill switch that can halt critical program operations.
+/// kill switch that can halt guarded value-moving program operations.
 #[derive(Accounts)]
 pub struct SetKillSwitch<'info> {
     /// Program state account containing the kill switch flag
@@ -35,7 +35,7 @@ pub struct SetKillSwitch<'info> {
     pub signer: Signer<'info>,
 }
 
-/// Controls the emergency kill switch for critical program operations
+/// Controls the emergency kill switch for guarded value-moving operations
 ///
 /// This instruction manages the program's emergency kill switch which can halt
 /// guarded execution paths when activated. The kill switch has asymmetric access control:
@@ -57,7 +57,11 @@ pub struct SetKillSwitch<'info> {
 /// # Effects
 /// - Updates the program state's is_killed field
 /// - When enabled, prevents guarded execution paths, including offer execution,
-///   redemption request create/fulfill/cancel, Prop AMM swaps, and configurable-vault withdrawals
+///   Prop AMM quotes/swaps, redemption request create/fulfill/cancel, vault
+///   deposits/withdrawals, direct mint/burn paths, and BUFFER config updates
+///   that can settle accrual
+/// - Governance and configuration-only instructions remain callable under their
+///   normal access control
 /// - Provides emergency halt capability for security incidents
 pub fn set_kill_switch(ctx: Context<SetKillSwitch>, enable: bool) -> Result<()> {
     let state = &mut ctx.accounts.state;

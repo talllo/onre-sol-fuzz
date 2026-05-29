@@ -180,6 +180,23 @@ fn test_mint_to_success() {
 }
 
 #[test]
+fn test_mint_to_rejects_when_killed() {
+    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+
+    let ix = build_transfer_mint_authority_to_program_ix(&boss, &onyc_mint, &TOKEN_PROGRAM_ID);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_set_kill_switch_ix(&boss, true);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let ix = build_mint_to_ix(&boss, &onyc_mint, 1_000_000_000, &TOKEN_PROGRAM_ID);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(result.is_err(), "kill switch should block manual minting");
+}
+
+#[test]
 fn test_mint_to_rejects_non_boss() {
     let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();

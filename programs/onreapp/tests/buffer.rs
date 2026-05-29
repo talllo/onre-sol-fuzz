@@ -381,6 +381,24 @@ fn test_deposit_reserve_vault_allows_any_depositor() {
 }
 
 #[test]
+fn test_deposit_reserve_vault_rejects_when_killed() {
+    let (mut svm, payer, _token_in_mint, onyc_mint, caller) = setup_buffer_context(1, 0, 0, 0);
+    let boss = payer.pubkey();
+    let deposit_amount = 250_000_000;
+    create_token_account(&mut svm, &onyc_mint, &caller.pubkey(), deposit_amount);
+
+    let ix = build_set_kill_switch_ix(&boss, true);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let ix = build_deposit_reserve_vault_ix(&caller.pubkey(), &onyc_mint, deposit_amount);
+    let result = send_tx(&mut svm, &[ix], &[&caller]);
+    assert!(
+        result.is_err(),
+        "kill switch should block reserve vault deposits"
+    );
+}
+
+#[test]
 fn test_withdraw_reserve_vault_allows_boss() {
     let (mut svm, payer, _token_in_mint, onyc_mint, caller) = setup_buffer_context(1, 0, 0, 0);
     let deposit_amount = 300_000_000;
@@ -421,6 +439,27 @@ fn test_withdraw_reserve_vault_rejects_non_boss() {
     let withdraw_ix = build_withdraw_reserve_vault_ix(&caller.pubkey(), &onyc_mint, 1);
     let result = send_tx(&mut svm, &[withdraw_ix], &[&caller]);
     assert!(result.is_err(), "non-boss withdrawal should fail");
+}
+
+#[test]
+fn test_withdraw_reserve_vault_rejects_when_killed() {
+    let (mut svm, payer, _token_in_mint, onyc_mint, caller) = setup_buffer_context(1, 0, 0, 0);
+    let boss = payer.pubkey();
+    let deposit_amount = 150_000_000;
+    create_token_account(&mut svm, &onyc_mint, &caller.pubkey(), deposit_amount);
+
+    let deposit_ix = build_deposit_reserve_vault_ix(&caller.pubkey(), &onyc_mint, deposit_amount);
+    send_tx(&mut svm, &[deposit_ix], &[&caller]).unwrap();
+
+    let ix = build_set_kill_switch_ix(&boss, true);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let withdraw_ix = build_withdraw_reserve_vault_ix(&boss, &onyc_mint, 1);
+    let result = send_tx(&mut svm, &[withdraw_ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "kill switch should block reserve vault withdrawals"
+    );
 }
 
 #[test]
@@ -482,6 +521,25 @@ fn test_set_buffer_gross_yield_rejects_non_boss() {
 }
 
 #[test]
+fn test_set_buffer_gross_yield_rejects_when_killed() {
+    let (mut svm, payer, _token_in_mint, onyc_mint, _caller) =
+        setup_buffer_context(150_000, 50_000, 0, 0);
+    let boss = payer.pubkey();
+    let state = read_state(&svm);
+
+    let ix = build_set_kill_switch_ix(&boss, true);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let ix = build_set_buffer_gross_yield_ix(&boss, &state.main_offer, &onyc_mint, 200_000);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "kill switch should block gross APR updates that can settle accrual"
+    );
+    assert_eq!(read_buffer_state(&svm).gross_yield, 150_000);
+}
+
+#[test]
 fn test_set_buffer_fee_config_rejects_no_change() {
     let (mut svm, payer, _token_in_mint, onyc_mint, _caller) =
         setup_buffer_context(150_000, 50_000, 100, 1_000);
@@ -510,6 +568,28 @@ fn test_set_buffer_fee_config_rejects_non_boss() {
     );
     let result = send_tx(&mut svm, &[ix], &[&non_boss]);
     assert!(result.is_err(), "non-boss should not update buffer fees");
+
+    let buffer_state = read_buffer_state(&svm);
+    assert_eq!(buffer_state.management_fee_basis_points, 100);
+    assert_eq!(buffer_state.performance_fee_basis_points, 1_000);
+}
+
+#[test]
+fn test_set_buffer_fee_config_rejects_when_killed() {
+    let (mut svm, payer, _token_in_mint, onyc_mint, _caller) =
+        setup_buffer_context(150_000, 50_000, 100, 1_000);
+    let boss = payer.pubkey();
+    let state = read_state(&svm);
+
+    let ix = build_set_kill_switch_ix(&boss, true);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let ix = build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 200, 2_000);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "kill switch should block fee config updates that can settle accrual"
+    );
 
     let buffer_state = read_buffer_state(&svm);
     assert_eq!(buffer_state.management_fee_basis_points, 100);

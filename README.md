@@ -52,6 +52,21 @@ Offers use up to 10 `OfferVector` entries with APR-based compound interest. Pric
 | `redemption_admin` | Manages redemption operations |
 | `approvers` | Trusted keys for cryptographic approval verification (ed25519) |
 
+### Kill Switch Semantics
+
+The kill switch is an emergency stop for guarded value-moving paths. The boss can enable or disable it; admins can only enable it.
+
+When `state.is_killed == true`, the program rejects:
+
+- offer execution: `take_offer`, `take_offer_v2`, `take_offer_permissionless`, `take_offer_permissionless_v2`
+- Prop AMM quotes and execution: `quote_swap_buy`, `quote_swap_sell`, `open_swap_buy`, `open_swap_sell`
+- redemption request movement: `create_redemption_request`, `fulfill_redemption_request`, `cancel_redemption_request`
+- vault funding and recovery: `offer_vault_deposit`, `offer_vault_withdraw`, `redemption_vault_deposit`, `redemption_vault_withdraw`
+- reserve/configurable vault movement: `deposit_reserve_vault`, `withdraw_reserve_vault`, `withdraw_configurable_vault`
+- direct supply-changing and accrual-settling paths: `mint_to`, `burn_for_nav_increase`, `set_buffer_gross_apr`, `set_buffer_fee_config`
+
+The kill switch does not pause every instruction. Governance and configuration-only instructions such as authority changes, admin/approver management, offer configuration, targeted disable, supply-cap configuration, and mint-authority transfer remain callable according to their normal access control.
+
 ### Token Support
 
 Most token movement paths use the SPL Token interface and can work with **SPL Token** or **Token-2022** mints. Redemption token-in/ONYC request setup and market-stats recomputation for ONYC require the classic SPL Token program.

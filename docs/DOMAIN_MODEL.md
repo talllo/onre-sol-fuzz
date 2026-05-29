@@ -281,7 +281,7 @@ The market snapshot is the shared reporting surface for TVL, NAV, NAV adjustment
 
 | Control | Scope |
 | --- | --- |
-| Kill switch | Global emergency stop for critical operations. Admins or boss can enable it; only boss disables it. |
+| Kill switch | Emergency stop for guarded value-moving paths. Admins or boss can enable it; only boss disables it. Governance and configuration-only instructions remain available under their normal authority checks. |
 | Offer disabled flag | Targeted disable for one offer. |
 | Redemption offer disabled flag | Targeted disable for one redemption market. |
 | Prop AMM pair enabled flag | Enables or disables automated liquidity for one offer pair. |

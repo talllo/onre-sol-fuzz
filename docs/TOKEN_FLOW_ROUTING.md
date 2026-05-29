@@ -4,6 +4,12 @@ This page shows where tokens move for the main V2 offer, redemption, and Prop AM
 
 Legacy `take_offer` and legacy `take_offer_permissionless` do not use configurable accounting vaults or redemption-vault refill routing. If the program controls the token-in mint, net token-in is burned and fee token-in routes to the boss token-in ATA; otherwise both net token-in and fee token-in route to the boss token-in ATA.
 
+## Kill Switch
+
+Token-moving instructions on this page are guarded by `state.is_killed`. When the kill switch is enabled, offer takes, Prop AMM quotes/execution, redemption request create/fulfill/cancel, vault deposits/withdrawals, reserve vault movement, configurable-vault withdrawals, direct `mint_to`, `burn_for_nav_increase`, and BUFFER config updates that settle accrual reject before moving, minting, or burning tokens.
+
+The kill switch is not a global pause for every instruction. Governance and configuration-only instructions remain available under their normal authority checks.
+
 ## Shared Refill Rule
 
 Net asset inflow from `take_offer_v2`, `take_offer_permissionless_v2`, and Prop AMM buy can refill the redemption vault only when all conditions are true:

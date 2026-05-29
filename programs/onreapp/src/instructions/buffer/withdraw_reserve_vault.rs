@@ -13,6 +13,7 @@ pub struct WithdrawReserveVault<'info> {
         bump = state.bump,
         has_one = boss,
         has_one = onyc_mint,
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
     )]
     pub state: Box<Account<'info, State>>,
 

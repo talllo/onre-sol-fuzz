@@ -797,6 +797,7 @@ pub fn build_offer_vault_deposit_ix(
     amount: u64,
     token_program: &Pubkey,
 ) -> Instruction {
+    let (state_pda, _) = find_state_pda();
     let (vault_authority_pda, _) = find_offer_vault_authority_pda();
     let depositor_token_ata = derive_ata(depositor, token_mint, token_program);
     let vault_token_ata = derive_ata(&vault_authority_pda, token_mint, token_program);
@@ -805,6 +806,7 @@ pub fn build_offer_vault_deposit_ix(
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![
+            AccountMeta::new_readonly(state_pda, false),
             AccountMeta::new_readonly(vault_authority_pda, false),
             AccountMeta::new_readonly(*token_mint, false),
             AccountMeta::new(depositor_token_ata, false),

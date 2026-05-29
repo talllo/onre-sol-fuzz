@@ -1,4 +1,5 @@
 use crate::constants::seeds;
+use crate::state::State;
 use crate::utils::{has_transfer_fee, transfer_tokens};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
@@ -24,6 +25,14 @@ pub struct RedemptionVaultDepositEvent {
 /// lacks mint authority and must transfer from pre-funded reserves.
 #[derive(Accounts)]
 pub struct RedemptionVaultDeposit<'info> {
+    /// Program state account containing kill switch status
+    #[account(
+        seeds = [seeds::STATE],
+        bump = state.bump,
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
+    )]
+    pub state: Box<Account<'info, State>>,
+
     /// Program-derived authority that controls redemption vault token accounts
     ///
     /// This PDA manages the redemption vault token accounts and enables the program

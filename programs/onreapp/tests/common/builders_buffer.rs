@@ -155,6 +155,7 @@ pub fn build_deposit_reserve_vault_ix(
     onyc_mint: &Pubkey,
     amount: u64,
 ) -> Instruction {
+    let (state_pda, _) = find_state_pda();
     let (buffer_state_pda, _) = find_buffer_state_pda();
     let (reserve_vault_authority_pda, _) = find_reserve_vault_authority_pda();
     let depositor_onyc_ata = derive_ata(depositor, onyc_mint, &TOKEN_PROGRAM_ID);
@@ -166,6 +167,7 @@ pub fn build_deposit_reserve_vault_ix(
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![
+            AccountMeta::new_readonly(state_pda, false),
             AccountMeta::new_readonly(buffer_state_pda, false),
             AccountMeta::new_readonly(reserve_vault_authority_pda, false),
             AccountMeta::new_readonly(*onyc_mint, false),

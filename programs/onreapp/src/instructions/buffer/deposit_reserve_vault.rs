@@ -1,5 +1,6 @@
 use crate::constants::seeds;
 use crate::instructions::buffer::{BufferState, ReserveVaultDepositedEvent};
+use crate::state::State;
 use crate::utils::{has_transfer_fee, transfer_tokens};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
@@ -7,6 +8,14 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 #[derive(Accounts)]
 pub struct DepositReserveVault<'info> {
+    #[account(
+        seeds = [seeds::STATE],
+        bump = state.bump,
+        has_one = onyc_mint,
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
+    )]
+    pub state: Box<Account<'info, State>>,
+
     #[account(
         has_one = onyc_mint,
         seeds = [seeds::BUFFER_STATE],

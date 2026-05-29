@@ -14,6 +14,14 @@ For BUFFER integrations, keep in mind that BUFFER accrual does not accept a call
 
 ---
 
+## Operational Kill Switch
+
+Integrations should treat `state.is_killed == true` as an emergency stop for guarded value-moving paths. While active, the program rejects offer takes, Prop AMM quotes/execution, redemption request create/fulfill/cancel, vault deposits/withdrawals, reserve vault deposits/withdrawals, configurable-vault withdrawals, direct `mint_to`, `burn_for_nav_increase`, and BUFFER config updates that would settle accrual.
+
+Read-only market views such as `get_nav`, `get_apy`, `get_tvl_v2`, and `get_circulating_supply_v2` are not kill-switch guarded. Governance and configuration-only instructions also remain callable according to their normal access control.
+
+---
+
 ## Getting Started
 
 ### 1. Get the IDL

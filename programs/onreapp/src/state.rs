@@ -12,7 +12,7 @@ pub struct State {
     pub boss: Pubkey,
     /// Proposed new boss for two-step ownership transfer
     pub proposed_boss: Pubkey,
-    /// Emergency kill switch to halt critical operations when activated
+    /// Emergency kill switch to halt guarded value-moving operations when activated
     pub is_killed: bool,
     /// ONyc token mint used for market calculations and operations
     pub onyc_mint: Pubkey,

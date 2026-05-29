@@ -2033,6 +2033,23 @@ export type Onreapp = {
       ],
       "accounts": [
         {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "bufferState",
           "pda": {
             "seeds": [
@@ -2094,6 +2111,7 @@ export type Onreapp = {
         {
           "name": "onycMint",
           "relations": [
+            "state",
             "bufferState"
           ]
         },
@@ -4584,6 +4602,26 @@ export type Onreapp = {
       ],
       "accounts": [
         {
+          "name": "state",
+          "docs": [
+            "Program state account containing kill switch status"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "vaultAuthority",
           "docs": [
             "Program-derived authority that controls vault token accounts",
@@ -6001,6 +6039,26 @@ export type Onreapp = {
       ],
       "accounts": [
         {
+          "name": "state",
+          "docs": [
+            "Program state account containing kill switch status"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "redemptionVaultAuthority",
           "docs": [
             "Program-derived authority that controls redemption vault token accounts",
@@ -7222,8 +7280,8 @@ export type Onreapp = {
         "Enables or disables the kill switch.",
         "",
         "Delegates to `state_operations::set_kill_switch` to change the kill switch state.",
-        "When enabled (true), the kill switch can halt critical program operations.",
-        "When disabled (false), normal program operations can proceed.",
+        "When enabled (true), the kill switch halts guarded value-moving paths.",
+        "When disabled (false), those guarded paths can proceed normally.",
         "",
         "Access control:",
         "- Both boss and admins can enable the kill switch",
@@ -14736,7 +14794,7 @@ export type Onreapp = {
           {
             "name": "isKilled",
             "docs": [
-              "Emergency kill switch to halt critical operations when activated"
+              "Emergency kill switch to halt guarded value-moving operations when activated"
             ],
             "type": "bool"
           },

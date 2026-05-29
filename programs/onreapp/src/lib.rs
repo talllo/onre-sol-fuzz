@@ -443,8 +443,8 @@ pub mod onreapp {
     /// Enables or disables the kill switch.
     ///
     /// Delegates to `state_operations::set_kill_switch` to change the kill switch state.
-    /// When enabled (true), the kill switch can halt critical program operations.
-    /// When disabled (false), normal program operations can proceed.
+    /// When enabled (true), the kill switch halts guarded value-moving paths.
+    /// When disabled (false), those guarded paths can proceed normally.
     ///
     /// Access control:
     /// - Both boss and admins can enable the kill switch

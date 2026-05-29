@@ -8,7 +8,8 @@ resolver = "2"
 overflow-checks = true
 lto = "off"
 codegen-units = 1
-debug = true
+debug = false
+strip = "debuginfo"
 opt-level = 3
 [profile.release.build-override]
 incremental = false

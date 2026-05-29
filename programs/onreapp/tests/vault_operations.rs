@@ -57,6 +57,25 @@ fn test_offer_vault_deposit_any_user_can_deposit() {
     assert_eq!(get_token_balance(&svm, &vault_ata), 10_000_000_000);
 }
 
+#[test]
+fn test_offer_vault_deposit_rejects_when_killed() {
+    let (mut svm, payer, _) = setup_vault();
+    let boss = payer.pubkey();
+
+    let token_mint = create_mint(&mut svm, &payer, 9, &boss);
+    create_token_account(&mut svm, &token_mint, &boss, 1_000_000_000_000);
+
+    let ix = build_set_kill_switch_ix(&boss, true);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let ix = build_offer_vault_deposit_ix(&boss, &token_mint, 100_000_000_000, &TOKEN_PROGRAM_ID);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "kill switch should block offer vault deposits"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Offer Vault Withdraw
 // ---------------------------------------------------------------------------
@@ -110,6 +129,29 @@ fn test_offer_vault_withdraw_rejects_non_boss() {
     assert!(result.is_err(), "non-boss should not be able to withdraw");
 }
 
+#[test]
+fn test_offer_vault_withdraw_rejects_when_killed() {
+    let (mut svm, payer, _) = setup_vault();
+    let boss = payer.pubkey();
+
+    let token_mint = create_mint(&mut svm, &payer, 9, &boss);
+    create_token_account(&mut svm, &token_mint, &boss, 1_000_000_000_000);
+
+    let ix = build_offer_vault_deposit_ix(&boss, &token_mint, 100_000_000_000, &TOKEN_PROGRAM_ID);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_set_kill_switch_ix(&boss, true);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let ix = build_offer_vault_withdraw_ix(&boss, &token_mint, 10_000_000_000, &TOKEN_PROGRAM_ID);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "kill switch should block offer vault withdrawals"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Redemption Vault Deposit
 // ---------------------------------------------------------------------------
@@ -157,6 +199,26 @@ fn test_redemption_vault_deposit_any_user_can_deposit() {
     send_tx(&mut svm, &[ix], &[&non_boss]).unwrap();
 
     assert_eq!(get_token_balance(&svm, &vault_ata), 10_000_000_000);
+}
+
+#[test]
+fn test_redemption_vault_deposit_rejects_when_killed() {
+    let (mut svm, payer, _) = setup_vault();
+    let boss = payer.pubkey();
+
+    let token_mint = create_mint(&mut svm, &payer, 9, &boss);
+    create_token_account(&mut svm, &token_mint, &boss, 1_000_000_000_000);
+
+    let ix = build_set_kill_switch_ix(&boss, true);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let ix =
+        build_redemption_vault_deposit_ix(&boss, &token_mint, 100_000_000_000, &TOKEN_PROGRAM_ID);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "kill switch should block redemption vault deposits"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +277,31 @@ fn test_redemption_vault_withdraw_rejects_non_boss() {
     assert!(
         result.is_err(),
         "non-boss should not be able to withdraw from redemption vault"
+    );
+}
+
+#[test]
+fn test_redemption_vault_withdraw_rejects_when_killed() {
+    let (mut svm, payer, _) = setup_vault();
+    let boss = payer.pubkey();
+
+    let token_mint = create_mint(&mut svm, &payer, 9, &boss);
+    create_token_account(&mut svm, &token_mint, &boss, 1_000_000_000_000);
+
+    let ix =
+        build_redemption_vault_deposit_ix(&boss, &token_mint, 100_000_000_000, &TOKEN_PROGRAM_ID);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_set_kill_switch_ix(&boss, true);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let ix =
+        build_redemption_vault_withdraw_ix(&boss, &token_mint, 10_000_000_000, &TOKEN_PROGRAM_ID);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "kill switch should block redemption vault withdrawals"
     );
 }
 

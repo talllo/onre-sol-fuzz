@@ -400,6 +400,7 @@ export class ScriptHelper {
         return await this.program.methods
             .offerVaultDeposit(new BN(params.amount))
             .accountsPartial({
+                state: this.statePda,
                 tokenMint: params.tokenMint,
                 tokenProgram: params.tokenProgram ?? TOKEN_PROGRAM_ID,
                 depositor: params.depositor
@@ -422,6 +423,7 @@ export class ScriptHelper {
         return await this.program.methods
             .redemptionVaultDeposit(new BN(params.amount))
             .accountsPartial({
+                state: this.statePda,
                 tokenMint: params.tokenMint,
                 tokenProgram: params.tokenProgram ?? TOKEN_PROGRAM_ID,
                 depositor: params.depositor

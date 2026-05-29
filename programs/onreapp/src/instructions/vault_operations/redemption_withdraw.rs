@@ -70,7 +70,8 @@ pub struct RedemptionVaultWithdraw<'info> {
     #[account(
         seeds = [seeds::STATE],
         bump = state.bump,
-        has_one = boss
+        has_one = boss,
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
     )]
     pub state: Box<Account<'info, State>>,
 
