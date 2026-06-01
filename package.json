@@ -13,6 +13,7 @@
     "script:mainnet-dev": "NETWORK=mainnet-dev tsx",
     "script:devnet-test": "NETWORK=devnet-test tsx",
     "script:devnet-dev": "NETWORK=devnet-dev tsx",
+    "surfpool:regression": "tsx scripts/surfpool-regression/run.ts",
     "cli": "tsx scripts/cli/index.ts",
     "ui": "vite --config scripts/ui/vite.config.ts",
     "ui:build": "vite build --config scripts/ui/vite.config.ts"
