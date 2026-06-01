@@ -206,6 +206,24 @@ programs/onreapp/tests/
 └── vault_operations.rs
 ```
 
+## Surfpool Regression
+
+Surfpool regression tests assume you have already started a mainnet fork with Studio enabled. The runner only checks the existing RPC/Studio endpoints, builds the current OnRe program, patches fork governance, upgrades the forked program, funds local test balances, and runs the regression scenarios.
+
+```bash
+pnpm surfpool:regression
+```
+
+Useful environment overrides:
+
+```bash
+SURFPOOL_RPC_URL=http://127.0.0.1:8899
+SURFPOOL_STUDIO_URL=http://127.0.0.1:18488
+SURFPOOL_REGRESSION_UPGRADE_AUTHORITY_KEYPAIR=~/.config/solana/id.json
+SURFPOOL_REGRESSION_SKIP_BUILD=1
+SURFPOOL_REGRESSION_SKIP_DEPLOY=1
+```
+
 ## Coverage
 
 Coverage uses the Rust LiteSVM trace flow documented in `COVERAGE.md`. It requires external tools:
