@@ -25,7 +25,6 @@ const ONYC_BASE_UNITS = 10 ** TOKEN_DECIMALS.onyc;
 export const ACTIVE_OFFERS = [
     { symbol: "USDC", key: "usdc", mint: MINTS.usdc },
     { symbol: "USDG", key: "usdg", mint: MINTS.usdg },
-    { symbol: "USDT", key: "usdt", mint: MINTS.usdt },
 ] as const;
 
 export const ACTIVE_REDEMPTIONS = [
