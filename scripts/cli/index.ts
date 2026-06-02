@@ -37,7 +37,8 @@ async function main() {
         .option("-n, --network <network>", "Network to use (mainnet-prod, mainnet-test, mainnet-dev, devnet-test, devnet-dev)")
         .option("--json", "Output in JSON format")
         .option("--dry-run", "Generate transaction without execution prompt")
-        .option("--no-interactive", "Disable interactive prompts (require all params as flags)");
+        .option("--no-interactive", "Disable interactive prompts (require all params as flags)")
+        .option("--yes", "Sign and send locally without confirmation prompts");
 
     // Register command groups
     const stateCmd = program.command("state").description("Manage program state (boss, admins, approvers, kill switch)");

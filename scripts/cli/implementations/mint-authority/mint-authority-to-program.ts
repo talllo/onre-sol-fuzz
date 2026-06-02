@@ -20,7 +20,7 @@ export async function executeMintAuthorityToProgram(opts: GlobalOptions & Record
         }
 
         // Confirm dangerous action (skip in dry-run mode)
-        if (!opts.dryRun) {
+        if (!opts.dryRun && !opts.yes) {
             const confirmed = await confirmDangerousOperation(chalk.yellow("This will generate a transaction to transfer mint authority to the program. Continue?"));
 
             if (!confirmed) {
