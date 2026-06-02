@@ -72,6 +72,9 @@ export function validateTimestamp(value: string | number): boolean | string {
         if (value.toLowerCase() === "now") {
             return true;
         }
+        if (/^\d+$/.test(value.trim())) {
+            return true;
+        }
         const date = new Date(value);
         if (isNaN(date.getTime())) {
             return "Invalid date format. Use ISO format (e.g., 2025-06-01T00:00:00Z) or 'now'";
@@ -110,6 +113,9 @@ export function parseTimestamp(value: string | number): number {
     }
     if (value.toLowerCase() === "now") {
         return Math.floor(Date.now() / 1000);
+    }
+    if (/^\d+$/.test(value.trim())) {
+        return parseInt(value, 10);
     }
     return Math.floor(new Date(value).getTime() / 1000);
 }

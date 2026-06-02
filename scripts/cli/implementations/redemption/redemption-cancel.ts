@@ -1,6 +1,7 @@
 import type { GlobalOptions } from "../../prompts";
 import { buildAndHandleTransaction, executeCommand } from "../../helpers";
 import { requestParams } from "../../params";
+import { getTokenProgramId } from "../../utils/token-utils";
 
 /**
  * Execute redemption cancel command
@@ -11,7 +12,7 @@ export async function executeRedemptionCancel(opts: GlobalOptions & Record<strin
 
         await buildAndHandleTransaction(context, {
             buildIx: async (helper) => {
-                const requester = await helper.getBoss();
+                const requester = helper.wallet.publicKey;
                 const redemptionOfferPda = helper.getRedemptionOfferPda(params.tokenIn, params.tokenOut);
                 const redemptionRequestPda = helper.getRedemptionRequestPda(redemptionOfferPda, params.requestId);
 
@@ -19,10 +20,13 @@ export async function executeRedemptionCancel(opts: GlobalOptions & Record<strin
                     redemptionOfferPda,
                     redemptionRequestPda,
                     signer: requester,
+                    tokenInMint: params.tokenIn,
+                    tokenProgram: getTokenProgramId(params.tokenIn),
                 });
             },
             title: "Cancel Redemption Request Transaction",
             description: `Cancels redemption request #${params.requestId}`,
+            payer: context.helper.wallet.publicKey,
             showParamSummary: {
                 title: "Cancelling redemption request:",
                 params: {

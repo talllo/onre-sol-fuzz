@@ -38,6 +38,11 @@ export async function promptForParams(
             throw new Error(`Missing required parameter: ${param.name} (${param.flag || param.name})`);
         }
 
+        if (noInteractive && !param.required) {
+            result[param.name] = undefined;
+            continue;
+        }
+
         // Prompt for the value
         result[param.name] = await promptForSingleParam(param, config);
     }
