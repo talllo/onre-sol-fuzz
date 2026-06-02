@@ -7,6 +7,7 @@ import {
     executeOfferFetch,
     executeOfferList,
     executeOfferMake,
+    executeOfferSetDisabled,
     executeOfferTake,
     executeOfferUpdateFee,
 } from "../implementations";
@@ -99,6 +100,18 @@ export function registerOfferCommands(program: Command): void {
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeOfferUpdateFee(opts);
+        });
+
+    // offer set-disabled
+    program
+        .command("set-disabled")
+        .description("Enable or disable an offer")
+        .option("-i, --token-in <mint>", "Token in mint")
+        .option("-o, --token-out <mint>", "Token out mint")
+        .option("--disabled <boolean>", "Disabled state (true/false)")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeOfferSetDisabled(opts);
         });
 
     // offer delete-all-vectors

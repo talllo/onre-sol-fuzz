@@ -91,6 +91,28 @@ export const updateRedemptionFeeParams: ParamDefinition[] = [
     },
 ];
 
+export const setRedemptionDisabledParams: ParamDefinition[] = [
+    ...redemptionTokenPairParams,
+    {
+        name: "disabled",
+        type: "boolean",
+        description: "Whether the redemption offer should be disabled",
+        required: true,
+        flag: "--disabled",
+    },
+];
+
+export const updateRedemptionVaultTargetParams: ParamDefinition[] = [
+    ...redemptionTokenPairParams,
+    {
+        name: "vaultTargetBps",
+        type: "string",
+        description: "New redemption vault target in basis points",
+        required: true,
+        flag: "--target-bps",
+        transform: (value: any) => parseInt(value, 10),
+    },
+];
 
 export const listRequestsParams: ParamDefinition[] = [
     ...redemptionTokenPairParams,

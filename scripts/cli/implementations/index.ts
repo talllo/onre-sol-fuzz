@@ -37,6 +37,7 @@ export { executeOfferAddVector } from "./offer/offer-add-vector";
 export { executeOfferDeleteVector } from "./offer/offer-delete-vector";
 export { executeOfferUpdateFee } from "./offer/offer-update-fee";
 export { executeOfferDeleteAllVectors } from "./offer/offer-delete-all-vectors";
+export { executeOfferSetDisabled } from "./offer/offer-set-disabled";
 
 // Redemption implementations
 export { executeRedemptionMakeOffer } from "./redemption/redemption-make-offer";
@@ -49,6 +50,8 @@ export { executeRedemptionFulfill } from "./redemption/redemption-fulfill";
 export { executeRedemptionCancel } from "./redemption/redemption-cancel";
 export { executeRedemptionListRequests } from "./redemption/redemption-list-requests";
 export { executeRedemptionFetchVaults } from "./redemption/redemption-fetch-vaults";
+export { executeRedemptionSetDisabled } from "./redemption/redemption-set-disabled";
+export { executeRedemptionUpdateVaultTarget } from "./redemption/redemption-update-vault-target";
 
 // Program implementations
 export { executeProgramExtend } from "./program/program-extend";

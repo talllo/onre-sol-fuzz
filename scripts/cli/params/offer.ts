@@ -91,6 +91,17 @@ export const updateFeeParams: ParamDefinition[] = [
     },
 ];
 
+export const setOfferDisabledParams: ParamDefinition[] = [
+    ...tokenPairParams,
+    {
+        name: "disabled",
+        type: "boolean",
+        description: "Whether the offer should be disabled",
+        required: true,
+        flag: "--disabled",
+    },
+];
+
 export const takeOfferParams: ParamDefinition[] = [
     ...tokenPairParams,
     {

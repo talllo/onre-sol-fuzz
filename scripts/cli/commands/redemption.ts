@@ -10,7 +10,9 @@ import {
     executeRedemptionListOffers,
     executeRedemptionListRequests,
     executeRedemptionMakeOffer,
+    executeRedemptionSetDisabled,
     executeRedemptionUpdateFee,
+    executeRedemptionUpdateVaultTarget,
 } from "../implementations";
 
 /**
@@ -59,6 +61,30 @@ export function registerRedemptionCommands(program: Command): void {
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeRedemptionUpdateFee(opts);
+        });
+
+    // redemption update-vault-target
+    program
+        .command("update-vault-target")
+        .description("Update redemption offer vault target")
+        .option("-i, --token-in <mint>", "Token in mint (ONyc)")
+        .option("-o, --token-out <mint>", "Token out mint (USDC)")
+        .option("--target-bps <bps>", "New vault target in basis points")
+        .action(async (options, cmd) => {
+            const opts = { ...options, vaultTargetBps: options.targetBps, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeRedemptionUpdateVaultTarget(opts);
+        });
+
+    // redemption set-disabled
+    program
+        .command("set-disabled")
+        .description("Enable or disable a redemption offer")
+        .option("-i, --token-in <mint>", "Token in mint (ONyc)")
+        .option("-o, --token-out <mint>", "Token out mint (USDC)")
+        .option("--disabled <boolean>", "Disabled state (true/false)")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeRedemptionSetDisabled(opts);
         });
 
     // redemption create-request
