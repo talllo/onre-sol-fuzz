@@ -1,13 +1,13 @@
 import type { GlobalOptions } from "../../prompts";
 import { buildAndHandleTransaction, executeCommand } from "../../helpers";
-import { mintParams } from "../../params";
+import { transferMintAuthorityParams } from "../../params";
 import { getTokenProgramId } from "../../utils/token-utils";
 
 /**
  * Execute mint-authority to-boss command
  */
 export async function executeMintAuthorityToBoss(opts: GlobalOptions & Record<string, any>): Promise<void> {
-    await executeCommand(opts, mintParams, async (context) => {
+    await executeCommand(opts, transferMintAuthorityParams, async (context) => {
         const { params } = context;
 
         await buildAndHandleTransaction(context, {

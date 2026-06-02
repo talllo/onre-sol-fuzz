@@ -168,7 +168,7 @@ export function registerStateCommands(program: Command): void {
     program
         .command("set-redemption-admin")
         .description("Set the redemption admin who can fulfill redemption requests")
-        .option("--admin <address>", "Redemption admin public key")
+        .option("--redemption-admin <address>", "Redemption admin public key")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeStateSetRedemptionAdmin(opts);

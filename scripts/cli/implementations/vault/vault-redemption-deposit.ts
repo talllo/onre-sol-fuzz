@@ -16,7 +16,8 @@ export async function executeVaultRedemptionDeposit(opts: GlobalOptions & Record
 
         // Ask who will sign the deposit (before building the instruction, since it
         // affects the depositor account in the instruction and the transaction payer)
-        const depositorMode = opts.noInteractive
+        const noInteractive = opts.noInteractive === true || opts.interactive === false;
+        const depositorMode = noInteractive
             ? "local"
             : await select({
                   message: "Who will be the depositor?",

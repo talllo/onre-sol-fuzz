@@ -3,6 +3,7 @@ import type { GlobalOptions } from "../../prompts";
 import { buildAndHandleTransaction, executeCommand } from "../../helpers";
 import { fulfillRequestParams } from "../../params";
 import { PublicKey } from "@solana/web3.js";
+import { getTokenProgramId } from "../../utils/token-utils";
 
 /**
  * Execute redemption fulfill command
@@ -45,6 +46,10 @@ export async function executeRedemptionFulfill(opts: GlobalOptions & Record<stri
                     redemptionOfferPda,
                     redemptionRequestPda,
                     redemptionAdmin: state.redemptionAdmin,
+                    tokenInMint: params.tokenIn,
+                    tokenOutMint: params.tokenOut,
+                    tokenInProgram: getTokenProgramId(params.tokenIn),
+                    tokenOutProgram: getTokenProgramId(params.tokenOut),
                     amount: fulfillAmount,
                 });
             },
