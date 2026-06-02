@@ -358,4 +358,4 @@ getMarketData();
 
 Check the full IDL for all available instructions and account structures.
 
-For operational examples, use the CLI under `scripts/cli/` or the smoke/vault scripts listed in `README.md`.
+For operational examples, use the CLI under `scripts/cli/`.

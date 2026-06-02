@@ -143,22 +143,7 @@ pnpm cli -n mainnet-prod state get
 | `devnet-test` | Devnet | Test program on devnet |
 | `devnet-dev` | Devnet | Dev program on devnet |
 
-The CLI accepts `NETWORK` or the `-n` / `--network` flag. Standalone scripts read `NETWORK`; the package convenience scripts set it and then run `tsx`:
-
-```bash
-pnpm script:mainnet-prod scripts/smoke/smoke_tests.ts
-pnpm script:devnet-dev scripts/vault_operations/check-all-vault-balances.ts
-```
-
-### Standalone Scripts
-
-Scripts can also be run directly with `tsx`:
-
-```bash
-NETWORK=mainnet-prod pnpm exec tsx scripts/smoke/smoke_tests.ts
-NETWORK=mainnet-prod pnpm exec tsx scripts/vault_operations/check-all-vault-balances.ts
-NETWORK=mainnet-prod pnpm exec tsx scripts/vault_operations/check-redemption-vault-balance.ts
-```
+The CLI accepts `NETWORK` or the `-n` / `--network` flag.
 
 ### BUFFER CLI Notes
 
