@@ -11,6 +11,8 @@ export { executeVaultWithdraw } from "./vault/vault-withdraw";
 export { executeVaultRedemptionDeposit } from "./vault/vault-redemption-deposit";
 export { executeVaultRedemptionWithdraw } from "./vault/vault-redemption-withdraw";
 export { executeVaultList } from "./vault/vault-list";
+export { executeVaultSetConfigurableDestination } from "./vault/vault-set-configurable-destination";
+export { executeVaultWithdrawConfigurable } from "./vault/vault-withdraw-configurable";
 
 // Init implementations
 export { executeInitProgram } from "./init/init-program";
