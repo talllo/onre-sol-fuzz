@@ -16,6 +16,8 @@ export interface SwapQuoteResult {
     quotedAt: BN;
 }
 
+const SWAP_QUOTE_RESULT_SIZE = 152;
+
 function readPubkey(data: Buffer, offset: number): [PublicKey, number] {
     return [new PublicKey(data.subarray(offset, offset + 32)), offset + 32];
 }
@@ -25,6 +27,10 @@ function readU64(data: Buffer, offset: number): [BN, number] {
 }
 
 export function decodeSwapQuote(data: Buffer): SwapQuoteResult {
+    if (data.length < SWAP_QUOTE_RESULT_SIZE) {
+        throw new Error(`Invalid swap quote data length: expected at least ${SWAP_QUOTE_RESULT_SIZE} bytes, got ${data.length}`);
+    }
+
     let offset = 0;
     const [offer, afterOffer] = readPubkey(data, offset);
     offset = afterOffer;

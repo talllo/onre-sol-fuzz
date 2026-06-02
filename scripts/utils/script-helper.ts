@@ -31,6 +31,8 @@ export const config = getNetworkConfig();
 export const USDC_MINT = config.mints.usdc;
 export const ONYC_MINT = config.mints.onyc;
 
+type RawAmount = string | number;
+
 // Re-export for convenience
 export type { NetworkConfig };
 export { NETWORK_CONFIGS, printConfigSummary };
@@ -654,7 +656,7 @@ export class ScriptHelper {
             .instruction();
     }
 
-    async buildDepositReserveVaultIx(params: { onycMint: PublicKey; amount: number; depositor: PublicKey; tokenProgram?: PublicKey }) {
+    async buildDepositReserveVaultIx(params: { onycMint: PublicKey; amount: RawAmount; depositor: PublicKey; tokenProgram?: PublicKey }) {
         const tokenProgram = params.tokenProgram ?? TOKEN_PROGRAM_ID;
         return await this.program.methods
             .depositReserveVault(new BN(params.amount))
@@ -672,7 +674,7 @@ export class ScriptHelper {
             .instruction();
     }
 
-    async buildWithdrawReserveVaultIx(params: { onycMint: PublicKey; amount: number; boss: PublicKey; tokenProgram?: PublicKey }) {
+    async buildWithdrawReserveVaultIx(params: { onycMint: PublicKey; amount: RawAmount; boss: PublicKey; tokenProgram?: PublicKey }) {
         const tokenProgram = params.tokenProgram ?? TOKEN_PROGRAM_ID;
         return await this.program.methods
             .withdrawReserveVault(new BN(params.amount))

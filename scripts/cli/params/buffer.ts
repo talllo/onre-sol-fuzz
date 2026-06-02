@@ -59,7 +59,7 @@ export const bufferReserveVaultParams: ParamDefinition[] = [
     },
     {
         name: "amount",
-        type: "amount",
+        type: "u64",
         description: "Amount of ONyc to move (raw)",
         required: true,
         flag: "--amount",
