@@ -552,6 +552,68 @@ export class ScriptHelper {
             .instruction();
     }
 
+    async buildSetBufferFeeConfigIx(params: { managementFeeBps: number; performanceFeeBps: number; boss: PublicKey }) {
+        const state = await this.getState();
+        const onycMint = state.onycMint as PublicKey;
+
+        return await this.program.methods
+            .setBufferFeeConfig(params.managementFeeBps, params.performanceFeeBps)
+            .accountsPartial({
+                boss: params.boss,
+                mainOffer: state.mainOffer as PublicKey,
+                onycMint,
+                offerVaultAuthority: this.pdas.offerVaultAuthorityPda,
+                mintAuthority: this.pdas.mintAuthorityPda,
+                bufferAccounts: {
+                    bufferState: this.pdas.bufferStatePda,
+                    reserveVaultOnycAccount: this.getBufferVaultAta(onycMint),
+                    managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(onycMint),
+                    performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(onycMint),
+                },
+                tokenProgram: TOKEN_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
+                marketStats: this.pdas.marketStatsPda,
+                circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
+            })
+            .instruction();
+    }
+
+    async buildDepositReserveVaultIx(params: { onycMint: PublicKey; amount: number; depositor: PublicKey; tokenProgram?: PublicKey }) {
+        const tokenProgram = params.tokenProgram ?? TOKEN_PROGRAM_ID;
+        return await this.program.methods
+            .depositReserveVault(new BN(params.amount))
+            .accountsPartial({
+                bufferState: this.pdas.bufferStatePda,
+                reserveVaultAuthority: this.pdas.reserveVaultAuthorityPda,
+                onycMint: params.onycMint,
+                depositorOnycAccount: getAssociatedTokenAddressSync(params.onycMint, params.depositor, false, tokenProgram),
+                reserveVaultOnycAccount: getAssociatedTokenAddressSync(params.onycMint, this.pdas.reserveVaultAuthorityPda, true, tokenProgram),
+                depositor: params.depositor,
+                tokenProgram,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .instruction();
+    }
+
+    async buildWithdrawReserveVaultIx(params: { onycMint: PublicKey; amount: number; boss: PublicKey; tokenProgram?: PublicKey }) {
+        const tokenProgram = params.tokenProgram ?? TOKEN_PROGRAM_ID;
+        return await this.program.methods
+            .withdrawReserveVault(new BN(params.amount))
+            .accountsPartial({
+                bufferState: this.pdas.bufferStatePda,
+                reserveVaultAuthority: this.pdas.reserveVaultAuthorityPda,
+                onycMint: params.onycMint,
+                bossOnycAccount: getAssociatedTokenAddressSync(params.onycMint, params.boss, false, tokenProgram),
+                reserveVaultOnycAccount: getAssociatedTokenAddressSync(params.onycMint, this.pdas.reserveVaultAuthorityPda, true, tokenProgram),
+                boss: params.boss,
+                tokenProgram,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .instruction();
+    }
+
     async buildBurnForNavIncreaseIx(params: { onycMint: PublicKey; assetAdjustmentAmount: number; boss: PublicKey; mainOffer: PublicKey }) {
         return await this.program.methods
             .burnForNavIncrease(new BN(params.assetAdjustmentAmount))

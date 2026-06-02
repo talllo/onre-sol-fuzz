@@ -29,6 +29,44 @@ export const bufferGrossYieldParams: ParamDefinition[] = [
     },
 ];
 
+export const bufferFeeConfigParams: ParamDefinition[] = [
+    {
+        name: "managementFeeBps",
+        type: "string",
+        description: "Management fee in basis points",
+        required: true,
+        flag: "--management-fee-bps",
+        transform: (value: any) => parseInt(value, 10),
+    },
+    {
+        name: "performanceFeeBps",
+        type: "string",
+        description: "Performance fee in basis points",
+        required: true,
+        flag: "--performance-fee-bps",
+        transform: (value: any) => parseInt(value, 10),
+    },
+];
+
+export const bufferReserveVaultParams: ParamDefinition[] = [
+    {
+        name: "onycMint",
+        type: "mint",
+        description: "ONyc mint address",
+        required: true,
+        flag: "--onyc-mint",
+        default: (cfg: NetworkConfig) => cfg.mints.onyc,
+    },
+    {
+        name: "amount",
+        type: "amount",
+        description: "Amount of ONyc to move (raw)",
+        required: true,
+        flag: "--amount",
+        shortFlag: "-a",
+    },
+];
+
 export const bufferBurnParams: ParamDefinition[] = [
     {
         name: "tokenIn",

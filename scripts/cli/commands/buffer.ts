@@ -4,6 +4,9 @@ import {
     executeBufferBurn,
     executeBufferGet,
     executeBufferInitialize,
+    executeBufferReserveDeposit,
+    executeBufferReserveWithdraw,
+    executeBufferSetFees,
     executeBufferSetYields,
 } from "../implementations";
 
@@ -33,6 +36,36 @@ export function registerBufferCommands(program: Command): void {
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeBufferSetYields(opts);
+        });
+
+    program
+        .command("set-fees")
+        .description("Set BUFFER management and performance fees")
+        .option("--management-fee-bps <bps>", "Management fee in basis points")
+        .option("--performance-fee-bps <bps>", "Performance fee in basis points")
+        .action(async (options, cmd) => {
+            const opts = { ...options, managementFeeBps: options.managementFeeBps, performanceFeeBps: options.performanceFeeBps, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeBufferSetFees(opts);
+        });
+
+    program
+        .command("reserve-deposit")
+        .description("Deposit ONyc into the BUFFER reserve vault")
+        .option("--onyc-mint <address>", "ONyc mint")
+        .option("-a, --amount <value>", "Amount to deposit (raw)")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeBufferReserveDeposit(opts);
+        });
+
+    program
+        .command("reserve-withdraw")
+        .description("Withdraw ONyc from the BUFFER reserve vault")
+        .option("--onyc-mint <address>", "ONyc mint")
+        .option("-a, --amount <value>", "Amount to withdraw (raw)")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeBufferReserveWithdraw(opts);
         });
 
     program
