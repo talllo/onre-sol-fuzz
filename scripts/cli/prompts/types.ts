@@ -54,6 +54,7 @@ export interface PromptResult {
  */
 export interface GlobalOptions {
     network?: string;
+    wallet?: string;
     json?: boolean;
     dryRun?: boolean;
     noInteractive?: boolean;

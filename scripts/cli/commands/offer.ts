@@ -58,6 +58,7 @@ export function registerOfferCommands(program: Command): void {
         .option("-o, --token-out <mint>", "Token out mint")
         .option("-a, --amount <amount>", "Amount of token in to provide")
         .option("--permissionless", "Use permissionless flow")
+        .option("--legacy", "Use legacy take_offer instruction instead of take_offer_v2")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeOfferTake(opts);

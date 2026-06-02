@@ -35,6 +35,7 @@ async function main() {
         .description("CLI tool for managing OnRE tokenized (re)insurance pool")
         .version("1.0.0")
         .option("-n, --network <network>", "Network to use (mainnet-prod, mainnet-test, mainnet-dev, devnet-test, devnet-dev)")
+        .option("-w, --wallet <path>", "Wallet keypair path or ~/.config/solana/<name>.json")
         .option("--json", "Output in JSON format")
         .option("--dry-run", "Generate transaction without execution prompt")
         .option("--no-interactive", "Disable interactive prompts (require all params as flags)")
