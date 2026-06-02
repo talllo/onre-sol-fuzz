@@ -88,3 +88,10 @@ export { executeBufferSetFees } from "./buffer/buffer-set-fees";
 export { executeBufferReserveDeposit } from "./buffer/buffer-reserve-deposit";
 export { executeBufferReserveWithdraw } from "./buffer/buffer-reserve-withdraw";
 export { executeBufferBurn } from "./buffer/buffer-burn";
+
+// Prop AMM implementations
+export { executePropAmmConfigure } from "./prop-amm/prop-amm-configure";
+export { executePropAmmQuoteBuy } from "./prop-amm/prop-amm-quote-buy";
+export { executePropAmmQuoteSell } from "./prop-amm/prop-amm-quote-sell";
+export { executePropAmmBuy } from "./prop-amm/prop-amm-buy";
+export { executePropAmmSell } from "./prop-amm/prop-amm-sell";

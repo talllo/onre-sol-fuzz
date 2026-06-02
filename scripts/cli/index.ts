@@ -24,6 +24,7 @@ async function main() {
         registerInitCommands,
         registerProgramCommands,
         registerBufferCommands,
+        registerPropAmmCommands,
     } = await import("./commands/index.js");
 
     // Create the main program
@@ -62,6 +63,9 @@ async function main() {
 
     const bufferCmd = program.command("buffer").description("BUFFER pool operations");
     registerBufferCommands(bufferCmd);
+
+    const propAmmCmd = program.command("prop-amm").description("Prop AMM configuration, quotes, and swaps");
+    registerPropAmmCommands(propAmmCmd);
 
     const programCmd = program.command("program").description("Program management (extend data account)");
     registerProgramCommands(programCmd);
