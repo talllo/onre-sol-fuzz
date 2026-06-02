@@ -41,7 +41,8 @@ export async function executeCommand<T extends Record<string, any>>(
         const helper = await ScriptHelper.create();
 
         // Prompt for missing parameters
-        const params = (await promptForParams(paramDefs, opts, config, opts.noInteractive)) as T;
+        const noInteractive = opts.noInteractive === true || opts.interactive === false;
+        const params = (await promptForParams(paramDefs, opts, config, noInteractive)) as T;
 
         // Execute the command handler with context
         await handler({ helper, params, opts });

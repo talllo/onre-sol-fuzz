@@ -384,14 +384,45 @@ export class ScriptHelper {
         tokenInProgram?: PublicKey;
         tokenOutProgram?: PublicKey;
     }) {
+        const tokenInProgram = params.tokenInProgram ?? TOKEN_PROGRAM_ID;
+        const tokenOutProgram = params.tokenOutProgram ?? TOKEN_PROGRAM_ID;
+        const state = await this.getState();
+
         return await this.program.methods
-            .takeOffer(new BN(params.tokenInAmount), null)
+            .takeOfferV2(new BN(params.tokenInAmount), null)
             .accountsPartial({
+                offer: this.getOfferPda(params.tokenInMint, params.tokenOutMint),
+                state: this.statePda,
+                vaultAuthority: this.pdas.offerVaultAuthorityPda,
+                vaultTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, this.pdas.offerVaultAuthorityPda, true, tokenInProgram),
+                vaultTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, this.pdas.offerVaultAuthorityPda, true, tokenOutProgram),
                 tokenInMint: params.tokenInMint,
+                tokenInProgram,
                 tokenOutMint: params.tokenOutMint,
+                tokenOutProgram,
                 user: params.user,
-                tokenInProgram: params.tokenInProgram ?? TOKEN_PROGRAM_ID,
-                tokenOutProgram: params.tokenOutProgram ?? TOKEN_PROGRAM_ID,
+                userTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, params.user, false, tokenInProgram),
+                userTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, params.user, false, tokenOutProgram),
+                redemptionOffer: this.getRedemptionOfferPda(params.tokenOutMint, params.tokenInMint),
+                redemptionVaultAuthority: this.pdas.redemptionVaultAuthorityPda,
+                redemptionVaultTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, this.pdas.redemptionVaultAuthorityPda, true, tokenInProgram),
+                offerProceedsVault: this.getConfigurableVaultPda("offer-proceeds"),
+                offerProceedsTokenInAccount: this.getConfigurableVaultAta("offer-proceeds", params.tokenInMint, tokenInProgram),
+                offerFeeVault: this.getConfigurableVaultPda("offer-fee"),
+                offerFeeTokenInAccount: this.getConfigurableVaultAta("offer-fee", params.tokenInMint, tokenInProgram),
+                mintAuthority: this.pdas.mintAuthorityPda,
+                bufferAccounts: {
+                    bufferState: this.pdas.bufferStatePda,
+                    reserveVaultOnycAccount: this.getBufferVaultAta(params.tokenOutMint),
+                    managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(params.tokenOutMint),
+                    performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(params.tokenOutMint),
+                },
+                marketStats: this.pdas.marketStatsPda,
+                circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
+                instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
+                mainOffer: state.mainOffer as PublicKey,
             })
             .instruction();
     }
