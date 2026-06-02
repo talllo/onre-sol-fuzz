@@ -8,12 +8,16 @@ import {
     executeStateClose,
     executeStateGet,
     executeStateKillSwitch,
+    executeStateMaxMintAmount,
     executeStateMaxSupply,
     executeStateProposeBoss,
     executeStateRemoveAdmin,
     executeStateRemoveApprover,
+    executeStateSetExcludedOwners,
+    executeStateSetMainOffer,
     executeStateSetOnycMint,
     executeStateSetRedemptionAdmin,
+    executeStateUpdateExcludedBalance,
 } from "../implementations";
 
 /**
@@ -118,6 +122,46 @@ export function registerStateCommands(program: Command): void {
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeStateMaxSupply(opts);
+        });
+
+    // state max-mint-amount
+    program
+        .command("max-mint-amount")
+        .description("Configure maximum ONyc mint amount per instruction")
+        .option("--amount <value>", "Maximum mint amount (raw)")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeStateMaxMintAmount(opts);
+        });
+
+    // state set-main-offer
+    program
+        .command("set-main-offer")
+        .description("Set the main offer used for market stats and BUFFER accrual")
+        .option("--offer <address>", "Main offer PDA")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeStateSetMainOffer(opts);
+        });
+
+    // state set-excluded-owners
+    program
+        .command("set-excluded-owners")
+        .description("Configure circulating supply excluded owners")
+        .option("--owners <addresses>", "Comma-separated owner public keys")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeStateSetExcludedOwners(opts);
+        });
+
+    // state update-excluded-balance
+    program
+        .command("update-excluded-balance")
+        .description("Recompute circulating supply excluded balance")
+        .option("--onyc-mint <address>", "ONyc mint public key")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeStateUpdateExcludedBalance(opts);
         });
 
     // state set-redemption-admin
