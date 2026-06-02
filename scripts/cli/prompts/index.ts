@@ -121,6 +121,7 @@ async function promptMint(message: string, config: NetworkConfig, defaultValue?:
     let defaultChoice = "custom";
     if (defaultValue) {
         if (defaultValue.equals(config.mints.usdc)) defaultChoice = "usdc";
+        else if (config.mints.usdt && defaultValue.equals(config.mints.usdt)) defaultChoice = "usdt";
         else if (defaultValue.equals(config.mints.onyc)) defaultChoice = "onyc";
         else if (defaultValue.equals(config.mints.usdg)) defaultChoice = "usdg";
     }
@@ -130,6 +131,14 @@ async function promptMint(message: string, config: NetworkConfig, defaultValue?:
             name: `USDC  ${chalk.gray(config.mints.usdc.toBase58().slice(0, 8) + "...")}`,
             value: "usdc",
         },
+        ...(config.mints.usdt
+            ? [
+                {
+                    name: `USDT  ${chalk.gray(config.mints.usdt.toBase58().slice(0, 8) + "...")}`,
+                    value: "usdt",
+                },
+            ]
+            : []),
         {
             name: `ONyc  ${chalk.gray(config.mints.onyc.toBase58().slice(0, 8) + "...")}`,
             value: "onyc",
@@ -159,7 +168,11 @@ async function promptMint(message: string, config: NetworkConfig, defaultValue?:
         return new PublicKey(address.trim());
     }
 
-    return config.mints[selection as keyof typeof config.mints];
+    const mint = config.mints[selection as keyof typeof config.mints];
+    if (!mint) {
+        throw new Error(`${selection.toUpperCase()} mint is not configured for ${config.name}`);
+    }
+    return mint;
 }
 
 /**
@@ -272,6 +285,12 @@ function transformValue(value: any, param: ParamDefinition, config: NetworkConfi
                 // Check for known mint aliases
                 const lower = value.toLowerCase();
                 if (lower === "usdc") return config.mints.usdc;
+                if (lower === "usdt") {
+                    if (!config.mints.usdt) {
+                        throw new Error(`USDT mint is not configured for ${config.name}`);
+                    }
+                    return config.mints.usdt;
+                }
                 if (lower === "onyc") return config.mints.onyc;
                 if (lower === "usdg") return config.mints.usdg;
                 return new PublicKey(value);

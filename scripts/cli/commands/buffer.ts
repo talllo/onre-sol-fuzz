@@ -71,7 +71,7 @@ export function registerBufferCommands(program: Command): void {
     program
         .command("burn")
         .description("Burn from BUFFER to support NAV increase")
-        .option("--token-in <address>", "Offer token-in mint (e.g. USDC)")
+        .option("--token-in <address>", "Offer token-in mint (e.g. USDC or USDT)")
         .option("--asset-adjustment-amount <value>", "Asset adjustment amount (raw)")
         .option("--target-nav <value>", "Target NAV (raw)")
         .option("--onyc-mint <address>", "ONyc mint")

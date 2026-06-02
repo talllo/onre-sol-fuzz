@@ -21,6 +21,7 @@ export async function executeRedemptionFetchVaults(opts: GlobalOptions & Record<
 
         const mints = [
             { name: "USDC", mint: config.mints.usdc },
+            ...(config.mints.usdt ? [{ name: "USDT", mint: config.mints.usdt }] : []),
             { name: "USDG", mint: config.mints.usdg },
             { name: "ONyc", mint: config.mints.onyc },
         ];

@@ -24,6 +24,7 @@ export interface NetworkConfig {
     /** Token mint addresses */
     mints: {
         usdc: PublicKey;
+        usdt?: PublicKey;
         onyc: PublicKey;
         usdg: PublicKey;
     };
@@ -45,6 +46,7 @@ const DEV_PROGRAM_ID = new PublicKey("devHfQHgiFNifkLW49RCXpyTUZMyKuBNnFSbrQ8Xsb
 
 // Token mints - mainnet
 const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const USDT_MINT = new PublicKey("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB");
 const ONYC_MINT = new PublicKey("5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5");
 const USDG_MINT = new PublicKey("2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH");
 
@@ -70,6 +72,7 @@ export const NETWORK_CONFIGS: Record<NetworkName, NetworkConfig> = {
         boss: PROD_SQUAD,
         mints: {
             usdc: USDC_MINT,
+            usdt: USDT_MINT,
             onyc: ONYC_MINT,
             usdg: USDG_MINT
         }
@@ -162,6 +165,9 @@ export function printConfigSummary(config: NetworkConfig): void {
     console.log(`  Program: ${config.programId.toBase58()}`);
     console.log(`  Boss:    ${config.boss.toBase58()}`);
     console.log(`  USDC:    ${config.mints.usdc.toBase58()}`);
+    if (config.mints.usdt) {
+        console.log(`  USDT:    ${config.mints.usdt.toBase58()}`);
+    }
     console.log(`  ONyc:    ${config.mints.onyc.toBase58()}`);
     console.log(`  USDG:    ${config.mints.usdg.toBase58()}`);
     console.log("═══════════════════════════════════════════════════════════════\n");

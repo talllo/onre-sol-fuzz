@@ -20,7 +20,7 @@ const redemptionTokenPairParams: ParamDefinition[] = [
     {
         name: "tokenOut",
         type: "mint",
-        description: "Token out mint (USDC for redemptions)",
+        description: "Token out mint (USDC or USDT for redemptions)",
         required: true,
         flag: "--token-out",
         shortFlag: "-o",

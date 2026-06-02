@@ -19,8 +19,8 @@ export function registerMarketCommands(program: Command): void {
     program
         .command("nav")
         .description("Get current NAV (Net Asset Value) for an offer")
-        .option("-i, --token-in <mint>", "Token in mint (usdc, onyc, usdg, or address)")
-        .option("-o, --token-out <mint>", "Token out mint (usdc, onyc, usdg, or address)")
+        .option("-i, --token-in <mint>", "Token in mint (usdc, usdt, onyc, usdg, or address)")
+        .option("-o, --token-out <mint>", "Token out mint (usdc, usdt, onyc, usdg, or address)")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeMarketNav(opts);
@@ -30,8 +30,8 @@ export function registerMarketCommands(program: Command): void {
     program
         .command("nav-adjustment")
         .description("Get NAV adjustment (price change) for an offer")
-        .option("-i, --token-in <mint>", "Token in mint (usdc, onyc, usdg, or address)")
-        .option("-o, --token-out <mint>", "Token out mint (usdc, onyc, usdg, or address)")
+        .option("-i, --token-in <mint>", "Token in mint (usdc, usdt, onyc, usdg, or address)")
+        .option("-o, --token-out <mint>", "Token out mint (usdc, usdt, onyc, usdg, or address)")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeMarketNavAdjustment(opts);

@@ -5,7 +5,7 @@ import type { NetworkConfig } from "../../utils/script-helper";
  */
 export type ParamType =
     | "publicKey" // Solana PublicKey
-    | "mint" // Mint selection (usdc, onyc, usdg, or custom)
+    | "mint" // Mint selection (usdc, usdt, onyc, usdg, or custom)
     | "amount" // Token amount (raw integer, fits in JS number < 2^53)
     | "u64" // Large token amount as string (supports values >= 2^53)
     | "basisPoints" // Fee in basis points (0-1000)

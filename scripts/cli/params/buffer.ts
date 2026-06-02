@@ -71,7 +71,7 @@ export const bufferBurnParams: ParamDefinition[] = [
     {
         name: "tokenIn",
         type: "mint",
-        description: "Offer token-in mint used for NAV/TVL context (e.g. USDC)",
+        description: "Offer token-in mint used for NAV/TVL context (e.g. USDC or USDT)",
         required: true,
         flag: "--token-in",
         default: (cfg: NetworkConfig) => cfg.mints.usdc,
