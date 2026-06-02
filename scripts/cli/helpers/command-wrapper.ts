@@ -38,7 +38,7 @@ export async function executeCommand<T extends Record<string, any>>(
         }
 
         // Initialize script helper
-        const helper = await ScriptHelper.create();
+        const helper = await ScriptHelper.create(opts.wallet);
 
         // Prompt for missing parameters
         const noInteractive = opts.noInteractive === true || opts.interactive === false;

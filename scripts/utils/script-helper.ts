@@ -377,8 +377,50 @@ export class ScriptHelper {
             .instruction();
     }
 
+    async buildTakeOfferLegacyIxs(params: {
+        tokenInAmount: RawAmount;
+        tokenInMint: PublicKey;
+        tokenOutMint: PublicKey;
+        user: PublicKey;
+        approvalMessage?: any;
+        tokenInProgram?: PublicKey;
+        tokenOutProgram?: PublicKey;
+    }) {
+        const tokenInProgram = params.tokenInProgram ?? TOKEN_PROGRAM_ID;
+        const tokenOutProgram = params.tokenOutProgram ?? TOKEN_PROGRAM_ID;
+        const boss = await this.getBoss();
+        const bossTokenInAccount = getAssociatedTokenAddressSync(params.tokenInMint, boss, false, tokenInProgram);
+        const createBossTokenInIx = createAssociatedTokenAccountIdempotentInstruction(params.user, bossTokenInAccount, boss, params.tokenInMint, tokenInProgram);
+
+        const takeIx = await this.program.methods
+            .takeOffer(new BN(params.tokenInAmount), params.approvalMessage ?? null)
+            .accountsPartial({
+                offer: this.getOfferPda(params.tokenInMint, params.tokenOutMint),
+                state: this.statePda,
+                boss,
+                vaultAuthority: this.pdas.offerVaultAuthorityPda,
+                vaultTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, this.pdas.offerVaultAuthorityPda, true, tokenInProgram),
+                vaultTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, this.pdas.offerVaultAuthorityPda, true, tokenOutProgram),
+                tokenInMint: params.tokenInMint,
+                tokenInProgram,
+                tokenOutMint: params.tokenOutMint,
+                tokenOutProgram,
+                userTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, params.user, false, tokenInProgram),
+                userTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, params.user, false, tokenOutProgram),
+                bossTokenInAccount,
+                mintAuthority: this.pdas.mintAuthorityPda,
+                instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+                user: params.user,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .instruction();
+
+        return [createBossTokenInIx, takeIx];
+    }
+
     async buildTakeOfferIx(params: {
-        tokenInAmount: number;
+        tokenInAmount: RawAmount;
         tokenInMint: PublicKey;
         tokenOutMint: PublicKey;
         user: PublicKey;
@@ -391,7 +433,7 @@ export class ScriptHelper {
         const state = await this.getState();
 
         return await this.program.methods
-            .takeOfferV2(new BN(params.tokenInAmount), null)
+            .takeOfferV2(new BN(params.tokenInAmount), params.approvalMessage ?? null)
             .accountsPartial({
                 offer: this.getOfferPda(params.tokenInMint, params.tokenOutMint),
                 state: this.statePda,
@@ -429,8 +471,62 @@ export class ScriptHelper {
             .instruction();
     }
 
+    async buildTakeOfferPermissionlessLegacyIxs(params: {
+        tokenInAmount: RawAmount;
+        tokenInMint: PublicKey;
+        tokenOutMint: PublicKey;
+        user: PublicKey;
+        approvalMessage?: any;
+        tokenInProgram?: PublicKey;
+        tokenOutProgram?: PublicKey;
+    }) {
+        const vaultAuthority = this.pdas.offerVaultAuthorityPda;
+        const permissionlessAuthority = this.pdas.permissionlessVaultAuthorityPda;
+        const tokenInProgram = params.tokenInProgram ?? TOKEN_PROGRAM_ID;
+        const tokenOutProgram = params.tokenOutProgram ?? TOKEN_PROGRAM_ID;
+        const boss = await this.getBoss();
+        const bossTokenInAccount = getAssociatedTokenAddressSync(params.tokenInMint, boss, false, tokenInProgram);
+        const permissionlessTokenInAccount = getAssociatedTokenAddressSync(params.tokenInMint, permissionlessAuthority, true, tokenInProgram);
+        const permissionlessTokenOutAccount = getAssociatedTokenAddressSync(params.tokenOutMint, permissionlessAuthority, true, tokenOutProgram);
+
+        const setupIxs = [
+            createAssociatedTokenAccountIdempotentInstruction(params.user, bossTokenInAccount, boss, params.tokenInMint, tokenInProgram),
+            createAssociatedTokenAccountIdempotentInstruction(params.user, permissionlessTokenInAccount, permissionlessAuthority, params.tokenInMint, tokenInProgram),
+            createAssociatedTokenAccountIdempotentInstruction(params.user, permissionlessTokenOutAccount, permissionlessAuthority, params.tokenOutMint, tokenOutProgram),
+        ];
+
+        const takeIx = await this.program.methods
+            .takeOfferPermissionless(new BN(params.tokenInAmount), params.approvalMessage ?? null)
+            .accountsPartial({
+                offer: this.getOfferPda(params.tokenInMint, params.tokenOutMint),
+                state: this.statePda,
+                boss,
+                vaultAuthority,
+                vaultTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, vaultAuthority, true, tokenInProgram),
+                vaultTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, vaultAuthority, true, tokenOutProgram),
+                permissionlessAuthority,
+                permissionlessTokenInAccount,
+                permissionlessTokenOutAccount,
+                tokenInMint: params.tokenInMint,
+                tokenInProgram,
+                tokenOutMint: params.tokenOutMint,
+                tokenOutProgram,
+                userTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, params.user, false, tokenInProgram),
+                userTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, params.user, false, tokenOutProgram),
+                bossTokenInAccount,
+                mintAuthority: this.pdas.mintAuthorityPda,
+                instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+                user: params.user,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .instruction();
+
+        return [...setupIxs, takeIx];
+    }
+
     async buildTakeOfferPermissionlessIx(params: {
-        tokenInAmount: number;
+        tokenInAmount: RawAmount;
         tokenInMint: PublicKey;
         tokenOutMint: PublicKey;
         user: PublicKey;
@@ -446,7 +542,7 @@ export class ScriptHelper {
         const state = await this.getState();
 
         return await this.program.methods
-            .takeOfferPermissionlessV2(new BN(params.tokenInAmount), null)
+            .takeOfferPermissionlessV2(new BN(params.tokenInAmount), params.approvalMessage ?? null)
             .accountsPartial({
                 offer: this.getOfferPda(params.tokenInMint, params.tokenOutMint),
                 state: this.statePda,
