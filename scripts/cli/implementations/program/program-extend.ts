@@ -91,10 +91,12 @@ export async function executeProgramExtend(opts: GlobalOptions & Record<string, 
 
         console.log(chalk.gray(`Payer: ${keypair.publicKey.toBase58()} (${helper.walletSource})`));
 
-        const confirmed = await confirm({
-            message: "Send transaction to chain?",
-            default: false
-        });
+        const confirmed = opts.yes
+            ? true
+            : await confirm({
+                  message: "Send transaction to chain?",
+                  default: false
+              });
 
         if (!confirmed) {
             console.log(chalk.yellow("\nTransaction cancelled."));

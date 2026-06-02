@@ -57,4 +57,5 @@ export interface GlobalOptions {
     json?: boolean;
     dryRun?: boolean;
     noInteractive?: boolean;
+    yes?: boolean;
 }

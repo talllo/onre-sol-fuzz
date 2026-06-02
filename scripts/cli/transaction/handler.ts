@@ -28,6 +28,7 @@ export interface TransactionOptions {
     description?: string;
     dryRun?: boolean;
     json?: boolean;
+    yes?: boolean;
 }
 
 interface SerializedTransaction {
@@ -39,7 +40,7 @@ interface SerializedTransaction {
  * Handle transaction workflow: display, prompt for action, execute
  */
 export async function handleTransaction(tx: Transaction, helper: ScriptHelper, options: TransactionOptions): Promise<TransactionResult> {
-    const { title, description, dryRun, json } = options;
+    const { title, description, dryRun, json, yes } = options;
 
     // Serialize transaction
     const serialized = serializeTransactionSafely(tx, helper);
@@ -84,6 +85,10 @@ export async function handleTransaction(tx: Transaction, helper: ScriptHelper, o
             console.log(chalk.gray("Local sign/send will create a v0 address lookup table fallback."));
         }
         return { action: "copied", base58: serialized.base58 };
+    }
+
+    if (yes) {
+        return signAndSendTransaction(tx, helper, true);
     }
 
     // Interactive selection
@@ -177,7 +182,7 @@ async function copyTransaction(base58: string): Promise<TransactionResult> {
 /**
  * Sign transaction locally and send to chain
  */
-async function signAndSendTransaction(tx: Transaction, helper: ScriptHelper): Promise<TransactionResult> {
+async function signAndSendTransaction(tx: Transaction, helper: ScriptHelper, skipConfirm = false): Promise<TransactionResult> {
     let keypair: Keypair;
 
     // Check if ScriptHelper already has a wallet loaded
@@ -225,10 +230,12 @@ async function signAndSendTransaction(tx: Transaction, helper: ScriptHelper): Pr
     }
 
     // Confirm before sending
-    const confirmed = await confirm({
-        message: "Send transaction to chain?",
-        default: false,
-    });
+    const confirmed = skipConfirm
+        ? true
+        : await confirm({
+              message: "Send transaction to chain?",
+              default: false,
+          });
 
     if (!confirmed) {
         console.log(chalk.yellow("\nTransaction cancelled."));

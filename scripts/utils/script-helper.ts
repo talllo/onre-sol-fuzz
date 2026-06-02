@@ -4,7 +4,7 @@ import BN from "bn.js";
 
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { Connection, Keypair, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { ComputeBudgetProgram, Connection, Keypair, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Onreapp } from "../../target/types/onreapp";
 import idl from "../../target/idl/onreapp.json";
@@ -1363,6 +1363,7 @@ export class ScriptHelper {
 
     async prepareTransactionMultipleIxs(params: { ixs: TransactionInstruction[]; payer: PublicKey }) {
         const tx = new Transaction();
+        tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }));
         for (const ix of params.ixs) {
             tx.add(ix);
         }
