@@ -4,7 +4,7 @@ import BN from "bn.js";
 
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Onreapp } from "../../target/types/onreapp";
 import idl from "../../target/idl/onreapp.json";
@@ -228,6 +228,10 @@ export class ScriptHelper {
 
     getRedemptionOfferPda(tokenInMint: PublicKey, tokenOutMint: PublicKey): PublicKey {
         return PublicKey.findProgramAddressSync([Buffer.from("redemption_offer"), tokenInMint.toBuffer(), tokenOutMint.toBuffer()], this.program.programId)[0];
+    }
+
+    getPropAmmPairPda(offer: PublicKey): PublicKey {
+        return PublicKey.findProgramAddressSync([Buffer.from("prop_amm_pair"), offer.toBuffer()], this.program.programId)[0];
     }
 
     getRedemptionRequestPda(redemptionOffer: PublicKey, counter: number): PublicKey {
@@ -811,6 +815,204 @@ export class ScriptHelper {
                 marketStats: this.pdas.marketStatsPda,
                 signer: params.signer,
                 systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .instruction();
+    }
+
+    async buildConfigurePropAmmIx(params: {
+        assetMint: PublicKey;
+        enabled: boolean;
+        curvePegHaircutBps: number;
+        curveExponentScaled: number;
+        minCadenceExponentScaled: number;
+        cadenceThreshold: number;
+        cadenceSensitivityScaled: number;
+        epochDurationSeconds: string;
+        wallSensitivityScaled: number;
+        minimumSellHaircutOnyc: string;
+        boss: PublicKey;
+    }) {
+        const state = await this.getState();
+        const offer = this.getOfferPda(params.assetMint, state.onycMint as PublicKey);
+
+        return await this.program.methods
+            .configurePropAmm(
+                params.enabled,
+                params.curvePegHaircutBps,
+                params.curveExponentScaled,
+                params.minCadenceExponentScaled,
+                params.cadenceThreshold,
+                params.cadenceSensitivityScaled,
+                new BN(params.epochDurationSeconds),
+                params.wallSensitivityScaled,
+                new BN(params.minimumSellHaircutOnyc),
+            )
+            .accountsPartial({
+                state: this.statePda,
+                offer,
+                assetMint: params.assetMint,
+                propAmmPairState: this.getPropAmmPairPda(offer),
+                boss: params.boss,
+                systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .instruction();
+    }
+
+    async buildQuoteSwapBuyIx(params: { tokenInAmount: string; tokenInMint: PublicKey; tokenOutMint: PublicKey }) {
+        const offer = this.getOfferPda(params.tokenInMint, params.tokenOutMint);
+        return await this.program.methods
+            .quoteSwapBuy(new BN(params.tokenInAmount))
+            .accountsPartial({
+                offer,
+                propAmmPairState: this.getPropAmmPairPda(offer),
+                state: this.statePda,
+                tokenInMint: params.tokenInMint,
+                tokenOutMint: params.tokenOutMint,
+            })
+            .instruction();
+    }
+
+    async buildQuoteSwapSellIx(params: { tokenInAmount: string; tokenInMint: PublicKey; tokenOutMint: PublicKey; tokenOutProgram?: PublicKey }) {
+        const state = await this.getState();
+        const onycMint = state.onycMint as PublicKey;
+        if (!params.tokenInMint.equals(onycMint)) {
+            throw new Error("Prop AMM sell quotes must use ONYC as token in");
+        }
+
+        const assetMint = params.tokenOutMint;
+        const offer = this.getOfferPda(assetMint, onycMint);
+        const tokenOutProgram = params.tokenOutProgram ?? TOKEN_PROGRAM_ID;
+
+        return await this.program.methods
+            .quoteSwapSell(new BN(params.tokenInAmount))
+            .accountsPartial({
+                offer,
+                propAmmPairState: this.getPropAmmPairPda(offer),
+                redemptionOffer: this.getRedemptionOfferPda(onycMint, assetMint),
+                state: this.statePda,
+                redemptionVaultAuthority: this.pdas.redemptionVaultAuthorityPda,
+                redemptionVaultTokenOutAccount: getAssociatedTokenAddressSync(assetMint, this.pdas.redemptionVaultAuthorityPda, true, tokenOutProgram),
+                tokenInMint: onycMint,
+                tokenOutMint: assetMint,
+                tokenOutProgram,
+                marketStats: this.pdas.marketStatsPda,
+            })
+            .instruction();
+    }
+
+    async buildOpenSwapBuyIx(params: {
+        tokenInAmount: string;
+        minimumOut: string;
+        tokenInMint: PublicKey;
+        tokenOutMint: PublicKey;
+        user: PublicKey;
+        tokenInProgram?: PublicKey;
+        tokenOutProgram?: PublicKey;
+    }) {
+        const tokenInProgram = params.tokenInProgram ?? TOKEN_PROGRAM_ID;
+        const tokenOutProgram = params.tokenOutProgram ?? TOKEN_PROGRAM_ID;
+        const offer = this.getOfferPda(params.tokenInMint, params.tokenOutMint);
+        const state = await this.getState();
+
+        return await this.program.methods
+            .openSwapBuy(new BN(params.tokenInAmount), new BN(params.minimumOut))
+            .accountsPartial({
+                offer,
+                propAmmPairState: this.getPropAmmPairPda(offer),
+                redemptionOffer: this.getRedemptionOfferPda(params.tokenOutMint, params.tokenInMint),
+                state: this.statePda,
+                offerVaultAuthority: this.pdas.offerVaultAuthorityPda,
+                redemptionVaultAuthority: this.pdas.redemptionVaultAuthorityPda,
+                offerVaultTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, this.pdas.offerVaultAuthorityPda, true, tokenInProgram),
+                offerVaultTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, this.pdas.offerVaultAuthorityPda, true, tokenOutProgram),
+                redemptionVaultTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, this.pdas.redemptionVaultAuthorityPda, true, tokenInProgram),
+                tokenInMint: params.tokenInMint,
+                tokenInProgram,
+                tokenOutMint: params.tokenOutMint,
+                tokenOutProgram,
+                userTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, params.user, false, tokenInProgram),
+                userTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, params.user, false, tokenOutProgram),
+                propAmmProceedsVault: this.getConfigurableVaultPda("prop-amm-proceeds"),
+                propAmmProceedsTokenInAccount: this.getConfigurableVaultAta("prop-amm-proceeds", params.tokenInMint, tokenInProgram),
+                propAmmFeeVault: this.getConfigurableVaultPda("prop-amm-fee"),
+                propAmmFeeTokenInAccount: this.getConfigurableVaultAta("prop-amm-fee", params.tokenInMint, tokenInProgram),
+                permissionlessAuthority: this.pdas.permissionlessVaultAuthorityPda,
+                permissionlessTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, this.pdas.permissionlessVaultAuthorityPda, true, tokenInProgram),
+                permissionlessTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, this.pdas.permissionlessVaultAuthorityPda, true, tokenOutProgram),
+                mintAuthority: this.pdas.mintAuthorityPda,
+                bufferAccounts: {
+                    bufferState: this.pdas.bufferStatePda,
+                    reserveVaultOnycAccount: this.getBufferVaultAta(params.tokenOutMint),
+                    managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(params.tokenOutMint),
+                    performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(params.tokenOutMint),
+                },
+                marketStats: this.pdas.marketStatsPda,
+                circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
+                instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+                user: params.user,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
+                mainOffer: state.mainOffer as PublicKey,
+            })
+            .instruction();
+    }
+
+    async buildOpenSwapSellIx(params: {
+        tokenInAmount: string;
+        minimumOut: string;
+        tokenInMint: PublicKey;
+        tokenOutMint: PublicKey;
+        user: PublicKey;
+        tokenInProgram?: PublicKey;
+        tokenOutProgram?: PublicKey;
+    }) {
+        const state = await this.getState();
+        const onycMint = state.onycMint as PublicKey;
+        if (!params.tokenInMint.equals(onycMint)) {
+            throw new Error("Prop AMM sell swaps must use ONYC as token in");
+        }
+
+        const tokenInProgram = params.tokenInProgram ?? TOKEN_PROGRAM_ID;
+        const tokenOutProgram = params.tokenOutProgram ?? TOKEN_PROGRAM_ID;
+        const assetMint = params.tokenOutMint;
+        const offer = this.getOfferPda(assetMint, onycMint);
+
+        return await this.program.methods
+            .openSwapSell(new BN(params.tokenInAmount), new BN(params.minimumOut))
+            .accountsPartial({
+                offer,
+                propAmmPairState: this.getPropAmmPairPda(offer),
+                redemptionOffer: this.getRedemptionOfferPda(onycMint, assetMint),
+                state: this.statePda,
+                offerVaultAuthority: this.pdas.offerVaultAuthorityPda,
+                redemptionVaultAuthority: this.pdas.redemptionVaultAuthorityPda,
+                redemptionVaultTokenInAccount: getAssociatedTokenAddressSync(onycMint, this.pdas.redemptionVaultAuthorityPda, true, tokenInProgram),
+                redemptionVaultTokenOutAccount: getAssociatedTokenAddressSync(assetMint, this.pdas.redemptionVaultAuthorityPda, true, tokenOutProgram),
+                tokenInMint: onycMint,
+                tokenInProgram,
+                tokenOutMint: assetMint,
+                tokenOutProgram,
+                userTokenInAccount: getAssociatedTokenAddressSync(onycMint, params.user, false, tokenInProgram),
+                userTokenOutAccount: getAssociatedTokenAddressSync(assetMint, params.user, false, tokenOutProgram),
+                propAmmProceedsVault: this.getConfigurableVaultPda("prop-amm-proceeds"),
+                propAmmProceedsTokenInAccount: this.getConfigurableVaultAta("prop-amm-proceeds", onycMint, tokenInProgram),
+                propAmmFeeVault: this.getConfigurableVaultPda("prop-amm-fee"),
+                propAmmFeeTokenInAccount: this.getConfigurableVaultAta("prop-amm-fee", onycMint, tokenInProgram),
+                mintAuthority: this.pdas.mintAuthorityPda,
+                bufferAccounts: {
+                    bufferState: this.pdas.bufferStatePda,
+                    reserveVaultOnycAccount: this.getBufferVaultAta(onycMint),
+                    managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(onycMint),
+                    performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(onycMint),
+                },
+                marketStats: this.pdas.marketStatsPda,
+                circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
+                instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+                user: params.user,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
+                mainOffer: state.mainOffer as PublicKey,
+                offerVaultOnycAccount: getAssociatedTokenAddressSync(onycMint, this.pdas.offerVaultAuthorityPda, true, tokenInProgram),
             })
             .instruction();
     }

@@ -16,3 +16,4 @@ export * from "./redemption";
 export * from "./state";
 export * from "./buffer";
 export * from "./program";
+export * from "./prop-amm";

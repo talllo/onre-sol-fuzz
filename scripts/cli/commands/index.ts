@@ -7,3 +7,4 @@ export { registerRedemptionCommands } from "./redemption";
 export { registerInitCommands } from "./init";
 export { registerBufferCommands } from "./buffer";
 export { registerProgramCommands } from "./program";
+export { registerPropAmmCommands } from "./prop-amm";
