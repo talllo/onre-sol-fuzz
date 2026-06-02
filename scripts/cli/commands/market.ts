@@ -1,6 +1,15 @@
 import { Command } from "commander";
 import type { GlobalOptions } from "../prompts";
-import { executeMarketApy, executeMarketNav, executeMarketNavAdjustment, executeMarketSupply, executeMarketTvl } from "../implementations";
+import {
+    executeMarketApy,
+    executeMarketNav,
+    executeMarketNavAdjustment,
+    executeMarketRefresh,
+    executeMarketSupply,
+    executeMarketSupplyV2,
+    executeMarketTvl,
+    executeMarketTvlV2,
+} from "../implementations";
 
 /**
  * Register market subcommands
@@ -50,6 +59,17 @@ export function registerMarketCommands(program: Command): void {
             await executeMarketTvl(opts);
         });
 
+    // market tvl-v2
+    program
+        .command("tvl-v2")
+        .description("Get Total Value Locked using market stats V2 accounting")
+        .option("-i, --token-in <mint>", "Token in mint")
+        .option("-o, --token-out <mint>", "Token out mint")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeMarketTvlV2(opts);
+        });
+
     // market supply
     program
         .command("supply")
@@ -57,5 +77,24 @@ export function registerMarketCommands(program: Command): void {
         .action(async (_, cmd) => {
             const opts = cmd.optsWithGlobals() as GlobalOptions;
             await executeMarketSupply(opts);
+        });
+
+    // market supply-v2
+    program
+        .command("supply-v2")
+        .description("Get circulating supply using excluded balance V2 accounting")
+        .action(async (_, cmd) => {
+            const opts = cmd.optsWithGlobals() as GlobalOptions;
+            await executeMarketSupplyV2(opts);
+        });
+
+    // market refresh
+    program
+        .command("refresh")
+        .description("Refresh cached market stats")
+        .option("-i, --token-in <mint>", "Token in mint")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeMarketRefresh(opts);
         });
 }

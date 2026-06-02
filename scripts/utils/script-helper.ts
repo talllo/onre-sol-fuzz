@@ -798,6 +798,23 @@ export class ScriptHelper {
             .instruction();
     }
 
+    async buildRefreshMarketStatsIx(params: { tokenInMint: PublicKey; signer: PublicKey }) {
+        const state = await this.getState();
+        return await this.program.methods
+            .refreshMarketStats()
+            .accountsPartial({
+                mainOffer: state.mainOffer as PublicKey,
+                tokenInMint: params.tokenInMint,
+                state: this.statePda,
+                onycMint: state.onycMint as PublicKey,
+                excludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
+                marketStats: this.pdas.marketStatsPda,
+                signer: params.signer,
+                systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .instruction();
+    }
+
     async buildAddApproverIx(params: { approver: PublicKey; boss: PublicKey }) {
         return await this.program.methods
             .addApprover(params.approver)
