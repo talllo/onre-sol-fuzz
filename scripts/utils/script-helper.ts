@@ -59,6 +59,7 @@ export class ScriptHelper {
         redemptionVaultAuthorityPda: PublicKey;
         marketStatsPda: PublicKey;
         circulatingSupplyExcludedBalancePda: PublicKey;
+        circulatingSupplyExcludedAccountsPda: PublicKey;
     };
 
     private constructor(program: Program<Onreapp>, connection: Connection, networkConfig: NetworkConfig, wallet: Wallet, walletSource?: string) {
@@ -81,6 +82,7 @@ export class ScriptHelper {
             redemptionVaultAuthorityPda: PublicKey.findProgramAddressSync([Buffer.from("redemption_offer_vault_authority")], program.programId)[0],
             marketStatsPda: PublicKey.findProgramAddressSync([Buffer.from("market_stats")], program.programId)[0],
             circulatingSupplyExcludedBalancePda: PublicKey.findProgramAddressSync([Buffer.from("circ_supply_excl_balance")], program.programId)[0],
+            circulatingSupplyExcludedAccountsPda: PublicKey.findProgramAddressSync([Buffer.from("circ_supply_excl_accounts")], program.programId)[0],
         };
     }
 
@@ -590,6 +592,82 @@ export class ScriptHelper {
             .accountsPartial({
                 boss: params.boss,
             })
+            .instruction();
+    }
+
+    async buildConfigureMaxMintAmountIx(params: { maxMintAmount: string; boss: PublicKey }) {
+        return await this.program.methods
+            .configureMaxMintAmount(new BN(params.maxMintAmount))
+            .accountsPartial({
+                boss: params.boss,
+            })
+            .instruction();
+    }
+
+    async buildSetMainOfferIx(params: { offer: PublicKey; boss: PublicKey }) {
+        return await this.program.methods
+            .setMainOffer()
+            .accountsPartial({
+                boss: params.boss,
+                offer: params.offer,
+            })
+            .instruction();
+    }
+
+    async buildSetCirculatingSupplyExcludedAccountsIx(params: { owners: PublicKey[]; boss: PublicKey }) {
+        const owners = [...params.owners];
+        if (owners.length > 20) {
+            throw new Error("At most 20 excluded owners can be configured");
+        }
+        while (owners.length < 20) {
+            owners.push(PublicKey.default);
+        }
+
+        return await this.program.methods
+            .setCirculatingSupplyExcludedAccounts(owners as [
+                PublicKey, PublicKey, PublicKey, PublicKey, PublicKey,
+                PublicKey, PublicKey, PublicKey, PublicKey, PublicKey,
+                PublicKey, PublicKey, PublicKey, PublicKey, PublicKey,
+                PublicKey, PublicKey, PublicKey, PublicKey, PublicKey,
+            ])
+            .accountsPartial({
+                boss: params.boss,
+                excludedAccounts: this.pdas.circulatingSupplyExcludedAccountsPda,
+                systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .instruction();
+    }
+
+    async buildUpdateCirculatingSupplyExcludedBalanceIx(params: { onycMint: PublicKey; signer: PublicKey; tokenProgram?: PublicKey }) {
+        const excludedAccounts = await this.program.account.circulatingSupplyExcludedAccounts
+            .fetch(this.pdas.circulatingSupplyExcludedAccountsPda)
+            .catch((error: any) => {
+                const message = error?.message || String(error);
+                if (message.includes("Account does not exist") || message.includes("AccountNotFound")) {
+                    throw new Error("Circulating supply excluded owners are not configured. Run `state set-excluded-owners` first.");
+                }
+                throw error;
+            });
+        const tokenProgram = params.tokenProgram ?? TOKEN_PROGRAM_ID;
+        const remainingAccounts = excludedAccounts.owners
+            .filter((owner: PublicKey) => !owner.equals(PublicKey.default))
+            .map((owner: PublicKey) => ({
+                pubkey: getAssociatedTokenAddressSync(params.onycMint, owner, false, tokenProgram),
+                isWritable: false,
+                isSigner: false,
+            }));
+
+        return await this.program.methods
+            .updateCirculatingSupplyExcludedBalance()
+            .accountsPartial({
+                onycMint: params.onycMint,
+                excludedAccounts: this.pdas.circulatingSupplyExcludedAccountsPda,
+                excludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
+                tokenProgram,
+                signer: params.signer,
+                systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .remainingAccounts(remainingAccounts)
             .instruction();
     }
 
