@@ -331,6 +331,16 @@ export class ScriptHelper {
             .instruction();
     }
 
+    async buildSetOfferDisabledIx(params: { tokenInMint: PublicKey; tokenOutMint: PublicKey; disabled: boolean; signer: PublicKey }) {
+        return await this.program.methods
+            .setOfferDisabled(params.disabled)
+            .accountsPartial({
+                offer: this.getOfferPda(params.tokenInMint, params.tokenOutMint),
+                signer: params.signer,
+            })
+            .instruction();
+    }
+
     async buildDeleteOfferVectorIx(params: { tokenInMint: PublicKey; tokenOutMint: PublicKey; vectorStartTimestamp: number; boss: PublicKey }) {
         return await this.program.methods
             .deleteOfferVector(new BN(params.vectorStartTimestamp))
@@ -854,6 +864,26 @@ export class ScriptHelper {
     async buildUpdateRedemptionOfferFeeIx(params: { redemptionOfferPda: PublicKey; newFeeBasisPoints: number; boss: PublicKey }) {
         return await this.program.methods
             .updateRedemptionOfferFee(params.newFeeBasisPoints)
+            .accountsPartial({
+                redemptionOffer: params.redemptionOfferPda,
+                boss: params.boss,
+            })
+            .instruction();
+    }
+
+    async buildSetRedemptionOfferDisabledIx(params: { redemptionOfferPda: PublicKey; disabled: boolean; signer: PublicKey }) {
+        return await this.program.methods
+            .setRedemptionOfferDisabled(params.disabled)
+            .accountsPartial({
+                redemptionOffer: params.redemptionOfferPda,
+                signer: params.signer,
+            })
+            .instruction();
+    }
+
+    async buildUpdateRedemptionOfferVaultTargetIx(params: { redemptionOfferPda: PublicKey; vaultTargetBps: number; boss: PublicKey }) {
+        return await this.program.methods
+            .updateRedemptionOfferVaultTarget(params.vaultTargetBps)
             .accountsPartial({
                 redemptionOffer: params.redemptionOfferPda,
                 boss: params.boss,
