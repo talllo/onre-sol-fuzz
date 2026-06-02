@@ -81,4 +81,7 @@ export { executeStateClose } from "./state/state-close";
 export { executeBufferGet } from "./buffer/buffer-get";
 export { executeBufferInitialize } from "./buffer/buffer-initialize";
 export { executeBufferSetYields } from "./buffer/buffer-set-yields";
+export { executeBufferSetFees } from "./buffer/buffer-set-fees";
+export { executeBufferReserveDeposit } from "./buffer/buffer-reserve-deposit";
+export { executeBufferReserveWithdraw } from "./buffer/buffer-reserve-withdraw";
 export { executeBufferBurn } from "./buffer/buffer-burn";
