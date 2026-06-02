@@ -35,6 +35,17 @@ export const ONYC_MINT = config.mints.onyc;
 export type { NetworkConfig };
 export { NETWORK_CONFIGS, printConfigSummary };
 
+const CONFIGURABLE_VAULTS = {
+    "offer-fee": { seed: "offer_fee", kind: { offerFee: {} } },
+    "management-fee": { seed: "management_fee", kind: { managementFee: {} } },
+    "performance-fee": { seed: "performance_fee", kind: { performanceFee: {} } },
+    "prop-amm-fee": { seed: "prop_amm_fee", kind: { propAmmFee: {} } },
+    "offer-proceeds": { seed: "offer_proceeds", kind: { offerProceeds: {} } },
+    "prop-amm-proceeds": { seed: "prop_amm_proceeds", kind: { propAmmProceeds: {} } },
+} as const;
+
+export type ConfigurableVaultCliKind = keyof typeof CONFIGURABLE_VAULTS;
+
 /**
  * Helper class for Onre scripts - provides clean abstraction similar to test OnreProgram
  * Encapsulates common functionality to reduce duplication across scripts
@@ -201,6 +212,14 @@ export class ScriptHelper {
 
     getMarketStatsPda(): PublicKey {
         return this.pdas.marketStatsPda;
+    }
+
+    getConfigurableVaultPda(kind: ConfigurableVaultCliKind): PublicKey {
+        return PublicKey.findProgramAddressSync([Buffer.from("configurable_vault"), Buffer.from(CONFIGURABLE_VAULTS[kind].seed)], this.program.programId)[0];
+    }
+
+    getConfigurableVaultAta(kind: ConfigurableVaultCliKind, mint: PublicKey, tokenProgram: PublicKey = TOKEN_PROGRAM_ID): PublicKey {
+        return getAssociatedTokenAddressSync(mint, this.getConfigurableVaultPda(kind), true, tokenProgram);
     }
 
     async getMarketStats() {
@@ -450,6 +469,42 @@ export class ScriptHelper {
                 tokenMint: params.tokenMint,
                 tokenProgram: params.tokenProgram ?? TOKEN_PROGRAM_ID,
                 boss: params.boss,
+            })
+            .instruction();
+    }
+
+    async buildSetConfigurableVaultDestinationIx(params: { kind: ConfigurableVaultCliKind; destination: PublicKey; boss: PublicKey }) {
+        return await this.program.methods
+            .setConfigurableVaultDestination(CONFIGURABLE_VAULTS[params.kind].kind, params.destination)
+            .accountsPartial({
+                boss: params.boss,
+                configurableVault: this.getConfigurableVaultPda(params.kind),
+                systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .instruction();
+    }
+
+    async buildWithdrawConfigurableVaultIx(params: { kind: ConfigurableVaultCliKind; mint: PublicKey; amount: string; caller: PublicKey; tokenProgram?: PublicKey }) {
+        const tokenProgram = params.tokenProgram ?? TOKEN_PROGRAM_ID;
+        const configurableVault = this.getConfigurableVaultPda(params.kind);
+        const vault = await this.program.account.configurableVault.fetch(configurableVault);
+        const destination = vault.withdrawalDestination as PublicKey;
+        if (destination.equals(PublicKey.default)) {
+            throw new Error(`Configurable vault ${params.kind} has no withdrawal destination configured`);
+        }
+
+        return await this.program.methods
+            .withdrawConfigurableVault(CONFIGURABLE_VAULTS[params.kind].kind, new BN(params.amount))
+            .accountsPartial({
+                caller: params.caller,
+                configurableVault,
+                vaultTokenAccount: this.getConfigurableVaultAta(params.kind, params.mint, tokenProgram),
+                destination,
+                destinationTokenAccount: getAssociatedTokenAddressSync(params.mint, destination, false, tokenProgram),
+                mint: params.mint,
+                tokenProgram,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
             })
             .instruction();
     }
