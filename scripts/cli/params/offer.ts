@@ -126,7 +126,7 @@ export const fetchOfferParams: ParamDefinition[] = [
     {
         name: "tokenIn",
         type: "mint",
-        description: "Token in mint (e.g., USDC)",
+        description: "Token in mint (e.g., USDC or USDT)",
         required: false,
         flag: "--token-in",
         shortFlag: "-i",

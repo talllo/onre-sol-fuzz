@@ -23,6 +23,7 @@ export async function executeVaultList(opts: GlobalOptions & Record<string, any>
 
         const mints = [
             { name: "USDC", mint: config.mints.usdc },
+            ...(config.mints.usdt ? [{ name: "USDT", mint: config.mints.usdt }] : []),
             { name: "USDG", mint: config.mints.usdg },
             { name: "ONyc", mint: config.mints.onyc },
         ];

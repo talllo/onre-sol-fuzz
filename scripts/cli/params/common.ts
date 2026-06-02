@@ -15,7 +15,7 @@ export const tokenPairParams: ParamDefinition[] = [
     {
         name: "tokenIn",
         type: "mint",
-        description: "Token in mint (e.g., USDC)",
+        description: "Token in mint (e.g., USDC or USDT)",
         required: true,
         flag: "--token-in",
         shortFlag: "-i",
