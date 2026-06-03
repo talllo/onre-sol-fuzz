@@ -145,6 +145,16 @@ pnpm cli -n mainnet-prod state get
 
 The CLI accepts `NETWORK` or the `-n` / `--network` flag.
 
+### Browser UI
+
+A browser UI under `scripts/ui/` exposes the mainnet production program from the generated IDL. It supports injected Solana wallets, account/argument forms for every IDL instruction, automatic resolution of known state fields, PDAs, and ATAs, transaction simulation, wallet signing, and base58 export for external signing workflows.
+
+```bash
+pnpm ui
+```
+
+The UI always targets the mainnet production program ID: `onreuGhHHgVzMWSkj2oQDLDtvvGvoepBPkqyaubFcwe`. The RPC URL is configurable in the UI, so operators can use public mainnet RPC or a private mainnet endpoint.
+
 ### BUFFER CLI Notes
 
 The current CLI exposes only a subset of the on-chain BUFFER flow:

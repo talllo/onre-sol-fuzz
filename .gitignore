@@ -29,6 +29,7 @@ pnpm-debug.log*
 test-ledger
 tests/fixtures/
 coverage/
+dist/
 sbf_trace_dir/
 
 # Local simulator and analysis outputs

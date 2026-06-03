@@ -13,7 +13,9 @@
     "script:mainnet-dev": "NETWORK=mainnet-dev tsx",
     "script:devnet-test": "NETWORK=devnet-test tsx",
     "script:devnet-dev": "NETWORK=devnet-dev tsx",
-    "cli": "tsx scripts/cli/index.ts"
+    "cli": "tsx scripts/cli/index.ts",
+    "ui": "vite --config scripts/ui/vite.config.ts",
+    "ui:build": "vite build --config scripts/ui/vite.config.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
@@ -23,6 +25,7 @@
     "@solana/spl-token": "0.4.14",
     "@solana/web3.js": "^1.98.2",
     "bs58": "^6.0.0",
+    "buffer": "^6.0.3",
     "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
     "clipboardy": "^5.0.2",
@@ -41,6 +44,7 @@
     "prettier": "^3.5.2",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
+    "vite": "^8.0.16",
     "zx": "^8.6.0"
   }
 }

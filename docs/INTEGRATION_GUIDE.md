@@ -358,4 +358,4 @@ getMarketData();
 
 Check the full IDL for all available instructions and account structures.
 
-For operational examples, use the CLI under `scripts/cli/`.
+For operational examples, use the CLI under `scripts/cli/` or the mainnet browser UI under `scripts/ui/`.
