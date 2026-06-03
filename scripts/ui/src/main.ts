@@ -217,7 +217,7 @@ function initializeSelectedInstruction(): void {
     for (const flat of flattenAccounts(instruction.accounts ?? [])) {
         const value = defaultAccountValue(flat.account, flat.fullName);
         state.accountValues[flat.fullName] = value;
-        state.accountAuto[flat.fullName] = value.length > 0 || Boolean(flat.account.pda);
+        state.accountAuto[flat.fullName] = value.length > 0 || shouldAutoDeriveByDefault(flat.account);
     }
 
     deriveAccounts();
@@ -467,6 +467,7 @@ function bindEvents(): void {
             initializeSelectedInstruction();
             render();
             void refreshStateDerivedAccounts();
+            void refreshDecodedDerivedAccounts();
         });
     }
 
@@ -899,6 +900,21 @@ function deriveAccountValue(account: IdlAccount, fullName: string): string {
 
 function defaultAccountValue(account: IdlAccount, fullName: string): string {
     return deriveAccountValue(account, fullName);
+}
+
+function shouldAutoDeriveByDefault(account: IdlAccount): boolean {
+    const lowerName = account.name.toLowerCase();
+    return (
+        Boolean(account.pda || account.address) ||
+        lowerName === "boss" ||
+        lowerName === "new_boss" ||
+        lowerName === "redemption_admin" ||
+        lowerName === "main_offer" ||
+        lowerName === "redeemer" ||
+        lowerName === "destination" ||
+        Boolean(PDA_SEEDS[lowerName] || CONFIGURABLE_VAULT_ACCOUNT_SEEDS[lowerName]) ||
+        isTokenAccountName(lowerName)
+    );
 }
 
 function isManagedAccount(flat: FlatAccount, value: string): boolean {
