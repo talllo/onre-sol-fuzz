@@ -1,0 +1,97 @@
+import { Buffer } from "buffer";
+import { PublicKey, SystemProgram } from "@solana/web3.js";
+import type { ConfigurableVaultAccountInfo, DecodedAccount, OfferAccountInfo, RedemptionOfferAccountInfo, RedemptionRequestAccountInfo, StateAccountInfo } from "./types";
+
+export function decodeKnownAccount(kind: DecodedAccount["kind"], data: Buffer | Uint8Array): DecodedAccount | undefined {
+    const bytes = Buffer.from(data);
+    if (kind === "offer") {
+        const value = decodeOfferAccount(bytes);
+        return value ? { kind, value } : undefined;
+    }
+    if (kind === "redemption_offer") {
+        const value = decodeRedemptionOfferAccount(bytes);
+        return value ? { kind, value } : undefined;
+    }
+    if (kind === "redemption_request") {
+        const value = decodeRedemptionRequestAccount(bytes);
+        return value ? { kind, value } : undefined;
+    }
+    const value = decodeConfigurableVaultAccount(bytes);
+    return value ? { kind, value } : undefined;
+}
+
+export function decodeStateAccount(data: Buffer | Uint8Array): StateAccountInfo | undefined {
+    const bytes = Buffer.from(data);
+    if (bytes.length < 890) return undefined;
+    return {
+        boss: publicKeyAt(bytes, 8),
+        proposedBoss: publicKeyAt(bytes, 40),
+        onycMint: publicKeyAt(bytes, 73),
+        redemptionAdmin: publicKeyAt(bytes, 818),
+        mainOffer: publicKeyAt(bytes, 858),
+    };
+}
+
+function decodeOfferAccount(bytes: Buffer): OfferAccountInfo | undefined {
+    if (bytes.length < 72) return undefined;
+    return {
+        tokenInMint: publicKeyAt(bytes, 8),
+        tokenOutMint: publicKeyAt(bytes, 40),
+    };
+}
+
+function decodeRedemptionOfferAccount(bytes: Buffer): RedemptionOfferAccountInfo | undefined {
+    if (bytes.length < 146) return undefined;
+    return {
+        offer: publicKeyAt(bytes, 8),
+        tokenInMint: publicKeyAt(bytes, 40),
+        tokenOutMint: publicKeyAt(bytes, 72),
+        requestCounter: readU64(bytes, 138),
+    };
+}
+
+function decodeRedemptionRequestAccount(bytes: Buffer): RedemptionRequestAccountInfo | undefined {
+    if (bytes.length < 80) return undefined;
+    return {
+        offer: publicKeyAt(bytes, 8),
+        requestId: readU64(bytes, 40),
+        redeemer: publicKeyAt(bytes, 48),
+    };
+}
+
+function decodeConfigurableVaultAccount(bytes: Buffer): ConfigurableVaultAccountInfo | undefined {
+    if (bytes.length < 41) return undefined;
+    return {
+        kind: bytes[8],
+        withdrawalDestination: publicKeyAt(bytes, 9),
+    };
+}
+
+export function sameStateInfo(left: StateAccountInfo | undefined, right: StateAccountInfo): boolean {
+    return Boolean(
+        left &&
+        left.boss.equals(right.boss) &&
+        left.proposedBoss.equals(right.proposedBoss) &&
+        left.onycMint.equals(right.onycMint) &&
+        left.redemptionAdmin.equals(right.redemptionAdmin) &&
+        left.mainOffer.equals(right.mainOffer),
+    );
+}
+
+export function publicKeyAt(bytes: Buffer, offset: number): PublicKey {
+    return new PublicKey(bytes.subarray(offset, offset + 32));
+}
+
+export function isDefaultPublicKey(publicKey: PublicKey): boolean {
+    return publicKey.equals(SystemProgram.programId);
+}
+
+function readU64(bytes: Buffer, offset: number): bigint {
+    return bytes.readBigUInt64LE(offset);
+}
+
+export function u64Seed(value: bigint): Buffer {
+    const buffer = Buffer.alloc(8);
+    buffer.writeBigUInt64LE(value);
+    return buffer;
+}

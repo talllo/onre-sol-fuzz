@@ -45,12 +45,12 @@ Offers use up to 10 `OfferVector` entries with APR-based compound interest. Pric
 
 ### Authority Structure
 
-| Role | Description |
-|------|-------------|
-| `boss` | Primary authority with full control (two-step transfer via propose/accept) |
-| `admins[20]` | Can enable the kill switch |
-| `redemption_admin` | Manages redemption operations |
-| `approvers` | Trusted keys for cryptographic approval verification (ed25519) |
+| Role               | Description                                                                |
+| ------------------ | -------------------------------------------------------------------------- |
+| `boss`             | Primary authority with full control (two-step transfer via propose/accept) |
+| `admins[20]`       | Can enable the kill switch                                                 |
+| `redemption_admin` | Manages redemption operations                                              |
+| `approvers`        | Trusted keys for cryptographic approval verification (ed25519)             |
 
 ### Kill Switch Semantics
 
@@ -77,9 +77,9 @@ Most token movement paths use the SPL Token interface and can work with **SPL To
 
 The BUFFER module stores two separate inputs for accrual:
 
-| Field | Source |
-|------|--------|
-| `gross_apr` | Set explicitly by `set_buffer_gross_apr` |
+| Field           | Source                                                             |
+| --------------- | ------------------------------------------------------------------ |
+| `gross_apr`     | Set explicitly by `set_buffer_gross_apr`                           |
 | `current_yield` | Read from the active APR on the offer supplied to the accrual path |
 
 `state.main_offer` must be set before `initialize_buffer` because initialization validates its offer account. It can be updated later with `set_main_offer`, and it must always point to an offer whose `token_out_mint` is ONyc. Runtime accrual uses the offer supplied by the executing path; `set_buffer_gross_apr` uses `state.main_offer`.
@@ -94,11 +94,11 @@ Typical on-chain BUFFER setup order:
 
 ### Constants
 
-| Constant | Value |
-|----------|-------|
-| `MAX_VECTORS` | 10 |
-| `MAX_ADMINS` | 20 |
-| `PRICE_DECIMALS` | 9 |
+| Constant              | Value      |
+| --------------------- | ---------- |
+| `MAX_VECTORS`         | 10         |
+| `MAX_ADMINS`          | 20         |
+| `PRICE_DECIMALS`      | 9          |
 | `MAX_ALLOWED_FEE_BPS` | 1000 (10%) |
 
 ## Instructions
@@ -135,13 +135,13 @@ pnpm cli -n mainnet-prod state get
 
 ### Network Environments
 
-| Profile | Cluster | Description |
-|---------|---------|-------------|
-| `mainnet-prod` | Mainnet | Production program |
+| Profile        | Cluster | Description             |
+| -------------- | ------- | ----------------------- |
+| `mainnet-prod` | Mainnet | Production program      |
 | `mainnet-test` | Mainnet | Test program on mainnet |
-| `mainnet-dev` | Mainnet | Dev program on mainnet |
-| `devnet-test` | Devnet | Test program on devnet |
-| `devnet-dev` | Devnet | Dev program on devnet |
+| `mainnet-dev`  | Mainnet | Dev program on mainnet  |
+| `devnet-test`  | Devnet  | Test program on devnet  |
+| `devnet-dev`   | Devnet  | Dev program on devnet   |
 
 The CLI accepts `NETWORK` or the `-n` / `--network` flag.
 
@@ -153,7 +153,7 @@ A browser UI under `scripts/ui/` exposes the mainnet production program from the
 pnpm ui
 ```
 
-The UI always targets the mainnet production program ID: `onreuGhHHgVzMWSkj2oQDLDtvvGvoepBPkqyaubFcwe`. The RPC URL is configurable in the UI, so operators can use public mainnet RPC or a private mainnet endpoint.
+The UI always targets the mainnet production program ID: `onreuGhHHgVzMWSkj2oQDLDtvvGvoepBPkqyaubFcwe`. The RPC URL is configurable in the UI; dev mode defaults to `/rpc`, a Vite proxy to public mainnet RPC, and operators can paste Surfpool or a private mainnet endpoint.
 
 ### BUFFER CLI Notes
 

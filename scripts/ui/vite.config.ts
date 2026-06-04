@@ -21,6 +21,19 @@ export default defineConfig({
         host: "127.0.0.1",
         port: 5173,
         strictPort: false,
+        proxy: {
+            "/rpc": {
+                target: "https://api.mainnet-beta.solana.com",
+                changeOrigin: true,
+                rewrite: () => "/",
+                configure: (proxy: { on: (arg0: string, arg1: (proxyReq: any) => void) => void }) => {
+                    proxy.on("proxyReq", (proxyReq) => {
+                        proxyReq.removeHeader("origin");
+                        proxyReq.removeHeader("referer");
+                    });
+                },
+            },
+        },
     },
     build: {
         outDir: resolve(root, "../../dist/ui"),
