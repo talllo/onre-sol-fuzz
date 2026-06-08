@@ -126,6 +126,7 @@ h1 {
 .brand,
 .walletbar,
 .rpc-band,
+.rpc-mode,
 .actions,
 .output-actions,
 .account-row {
@@ -204,14 +205,115 @@ h1 {
   background: #f8fafb;
 }
 
-.rpc-band label {
+.rpc-copy {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 2px;
+  min-width: 185px;
+}
+
+.rpc-copy span {
   flex: 0 0 auto;
   font-weight: 720;
   color: #33424d;
 }
 
+.rpc-copy small {
+  color: #667480;
+  font-size: 12px;
+}
+
+.rpc-mode {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 4px;
+  border: 1px solid #d5dce3;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.rpc-mode button {
+  flex: 0 0 auto;
+}
+
 .rpc-band input {
+  min-width: 220px;
+  flex: 1 1 380px;
+  border-color: transparent;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  box-shadow: none;
+}
+
+.rpc-band input:focus {
+  border-color: #238f70;
+}
+
+.cheatcode-band {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(560px, 1.3fr);
+  gap: 14px;
+  align-items: center;
+  padding: 12px 18px;
+  border-bottom: 1px solid #d5dce3;
+  background: #fff7df;
+}
+
+.cheatcode-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.cheatcode-copy strong {
+  color: #4b3513;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.cheatcode-copy span,
+.cheatcode-copy small {
+  color: #72552a;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.cheatcode-copy code {
+  color: #4b3513;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.cheatcode-fields {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) auto minmax(180px, 1fr)
+    minmax(120px, 0.44fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.cheatcode-fields label {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.cheatcode-fields label span {
+  color: #5b4522;
+  font-size: 11px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.cheatcode-fields input {
+  border-color: #d2b973;
+  background: #ffffff;
+}
+
+.cheatcode-fields button {
+  min-height: 35px;
+  border-color: #9c7731;
 }
 
 .workspace {
@@ -422,6 +524,22 @@ h1 {
   flex: 0 0 auto;
 }
 
+.offer-mint-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.picker-stack {
+  min-width: 0;
+}
+
+.picker-stack > small {
+  display: block;
+  margin: 0 0 4px;
+}
+
 .segmented,
 .token-picker,
 .derived-row {
@@ -549,6 +667,14 @@ pre {
 }
 
 @media (max-width: 1180px) {
+  .cheatcode-band {
+    grid-template-columns: 1fr;
+  }
+
+  .cheatcode-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .workspace {
     grid-template-columns: minmax(210px, 260px) minmax(420px, 1fr);
   }
@@ -567,6 +693,10 @@ pre {
   .rpc-band {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .cheatcode-fields {
+    grid-template-columns: 1fr;
   }
 
   .workspace,

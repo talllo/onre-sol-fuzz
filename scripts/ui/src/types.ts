@@ -99,6 +99,7 @@ export type DecodedAccount =
 
 export interface AppState {
     rpcUrl: string;
+    customRpcUrl?: string;
     connection: Connection;
     selectedInstructionName: string;
     search: string;

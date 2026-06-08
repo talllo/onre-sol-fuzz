@@ -2,6 +2,15 @@ import { Buffer } from "buffer";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import type { ConfigurableVaultAccountInfo, DecodedAccount, OfferAccountInfo, RedemptionOfferAccountInfo, RedemptionRequestAccountInfo, StateAccountInfo } from "./types";
 
+export const STATE_ACCOUNT_MIN_LENGTH = 890;
+export const STATE_ACCOUNT_OFFSETS = {
+    boss: 8,
+    proposedBoss: 40,
+    onycMint: 73,
+    redemptionAdmin: 818,
+    mainOffer: 858,
+} as const;
+
 export function decodeKnownAccount(kind: DecodedAccount["kind"], data: Buffer | Uint8Array): DecodedAccount | undefined {
     const bytes = Buffer.from(data);
     if (kind === "offer") {
@@ -22,13 +31,13 @@ export function decodeKnownAccount(kind: DecodedAccount["kind"], data: Buffer | 
 
 export function decodeStateAccount(data: Buffer | Uint8Array): StateAccountInfo | undefined {
     const bytes = Buffer.from(data);
-    if (bytes.length < 890) return undefined;
+    if (bytes.length < STATE_ACCOUNT_MIN_LENGTH) return undefined;
     return {
-        boss: publicKeyAt(bytes, 8),
-        proposedBoss: publicKeyAt(bytes, 40),
-        onycMint: publicKeyAt(bytes, 73),
-        redemptionAdmin: publicKeyAt(bytes, 818),
-        mainOffer: publicKeyAt(bytes, 858),
+        boss: publicKeyAt(bytes, STATE_ACCOUNT_OFFSETS.boss),
+        proposedBoss: publicKeyAt(bytes, STATE_ACCOUNT_OFFSETS.proposedBoss),
+        onycMint: publicKeyAt(bytes, STATE_ACCOUNT_OFFSETS.onycMint),
+        redemptionAdmin: publicKeyAt(bytes, STATE_ACCOUNT_OFFSETS.redemptionAdmin),
+        mainOffer: publicKeyAt(bytes, STATE_ACCOUNT_OFFSETS.mainOffer),
     };
 }
 
