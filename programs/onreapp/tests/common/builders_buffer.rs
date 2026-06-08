@@ -5,17 +5,25 @@ pub fn build_initialize_buffer_ix(
     offer: &Pubkey,
     onyc_mint: &Pubkey,
 ) -> Instruction {
+    build_initialize_buffer_ix_with_token_program(boss, offer, onyc_mint, &TOKEN_PROGRAM_ID)
+}
+
+pub fn build_initialize_buffer_ix_with_token_program(
+    boss: &Pubkey,
+    offer: &Pubkey,
+    onyc_mint: &Pubkey,
+    token_program: &Pubkey,
+) -> Instruction {
     let (state_pda, _) = find_state_pda();
     let (buffer_state_pda, _) = find_buffer_state_pda();
     let (reserve_vault_authority_pda, _) = find_reserve_vault_authority_pda();
     let (management_fee_vault_pda, _) = find_management_fee_vault_pda();
     let (performance_fee_vault_pda, _) = find_performance_fee_vault_pda();
-    let buffer_vault_onyc_ata =
-        derive_ata(&reserve_vault_authority_pda, onyc_mint, &TOKEN_PROGRAM_ID);
+    let buffer_vault_onyc_ata = derive_ata(&reserve_vault_authority_pda, onyc_mint, token_program);
     let management_fee_vault_onyc_ata =
-        derive_ata(&management_fee_vault_pda, onyc_mint, &TOKEN_PROGRAM_ID);
+        derive_ata(&management_fee_vault_pda, onyc_mint, token_program);
     let performance_fee_vault_onyc_ata =
-        derive_ata(&performance_fee_vault_pda, onyc_mint, &TOKEN_PROGRAM_ID);
+        derive_ata(&performance_fee_vault_pda, onyc_mint, token_program);
 
     Instruction {
         program_id: PROGRAM_ID,
@@ -31,7 +39,7 @@ pub fn build_initialize_buffer_ix(
             AccountMeta::new(buffer_vault_onyc_ata, false),
             AccountMeta::new(management_fee_vault_onyc_ata, false),
             AccountMeta::new(performance_fee_vault_onyc_ata, false),
-            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+            AccountMeta::new_readonly(*token_program, false),
             AccountMeta::new_readonly(ATA_PROGRAM_ID, false),
             AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
         ],
@@ -155,12 +163,25 @@ pub fn build_deposit_reserve_vault_ix(
     onyc_mint: &Pubkey,
     amount: u64,
 ) -> Instruction {
+    build_deposit_reserve_vault_ix_with_token_program(
+        depositor,
+        onyc_mint,
+        amount,
+        &TOKEN_PROGRAM_ID,
+    )
+}
+
+pub fn build_deposit_reserve_vault_ix_with_token_program(
+    depositor: &Pubkey,
+    onyc_mint: &Pubkey,
+    amount: u64,
+    token_program: &Pubkey,
+) -> Instruction {
     let (state_pda, _) = find_state_pda();
     let (buffer_state_pda, _) = find_buffer_state_pda();
     let (reserve_vault_authority_pda, _) = find_reserve_vault_authority_pda();
-    let depositor_onyc_ata = derive_ata(depositor, onyc_mint, &TOKEN_PROGRAM_ID);
-    let reserve_vault_onyc_ata =
-        derive_ata(&reserve_vault_authority_pda, onyc_mint, &TOKEN_PROGRAM_ID);
+    let depositor_onyc_ata = derive_ata(depositor, onyc_mint, token_program);
+    let reserve_vault_onyc_ata = derive_ata(&reserve_vault_authority_pda, onyc_mint, token_program);
     let mut data = ix_discriminator("deposit_reserve_vault").to_vec();
     data.extend_from_slice(&amount.to_le_bytes());
 
@@ -174,7 +195,7 @@ pub fn build_deposit_reserve_vault_ix(
             AccountMeta::new(depositor_onyc_ata, false),
             AccountMeta::new(reserve_vault_onyc_ata, false),
             AccountMeta::new(*depositor, true),
-            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+            AccountMeta::new_readonly(*token_program, false),
             AccountMeta::new_readonly(ATA_PROGRAM_ID, false),
             AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
         ],
@@ -187,12 +208,20 @@ pub fn build_withdraw_reserve_vault_ix(
     onyc_mint: &Pubkey,
     amount: u64,
 ) -> Instruction {
+    build_withdraw_reserve_vault_ix_with_token_program(boss, onyc_mint, amount, &TOKEN_PROGRAM_ID)
+}
+
+pub fn build_withdraw_reserve_vault_ix_with_token_program(
+    boss: &Pubkey,
+    onyc_mint: &Pubkey,
+    amount: u64,
+    token_program: &Pubkey,
+) -> Instruction {
     let (state_pda, _) = find_state_pda();
     let (buffer_state_pda, _) = find_buffer_state_pda();
     let (reserve_vault_authority_pda, _) = find_reserve_vault_authority_pda();
-    let boss_onyc_ata = derive_ata(boss, onyc_mint, &TOKEN_PROGRAM_ID);
-    let reserve_vault_onyc_ata =
-        derive_ata(&reserve_vault_authority_pda, onyc_mint, &TOKEN_PROGRAM_ID);
+    let boss_onyc_ata = derive_ata(boss, onyc_mint, token_program);
+    let reserve_vault_onyc_ata = derive_ata(&reserve_vault_authority_pda, onyc_mint, token_program);
     let mut data = ix_discriminator("withdraw_reserve_vault").to_vec();
     data.extend_from_slice(&amount.to_le_bytes());
 
@@ -206,7 +235,7 @@ pub fn build_withdraw_reserve_vault_ix(
             AccountMeta::new(boss_onyc_ata, false),
             AccountMeta::new(reserve_vault_onyc_ata, false),
             AccountMeta::new(*boss, true),
-            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+            AccountMeta::new_readonly(*token_program, false),
             AccountMeta::new_readonly(ATA_PROGRAM_ID, false),
             AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
         ],

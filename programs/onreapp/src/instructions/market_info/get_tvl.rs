@@ -91,17 +91,6 @@ pub struct GetTVL<'info> {
     )]
     pub vault_token_out_account: UncheckedAccount<'info>,
 
-    /// CHECK: Address is validated against the boss token_out ATA and may be uninitialized.
-    #[account(
-        constraint = boss_onyc_account.key()
-            == get_associated_token_address_with_program_id(
-                &state.boss,
-                &token_out_mint.key(),
-                &token_out_program.key(),
-            ) @ crate::OnreError::InvalidBossTokenInAccount
-    )]
-    pub boss_onyc_account: UncheckedAccount<'info>,
-
     pub token_out_program: Interface<'info, TokenInterface>,
 }
 
@@ -147,13 +136,13 @@ pub struct GetTVLV2<'info> {
 /// Calculates and returns the current TVL (Total Value Locked) for an ONyc offer
 ///
 /// This read-only instruction calculates the TVL by combining the current NAV price
-/// with the circulating ONyc supply. The calculation excludes vault and boss
-/// ONyc holdings from total ONyc supply to represent only tokens in circulation.
+/// with the circulating ONyc supply. The calculation excludes offer-vault
+/// ONyc holdings from total ONyc supply to represent tokens in circulation.
 ///
 /// Formula: `TVL = circulating_supply * current_price / 10^9`
 ///
 /// The calculation uses the current active pricing vector to determine NAV and
-/// subtracts excluded balances from total supply to get circulating supply.
+/// subtracts the offer-vault balance from total supply to get circulating supply.
 ///
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
@@ -176,15 +165,8 @@ pub fn get_tvl(ctx: Context<GetTVL>) -> Result<u64> {
         &ctx.accounts.vault_token_out_account,
         &ctx.accounts.token_out_program,
     )?;
-    let boss_onyc_amount = read_optional_token_account_amount(
-        &ctx.accounts.boss_onyc_account,
-        &ctx.accounts.token_out_program,
-    )?;
-    let excluded_amount = vault_amount
-        .checked_add(boss_onyc_amount)
-        .ok_or(crate::OnreError::MathOverflow)?;
     let token_supply =
-        calculate_circulating_supply(ctx.accounts.token_out_mint.supply, excluded_amount)?;
+        calculate_circulating_supply(ctx.accounts.token_out_mint.supply, vault_amount)?;
 
     let tvl = calculate_shared_tvl(token_supply, current_price)
         .map_err(|_| error!(crate::OnreError::Overflow))?;

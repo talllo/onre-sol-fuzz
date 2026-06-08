@@ -148,6 +148,46 @@ fn setup_buffer_context(
     (svm, payer, token_in_mint, onyc_mint, caller)
 }
 
+fn setup_transfer_fee_onyc_buffer() -> (litesvm::LiteSVM, Keypair, Pubkey, Keypair) {
+    let (mut svm, payer, _default_onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+    let onyc_mint = create_mint_2022_with_transfer_fee(&mut svm, &payer, 9, &boss, 100, 1_000_000);
+    let token_in_mint = create_mint(&mut svm, &payer, 6, &boss);
+    let caller = Keypair::new();
+    svm.airdrop(&caller.pubkey(), INITIAL_LAMPORTS).unwrap();
+
+    let ix = build_set_onyc_mint_ix(&boss, &onyc_mint);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_make_offer_ix(
+        &boss,
+        &token_in_mint,
+        &onyc_mint,
+        0,
+        false,
+        true,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let (offer_pda, _) = find_offer_pda(&token_in_mint, &onyc_mint);
+    let ix = build_set_main_offer_ix(&boss, &offer_pda);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_initialize_buffer_ix_with_token_program(
+        &boss,
+        &offer_pda,
+        &onyc_mint,
+        &TOKEN_2022_PROGRAM_ID,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    (svm, payer, onyc_mint, caller)
+}
+
 fn assert_discounted_buffer_accrual(
     gross_yield: u64,
     current_yield: u64,
@@ -399,6 +439,33 @@ fn test_deposit_reserve_vault_rejects_when_killed() {
 }
 
 #[test]
+fn test_deposit_reserve_vault_rejects_transfer_fee_onyc() {
+    let (mut svm, _payer, onyc_mint, caller) = setup_transfer_fee_onyc_buffer();
+    let deposit_amount = 250_000_000;
+    let caller_onyc_ata =
+        create_token_account_2022(&mut svm, &onyc_mint, &caller.pubkey(), deposit_amount);
+    let reserve_vault_onyc_ata = derive_ata(
+        &find_reserve_vault_authority_pda().0,
+        &onyc_mint,
+        &TOKEN_2022_PROGRAM_ID,
+    );
+
+    let ix = build_deposit_reserve_vault_ix_with_token_program(
+        &caller.pubkey(),
+        &onyc_mint,
+        deposit_amount,
+        &TOKEN_2022_PROGRAM_ID,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&caller]);
+    assert!(
+        result.is_err(),
+        "reserve deposits should reject Token-2022 ONyc with transfer fees"
+    );
+    assert_eq!(get_token_balance(&svm, &caller_onyc_ata), deposit_amount);
+    assert_eq!(get_token_balance(&svm, &reserve_vault_onyc_ata), 0);
+}
+
+#[test]
 fn test_withdraw_reserve_vault_allows_boss() {
     let (mut svm, payer, _token_in_mint, onyc_mint, caller) = setup_buffer_context(1, 0, 0, 0);
     let deposit_amount = 300_000_000;
@@ -424,6 +491,35 @@ fn test_withdraw_reserve_vault_allows_boss() {
     assert_eq!(
         get_token_balance(&svm, &boss_onyc_ata),
         1_000_000_000 + withdraw_amount
+    );
+}
+
+#[test]
+fn test_withdraw_reserve_vault_rejects_transfer_fee_onyc() {
+    let (mut svm, payer, onyc_mint, _caller) = setup_transfer_fee_onyc_buffer();
+    let boss = payer.pubkey();
+    let reserve_amount = 300_000_000;
+    let reserve_vault_onyc_ata = create_token_account_2022(
+        &mut svm,
+        &onyc_mint,
+        &find_reserve_vault_authority_pda().0,
+        reserve_amount,
+    );
+
+    let ix = build_withdraw_reserve_vault_ix_with_token_program(
+        &boss,
+        &onyc_mint,
+        120_000_000,
+        &TOKEN_2022_PROGRAM_ID,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "reserve withdrawals should reject Token-2022 ONyc with transfer fees"
+    );
+    assert_eq!(
+        get_token_balance(&svm, &reserve_vault_onyc_ata),
+        reserve_amount
     );
 }
 

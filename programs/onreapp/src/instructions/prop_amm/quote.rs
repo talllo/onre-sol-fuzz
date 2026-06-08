@@ -6,6 +6,7 @@ use crate::instructions::redemption::{
 };
 use crate::instructions::Offer;
 use crate::state::State;
+use crate::utils::has_transfer_fee;
 use anchor_lang::solana_program::program::set_return_data;
 use anchor_lang::{prelude::*, Accounts, AnchorDeserialize, AnchorSerialize};
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
@@ -781,6 +782,14 @@ pub fn build_swap_sell_quote(
 
 pub fn quote_swap_buy(ctx: Context<QuoteSwapBuy>, token_in_amount: u64) -> Result<()> {
     let offer = ctx.accounts.offer.load()?;
+    require!(
+        !has_transfer_fee(&ctx.accounts.token_in_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
+    require!(
+        !has_transfer_fee(&ctx.accounts.token_out_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
     let quote = build_swap_buy_quote(
         ctx.program_id,
         &ctx.accounts.state,
@@ -807,6 +816,14 @@ pub fn quote_swap_buy(ctx: Context<QuoteSwapBuy>, token_in_amount: u64) -> Resul
 
 pub fn quote_swap_sell(ctx: Context<QuoteSwapSell>, token_in_amount: u64) -> Result<()> {
     let offer = ctx.accounts.offer.load()?;
+    require!(
+        !has_transfer_fee(&ctx.accounts.token_in_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
+    require!(
+        !has_transfer_fee(&ctx.accounts.token_out_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
     let (market_stats_pda, _) =
         Pubkey::find_program_address(&[seeds::MARKET_STATS], ctx.program_id);
     require_keys_eq!(

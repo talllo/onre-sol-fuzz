@@ -21,8 +21,6 @@ pub struct GetCirculatingSupplyEvent {
     pub total_supply: u64,
     /// Vault token amount excluded from circulation in base units
     pub vault_amount: u64,
-    /// Boss ONyc token amount excluded from circulation in base units
-    pub boss_onyc_amount: u64,
     /// Unix timestamp when the calculation was performed
     pub timestamp: u64,
 }
@@ -38,7 +36,7 @@ pub struct GetCirculatingSupplyV2Event {
 /// Account structure for querying circulating supply information
 ///
 /// This struct defines the accounts required to calculate the circulating supply
-/// of ONyc tokens by subtracting vault and boss ONyc holdings from total supply.
+/// of ONyc tokens by subtracting vault holdings from total supply.
 /// All accounts are validated to ensure accurate calculation.
 #[derive(Accounts)]
 pub struct GetCirculatingSupply<'info> {
@@ -64,17 +62,6 @@ pub struct GetCirculatingSupply<'info> {
     )]
     pub onyc_vault_account: UncheckedAccount<'info>,
 
-    /// CHECK: Address is validated against the boss ONyc ATA and may be uninitialized.
-    #[account(
-        constraint = boss_onyc_account.key()
-            == get_associated_token_address_with_program_id(
-                &state.boss,
-                &state.onyc_mint.key(),
-                &token_program.key(),
-            ) @ crate::OnreError::InvalidBossTokenInAccount
-    )]
-    pub boss_onyc_account: UncheckedAccount<'info>,
-
     pub token_program: Interface<'info, TokenInterface>,
 }
 
@@ -93,13 +80,13 @@ pub struct GetCirculatingSupplyV2<'info> {
 /// Calculates and returns the current circulating supply of ONyc tokens
 ///
 /// This read-only instruction calculates the circulating supply by subtracting
-/// excluded balances from the total token supply. The excluded balances are vault
-/// holdings and the boss ONyc account.
+/// excluded balances from the total token supply. The excluded balance is the
+/// offer-vault ONyc holding.
 ///
-/// Formula: `circulating_supply = total_supply - (vault_amount + boss_onyc_amount)`
+/// Formula: `circulating_supply = total_supply - vault_amount`
 ///
-/// The vault and boss ONyc accounts can be uninitialized (treated as zero balance)
-/// or contain tokens that should be excluded from circulation calculations.
+/// The vault ONyc account can be uninitialized (treated as zero balance) or
+/// contain tokens that should be excluded from circulation calculations.
 ///
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
@@ -117,22 +104,14 @@ pub fn get_circulating_supply(ctx: Context<GetCirculatingSupply>) -> Result<u64>
         &ctx.accounts.onyc_vault_account,
         &ctx.accounts.token_program,
     )?;
-    let boss_onyc_amount = read_optional_token_account_amount(
-        &ctx.accounts.boss_onyc_account,
-        &ctx.accounts.token_program,
-    )?;
-    let excluded_amount = vault_amount
-        .checked_add(boss_onyc_amount)
-        .ok_or(crate::OnreError::MathOverflow)?;
     let total_supply = ctx.accounts.onyc_mint.supply;
-    let circulating_supply = calculate_circulating_supply(total_supply, excluded_amount)?;
+    let circulating_supply = calculate_circulating_supply(total_supply, vault_amount)?;
 
     msg!(
-        "Circulating Supply Info - Circulating Supply: {}, Total Supply: {}, Vault Amount: {}, Boss ONyc Amount: {}, Timestamp: {}",
+        "Circulating Supply Info - Circulating Supply: {}, Total Supply: {}, Vault Amount: {}, Timestamp: {}",
         circulating_supply,
         total_supply,
         vault_amount,
-        boss_onyc_amount,
         current_time
     );
 
@@ -140,7 +119,6 @@ pub fn get_circulating_supply(ctx: Context<GetCirculatingSupply>) -> Result<u64>
         circulating_supply,
         total_supply,
         vault_amount,
-        boss_onyc_amount,
         timestamp: current_time,
     });
 

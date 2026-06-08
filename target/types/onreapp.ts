@@ -2806,8 +2806,8 @@ export type Onreapp = {
       "docs": [
         "Delegates to `market_info::get_circulating_supply`.",
         "This is a read-only instruction that calculates and returns the current circulating supply",
-        "based on total ONyc supply minus the offer-vault and boss ONyc ATA balances.",
-        "circulating_supply = total_supply - (vault_amount + boss_onyc_amount)",
+        "based on total ONyc supply minus the offer-vault ONyc ATA balance.",
+        "circulating_supply = total_supply - vault_amount",
         "Emits a `GetCirculatingSupplyEvent` upon success.",
         "",
         "# Arguments",
@@ -2891,9 +2891,6 @@ export type Onreapp = {
         },
         {
           "name": "onycVaultAccount"
-        },
-        {
-          "name": "bossOnycAccount"
         },
         {
           "name": "tokenProgram"
@@ -3139,7 +3136,7 @@ export type Onreapp = {
         "",
         "Delegates to `market_info::get_tvl`.",
         "This legacy read-only instruction calculates TVL from circulating ONyc supply:",
-        "total ONyc mint supply minus the offer-vault ONyc ATA and boss ONyc ATA balances.",
+        "total ONyc mint supply minus the offer-vault ONyc ATA balance.",
         "TVL = circulating_supply * current_NAV / 10^9.",
         "Emits a `GetTVLEvent` upon success.",
         "",
@@ -3258,9 +3255,6 @@ export type Onreapp = {
         },
         {
           "name": "vaultTokenOutAccount"
-        },
-        {
-          "name": "bossOnycAccount"
         },
         {
           "name": "tokenOutProgram"
@@ -13872,13 +13866,6 @@ export type Onreapp = {
             "name": "vaultAmount",
             "docs": [
               "Vault token amount excluded from circulation in base units"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "bossOnycAmount",
-            "docs": [
-              "Boss ONyc token amount excluded from circulation in base units"
             ],
             "type": "u64"
           },

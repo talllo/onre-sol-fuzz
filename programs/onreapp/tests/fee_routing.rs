@@ -373,6 +373,42 @@ fn test_withdraw_offer_fees_rejects_kind_mismatch() {
 }
 
 #[test]
+fn test_withdraw_offer_fees_rejects_transfer_fee_mint() {
+    let (mut svm, payer, _onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+    let mint = create_mint_2022_with_transfer_fee(&mut svm, &payer, 6, &boss, 100, 1_000_000);
+    let destination = Keypair::new();
+    svm.airdrop(&destination.pubkey(), INITIAL_LAMPORTS)
+        .unwrap();
+
+    let (fee_vault_pda, _) = find_offer_fee_vault_pda();
+    let ix = build_set_configurable_vault_destination_ix(
+        &boss,
+        &fee_vault_pda,
+        ConfigurableVaultKind::OfferFee.as_u8(),
+        &destination.pubkey(),
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let vault_token_account = create_token_account_2022(&mut svm, &mint, &fee_vault_pda, 1_000_000);
+    let ix = build_withdraw_configurable_vault_ix(
+        &boss,
+        &fee_vault_pda,
+        &destination.pubkey(),
+        &mint,
+        ConfigurableVaultKind::OfferFee.as_u8(),
+        100_000,
+        &TOKEN_2022_PROGRAM_ID,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "configurable vault withdrawals should reject transfer-fee mints"
+    );
+    assert_eq!(get_token_balance(&svm, &vault_token_account), 1_000_000);
+}
+
+#[test]
 fn test_fee_routing_no_fee_transfer_when_zero_bps() {
     let mut ctx = setup_fee_routing();
     let boss = ctx.payer.pubkey();

@@ -3,6 +3,7 @@ mod common;
 use anchor_lang::AccountDeserialize;
 use common::*;
 use onreapp::state::{CirculatingSupplyExcludedAccounts, CirculatingSupplyExcludedBalance};
+use solana_sdk::account::Account;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
@@ -578,8 +579,8 @@ fn test_get_circulating_supply_with_vault() {
     let result = send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     let supply = get_return_u64(&result);
 
-    // circulating = total - (vault + boss ONyc) = 1000e9 - (200e9 + 300e9) = 500e9
-    assert_eq!(supply, 500_000_000_000);
+    // circulating = total - vault = 1000e9 - 200e9 = 800e9
+    assert_eq!(supply, 800_000_000_000);
 }
 
 // ---------------------------------------------------------------------------
@@ -694,6 +695,120 @@ fn test_update_circulating_supply_excluded_balance_rejects_missing_or_extra_atas
         send_tx(&mut svm, &[extra_ix], &[&payer]).is_err(),
         "extra remaining ATA should fail"
     );
+}
+
+#[test]
+fn test_update_circulating_supply_excluded_balance_rejects_swapped_ata_order() {
+    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+    let owner_a = Pubkey::new_unique();
+    let owner_b = Pubkey::new_unique();
+    let mut owners = [Pubkey::default(); 20];
+    owners[0] = owner_a;
+    owners[1] = owner_b;
+
+    let set_ix = build_set_circulating_supply_excluded_accounts_ix(&boss, &owners);
+    send_tx(&mut svm, &[set_ix], &[&payer]).unwrap();
+
+    let ata_a = create_token_account(&mut svm, &onyc_mint, &owner_a, 10);
+    let ata_b = create_token_account(&mut svm, &onyc_mint, &owner_b, 20);
+    let update_ix = build_update_circulating_supply_excluded_balance_ix(
+        &boss,
+        &onyc_mint,
+        &[ata_a, ata_b],
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut svm, &[update_ix], &[&payer]).unwrap();
+    assert_eq!(read_circulating_supply_excluded_balance(&svm).amount, 30);
+
+    let swapped_ix = build_update_circulating_supply_excluded_balance_ix(
+        &boss,
+        &onyc_mint,
+        &[ata_b, ata_a],
+        &TOKEN_PROGRAM_ID,
+    );
+    assert!(
+        send_tx(&mut svm, &[swapped_ix], &[&payer]).is_err(),
+        "swapped configured ATAs should fail"
+    );
+    assert_eq!(read_circulating_supply_excluded_balance(&svm).amount, 30);
+}
+
+#[test]
+fn test_update_circulating_supply_excluded_balance_rejects_malformed_ata_data() {
+    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+    let owner = Pubkey::new_unique();
+    let mut owners = [Pubkey::default(); 20];
+    owners[0] = owner;
+
+    let set_ix = build_set_circulating_supply_excluded_accounts_ix(&boss, &owners);
+    send_tx(&mut svm, &[set_ix], &[&payer]).unwrap();
+
+    let ata = create_token_account(&mut svm, &onyc_mint, &owner, 30);
+    let update_ix = build_update_circulating_supply_excluded_balance_ix(
+        &boss,
+        &onyc_mint,
+        &[ata],
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut svm, &[update_ix], &[&payer]).unwrap();
+    assert_eq!(read_circulating_supply_excluded_balance(&svm).amount, 30);
+
+    let wrong_mint = create_mint(&mut svm, &payer, 9, &boss);
+    let mut account = svm.get_account(&ata).unwrap();
+    account.data[0..32].copy_from_slice(wrong_mint.as_ref());
+    svm.set_account(ata, account).unwrap();
+    let update_ix = build_update_circulating_supply_excluded_balance_ix(
+        &boss,
+        &onyc_mint,
+        &[ata],
+        &TOKEN_PROGRAM_ID,
+    );
+    assert!(
+        send_tx(&mut svm, &[update_ix], &[&payer]).is_err(),
+        "ATA with wrong mint should fail"
+    );
+    assert_eq!(read_circulating_supply_excluded_balance(&svm).amount, 30);
+
+    let mut account = svm.get_account(&ata).unwrap();
+    account.data[0..32].copy_from_slice(onyc_mint.as_ref());
+    account.data[32..64].copy_from_slice(Pubkey::new_unique().as_ref());
+    svm.set_account(ata, account).unwrap();
+    let update_ix = build_update_circulating_supply_excluded_balance_ix(
+        &boss,
+        &onyc_mint,
+        &[ata],
+        &TOKEN_PROGRAM_ID,
+    );
+    assert!(
+        send_tx(&mut svm, &[update_ix], &[&payer]).is_err(),
+        "ATA with wrong owner should fail"
+    );
+    assert_eq!(read_circulating_supply_excluded_balance(&svm).amount, 30);
+
+    svm.set_account(
+        ata,
+        Account {
+            executable: false,
+            data: Vec::new(),
+            lamports: INITIAL_LAMPORTS,
+            owner: SYSTEM_PROGRAM_ID,
+            rent_epoch: 0,
+        },
+    )
+    .unwrap();
+    let update_ix = build_update_circulating_supply_excluded_balance_ix(
+        &boss,
+        &onyc_mint,
+        &[ata],
+        &TOKEN_PROGRAM_ID,
+    );
+    assert!(
+        send_tx(&mut svm, &[update_ix], &[&payer]).is_err(),
+        "uninitialized ATA should fail"
+    );
+    assert_eq!(read_circulating_supply_excluded_balance(&svm).amount, 30);
 }
 
 #[test]

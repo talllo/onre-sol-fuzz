@@ -642,7 +642,7 @@ pub mod onreapp {
     ///
     /// Delegates to `market_info::get_tvl`.
     /// This legacy read-only instruction calculates TVL from circulating ONyc supply:
-    /// total ONyc mint supply minus the offer-vault ONyc ATA and boss ONyc ATA balances.
+    /// total ONyc mint supply minus the offer-vault ONyc ATA balance.
     /// TVL = circulating_supply * current_NAV / 10^9.
     /// Emits a `GetTVLEvent` upon success.
     ///
@@ -657,8 +657,8 @@ pub mod onreapp {
 
     /// Delegates to `market_info::get_circulating_supply`.
     /// This is a read-only instruction that calculates and returns the current circulating supply
-    /// based on total ONyc supply minus the offer-vault and boss ONyc ATA balances.
-    /// circulating_supply = total_supply - (vault_amount + boss_onyc_amount)
+    /// based on total ONyc supply minus the offer-vault ONyc ATA balance.
+    /// circulating_supply = total_supply - vault_amount
     /// Emits a `GetCirculatingSupplyEvent` upon success.
     ///
     /// # Arguments

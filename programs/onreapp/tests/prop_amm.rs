@@ -200,6 +200,15 @@ fn prepare_prop_amm_sell_side(ctx: &mut PropAmmCtx, redemption_fee_bps: u16) {
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 }
 
+fn initialize_prop_amm_buffer(ctx: &mut PropAmmCtx, gross_yield: u64) {
+    let boss = ctx.payer.pubkey();
+    let (offer_pda, _) = find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_initialize_buffer_ix(&boss, &offer_pda, &ctx.onyc_mint);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    let ix = build_set_buffer_gross_yield_ix(&boss, &offer_pda, &ctx.onyc_mint, gross_yield);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+}
+
 #[test]
 fn test_hard_wall_curve_is_vulnerable_to_order_splitting() {
     let hard_wall_reserve = 10_000_000;
@@ -1358,6 +1367,76 @@ fn test_open_swap_buy_rejects_token_in_transfer_fee() {
 }
 
 #[test]
+fn test_quote_swap_buy_rejects_token_in_transfer_fee() {
+    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+    let usdg_mint = create_mint_2022_with_transfer_fee(&mut svm, &payer, 6, &boss, 500, 1_000_000);
+
+    let ix = build_make_offer_ix(
+        &boss,
+        &usdg_mint,
+        &onyc_mint,
+        0,
+        false,
+        true,
+        &TOKEN_2022_PROGRAM_ID,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let (offer_pda, _) = find_offer_pda(&usdg_mint, &onyc_mint);
+    let ix = build_set_main_offer_ix(&boss, &offer_pda);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let ix = build_configure_prop_amm_ix(&boss, &usdg_mint, &onyc_mint, true, 700, 25_000);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let quote_ix = build_quote_swap_ix(&onyc_mint, &usdg_mint, &onyc_mint, 1_000_000);
+    let result = send_tx(&mut svm, &[quote_ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "Prop AMM buy quote should reject Token-2022 transfer-fee assets"
+    );
+}
+
+#[test]
+fn test_quote_swap_sell_rejects_token_out_transfer_fee() {
+    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+    let asset_mint = create_mint_2022_with_transfer_fee(&mut svm, &payer, 6, &boss, 500, 1_000_000);
+
+    let ix = build_make_offer_ix(
+        &boss,
+        &asset_mint,
+        &onyc_mint,
+        0,
+        false,
+        true,
+        &TOKEN_2022_PROGRAM_ID,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let (offer_pda, _) = find_offer_pda(&asset_mint, &onyc_mint);
+    let ix = build_set_main_offer_ix(&boss, &offer_pda);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let ix = build_configure_prop_amm_ix(&boss, &asset_mint, &onyc_mint, true, 700, 25_000);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
+    let redemption_vault_asset = create_token_account_2022(
+        &mut svm,
+        &asset_mint,
+        &redemption_vault_authority,
+        1_000_000,
+    );
+    let mut quote_ix = build_quote_swap_ix(&onyc_mint, &onyc_mint, &asset_mint, 1_000_000_000);
+    quote_ix.accounts[5] = AccountMeta::new_readonly(redemption_vault_asset, false);
+    quote_ix.accounts[8] = AccountMeta::new_readonly(TOKEN_2022_PROGRAM_ID, false);
+
+    let result = send_tx(&mut svm, &[quote_ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "Prop AMM sell quote should reject Token-2022 transfer-fee payout assets"
+    );
+}
+
+#[test]
 fn test_open_swap_sell_rolls_epoch_tracker_before_recording_trade() {
     let mut ctx = setup_prop_amm();
     let boss = ctx.payer.pubkey();
@@ -1911,6 +1990,80 @@ fn test_open_swap_sell_accrues_buffer_before_burning_onyc() {
         supply_before + expected_buffer_accrual - sell_amount
     );
     assert_eq!(buffer_state_after.previous_supply, supply_after);
+}
+
+#[test]
+fn test_open_swap_buy_rejects_invalid_buffer_accounts() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    add_prop_amm_vector(&mut ctx);
+    let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    initialize_prop_amm_buffer(&mut ctx, 100_000);
+    advance_clock_by(&mut ctx.svm, ONE_YEAR_SECONDS);
+
+    for (account_index, label) in [
+        (23, "buffer state"),
+        (24, "reserve vault"),
+        (25, "management fee vault"),
+        (26, "performance fee vault"),
+    ] {
+        let previous_supply = read_buffer_state(&ctx.svm).previous_supply;
+        let mut ix = build_open_swap_buy_ix(
+            &ctx.onyc_mint,
+            &ctx.user.pubkey(),
+            &boss,
+            &ctx.usdc_mint,
+            &ctx.onyc_mint,
+            1_000_000,
+            0,
+            &TOKEN_PROGRAM_ID,
+            &TOKEN_PROGRAM_ID,
+        );
+        ix.accounts[account_index] = AccountMeta::new(Pubkey::new_unique(), false);
+
+        assert!(
+            send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).is_err(),
+            "Prop AMM buy should reject invalid {label}"
+        );
+        assert_eq!(read_buffer_state(&ctx.svm).previous_supply, previous_supply);
+    }
+}
+
+#[test]
+fn test_open_swap_sell_rejects_invalid_buffer_accounts() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    prepare_prop_amm_sell_side(&mut ctx, 0);
+    initialize_prop_amm_buffer(&mut ctx, 100_000);
+    advance_clock_by(&mut ctx.svm, ONE_YEAR_SECONDS);
+
+    for (account_index, label) in [
+        (19, "buffer state"),
+        (20, "reserve vault"),
+        (21, "management fee vault"),
+        (22, "performance fee vault"),
+    ] {
+        let previous_supply = read_buffer_state(&ctx.svm).previous_supply;
+        let mut ix = build_open_swap_sell_ix(
+            &ctx.onyc_mint,
+            &ctx.user.pubkey(),
+            &boss,
+            &ctx.onyc_mint,
+            &ctx.usdc_mint,
+            100_000_000,
+            0,
+            &TOKEN_PROGRAM_ID,
+            &TOKEN_PROGRAM_ID,
+        );
+        ix.accounts[account_index] = AccountMeta::new(Pubkey::new_unique(), false);
+
+        assert!(
+            send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).is_err(),
+            "Prop AMM sell should reject invalid {label}"
+        );
+        assert_eq!(read_buffer_state(&ctx.svm).previous_supply, previous_supply);
+    }
 }
 
 #[test]
