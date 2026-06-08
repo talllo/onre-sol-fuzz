@@ -185,6 +185,9 @@ anchor build && cargo test --manifest-path programs/onreapp/Cargo.toml --tests
 
 # Run a single test file
 anchor build && cargo test --manifest-path programs/onreapp/Cargo.toml --test redemption
+
+# Run the Dockerized Rust test environment
+docker compose up --build --abort-on-container-exit
 ```
 
 Tests live under `programs/onreapp/tests/`. Shared LiteSVM setup and helpers are in `common/`; the instruction tests are flat Rust test files, not nested folders.

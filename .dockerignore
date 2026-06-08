@@ -9,11 +9,17 @@ yarn.lock
 # Build outputs
 target/
 .anchor/
+coverage/
+dist/
+graphify-out/
+sbf_trace_dir/
 tests/fixtures/
 
 # IDE
 .vscode/
 .idea/
+.local/
+.surfpool/
 *.swp
 *.swo
 
