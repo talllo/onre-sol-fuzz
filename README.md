@@ -69,9 +69,9 @@ The kill switch does not pause every instruction. Governance and configuration-o
 
 ### Token Support
 
-Most token movement paths use the SPL Token interface and can work with **SPL Token** or **Token-2022** mints. Redemption token-in/ONYC request setup and market-stats recomputation for ONYC require the classic SPL Token program.
+Most token movement paths use the SPL Token interface and can work with **SPL Token** or **Token-2022** mints. Redemption offer/request token-in setup and market-stats recomputation for ONYC require the classic SPL Token program.
 
-`take_offer` and redemption payout paths reject Token-2022 mints with non-zero transfer fees.
+Token-2022 mints with non-zero transfer fees are rejected by guarded token-moving paths that cannot safely account for transfer-fee deltas, including offer execution, redemption operations, vault deposits/withdrawals, Prop AMM quotes/execution, BUFFER reserve movement, and configurable-vault withdrawals.
 
 ### BUFFER Yield Model
 
@@ -166,15 +166,14 @@ The UI always targets the mainnet production program ID: `onreuGhHHgVzMWSkj2oQDL
 
 The current CLI exposes only a subset of the on-chain BUFFER flow:
 
-- available commands: `buffer get`, `buffer initialize`, `buffer set-gross-yield`, `buffer burn`
+- available BUFFER commands: `buffer get`, `buffer initialize`, `buffer set-gross-yield`, `buffer set-fees`, `buffer reserve-deposit`, `buffer reserve-withdraw`, `buffer burn`
+- related state/vault commands: `state set-main-offer`, `vault set-configurable-destination`, `vault withdraw-configurable`
 - `buffer initialize` requires `--offer` and `--onyc-mint`
 - `current_yield` is not set manually; it is derived from the active APR on the offer supplied to the accrual path
 
-The CLI does not currently expose the full administrative BUFFER flow. In particular, README examples should not assume CLI support for:
-
-- `set_main_offer`
-- `set_buffer_fee_config`
-- management/performance fee vault withdrawals through `withdraw_configurable_vault`
+The CLI does not group the full administrative BUFFER flow under the `buffer`
+namespace. Main-offer changes use `state set-main-offer`, and management or
+performance fee vault withdrawals use the generic configurable-vault commands.
 
 CLI commands that modify state can either sign locally and send, or output a base58-encoded transaction for external signing such as Squad multisig. Read-only scripts print results directly.
 
@@ -202,14 +201,28 @@ Tests live under `programs/onreapp/tests/`. Shared LiteSVM setup and helpers are
 ```
 programs/onreapp/tests/
 ├── common/                     # LiteSVM setup, builders, readers, token helpers
+├── add_admin.rs
+├── add_offer_vector.rs
 ├── buffer.rs
+├── close_state.rs
+├── configure_max_mint_amount.rs
+├── configure_max_supply.rs
+├── delete_all_offer_vectors.rs
+├── delete_offer_vector.rs
+├── fee_routing.rs
+├── initialize.rs
+├── layout_compatibility.rs
+├── make_offer.rs
 ├── market_info.rs
 ├── mint_authority.rs
+├── partial_redemption.rs
 ├── prop_amm.rs
 ├── redemption.rs
+├── set_onyc_mint.rs
 ├── state_operations.rs
 ├── take_offer.rs
 ├── take_offer_permissionless.rs
+├── update_offer_fee.rs
 └── vault_operations.rs
 ```
 
@@ -221,6 +234,29 @@ Coverage uses the Rust LiteSVM trace flow documented in `COVERAGE.md`. It requir
 cargo install sbpf-coverage
 brew install lcov
 ```
+
+The SBF release profile must preserve debug sections for `sbpf-coverage`.
+Before running coverage, make sure the workspace `Cargo.toml` release profile is
+coverage-compatible:
+
+```toml
+[profile.release]
+overflow-checks = true
+lto = "off"
+codegen-units = 1
+debug = true
+strip = "none"
+opt-level = 3
+
+[profile.release.build-override]
+incremental = false
+codegen-units = 1
+```
+
+The `codegen-units` entries are in different profile tables. The first controls
+the release program build; the `build-override` entry controls build scripts and
+build-time crates. Do not use `debug = false` or `strip = "debuginfo"` for
+coverage builds, because `sbpf-coverage` needs the SBF debug sections.
 
 Run the coverage flow from the repo root:
 
