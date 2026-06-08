@@ -85,8 +85,9 @@ pub struct GetCirculatingSupplyV2<'info> {
     #[account(seeds = [seeds::STATE], bump = state.bump, has_one = onyc_mint)]
     pub state: Box<Account<'info, State>>,
 
-    /// CHECK: PDA address and data are validated in instruction logic; uninitialized means zero.
-    pub excluded_balance: UncheckedAccount<'info>,
+    /// CHECK: PDA derivation is validated by seeds constraint; uninitialized data means zero.
+    #[account(seeds = [seeds::CIRCULATING_SUPPLY_EXCLUDED_BALANCE], bump)]
+    pub circulating_supply_excluded_balance: UncheckedAccount<'info>,
 }
 
 /// Calculates and returns the current circulating supply of ONyc tokens
@@ -151,7 +152,9 @@ pub fn get_circulating_supply_v2(ctx: Context<GetCirculatingSupplyV2>) -> Result
 
     let excluded_amount = load_circulating_supply_excluded_balance_amount(
         ctx.program_id,
-        &ctx.accounts.excluded_balance.to_account_info(),
+        &ctx.accounts
+            .circulating_supply_excluded_balance
+            .to_account_info(),
     )?;
 
     let total_supply = ctx.accounts.onyc_mint.supply;

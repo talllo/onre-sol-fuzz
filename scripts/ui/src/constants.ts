@@ -56,7 +56,6 @@ export const PDA_SEEDS: Record<string, string> = {
     redemption_vault_authority: "redemption_offer_vault_authority",
     market_stats: "market_stats",
     circulating_supply_excluded_balance: "circ_supply_excl_balance",
-    excluded_balance: "circ_supply_excl_balance",
     excluded_accounts: "circ_supply_excl_accounts",
 };
 

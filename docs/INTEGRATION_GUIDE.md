@@ -130,13 +130,13 @@ console.log(`APY: ${apyPercent.toFixed(2)}%`); // e.g., 10.50%
   tokenInMint: PublicKey,
   tokenOutMint: PublicKey,
   state: PublicKey,          // PDA: ["state"]
-  excludedBalance: PublicKey // PDA: ["circ_supply_excl_balance"]
+  circulatingSupplyExcludedBalance: PublicKey // PDA: ["circ_supply_excl_balance"]
 }
 ```
 
 **Example:**
 ```typescript
-const [excludedBalance] = PublicKey.findProgramAddressSync(
+const [circulatingSupplyExcludedBalance] = PublicKey.findProgramAddressSync(
   [Buffer.from("circ_supply_excl_balance")],
   program.programId
 );
@@ -151,7 +151,7 @@ const tvl = await program.methods
     tokenInMint,
     tokenOutMint,
     state: statePda,
-    excludedBalance
+    circulatingSupplyExcludedBalance
   })
   .view();
 
@@ -171,7 +171,7 @@ console.log(`TVL: ${tvl.toString()}`);
 {
   state: PublicKey,           // PDA: ["state"]
   onycMint: PublicKey,        // From state.onyc_mint
-  excludedBalance: PublicKey  // PDA: ["circ_supply_excl_balance"]
+  circulatingSupplyExcludedBalance: PublicKey  // PDA: ["circ_supply_excl_balance"]
 }
 ```
 
@@ -187,7 +187,7 @@ const [statePda] = PublicKey.findProgramAddressSync(
 const state = await program.account.state.fetch(statePda);
 const onycMint = state.onycMint;
 
-const [excludedBalance] = PublicKey.findProgramAddressSync(
+const [circulatingSupplyExcludedBalance] = PublicKey.findProgramAddressSync(
   [Buffer.from("circ_supply_excl_balance")],
   program.programId
 );
@@ -197,7 +197,7 @@ const supply = await program.methods
   .accounts({
     state: statePda,
     onycMint,
-    excludedBalance
+    circulatingSupplyExcludedBalance
   })
   .view();
 

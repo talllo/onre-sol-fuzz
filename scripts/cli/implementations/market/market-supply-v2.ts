@@ -12,7 +12,7 @@ export async function executeMarketSupplyV2(opts: GlobalOptions): Promise<void> 
             .accountsPartial({
                 onycMint: config.mints.onyc,
                 state: helper.statePda,
-                excludedBalance: helper.pdas.circulatingSupplyExcludedBalancePda,
+                circulatingSupplyExcludedBalance: helper.pdas.circulatingSupplyExcludedBalancePda,
             })
             .view();
 

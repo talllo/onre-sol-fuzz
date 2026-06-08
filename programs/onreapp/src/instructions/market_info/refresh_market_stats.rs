@@ -35,8 +35,9 @@ pub struct RefreshMarketStats<'info> {
     /// The canonical ONyc mint for global market stats.
     pub onyc_mint: InterfaceAccount<'info, Mint>,
 
-    /// CHECK: PDA address and data are validated in instruction logic; uninitialized means zero.
-    pub excluded_balance: UncheckedAccount<'info>,
+    /// CHECK: PDA derivation is validated by seeds constraint; uninitialized data means zero.
+    #[account(seeds = [seeds::CIRCULATING_SUPPLY_EXCLUDED_BALANCE], bump)]
+    pub circulating_supply_excluded_balance: UncheckedAccount<'info>,
 
     /// Canonical global market-stats PDA updated by refreshes and purchases.
     #[account(
@@ -79,7 +80,9 @@ pub fn refresh_market_stats(ctx: Context<RefreshMarketStats>) -> Result<()> {
     );
     let excluded_amount = super::load_circulating_supply_excluded_balance_amount(
         ctx.program_id,
-        &ctx.accounts.excluded_balance.to_account_info(),
+        &ctx.accounts
+            .circulating_supply_excluded_balance
+            .to_account_info(),
     )?;
     let snapshot = recompute_market_stats(&main_offer, &ctx.accounts.onyc_mint, excluded_amount)?;
 

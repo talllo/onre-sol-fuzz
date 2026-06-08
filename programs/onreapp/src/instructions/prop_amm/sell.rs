@@ -1,7 +1,7 @@
 use crate::constants::seeds;
 use crate::instructions::buffer::accounts::{
-    BufferAccrualAccountsBumps, __client_accounts_buffer_accrual_accounts,
-    __cpi_client_accounts_buffer_accrual_accounts,
+    __client_accounts_buffer_accrual_accounts, __cpi_client_accounts_buffer_accrual_accounts,
+    BufferAccrualAccountsBumps,
 };
 use crate::instructions::buffer::accrue_buffer::{
     accrue_buffer_from_accounts, store_buffer_post_supply,
@@ -35,6 +35,14 @@ use super::quote::{
 
 #[derive(Accounts)]
 pub struct OpenSwapSell<'info> {
+    #[account(
+        seeds = [
+            crate::constants::seeds::OFFER,
+            token_out_mint.key().as_ref(),
+            token_in_mint.key().as_ref()
+        ],
+        bump = offer.load()?.bump
+    )]
     pub offer: AccountLoader<'info, Offer>,
 
     #[account(
@@ -62,7 +70,8 @@ pub struct OpenSwapSell<'info> {
     )]
     pub state: Box<Account<'info, State>>,
 
-    /// CHECK: PDA derivation validated in instruction logic
+    /// CHECK: PDA derivation validated by seeds constraint
+    #[account(seeds = [crate::constants::seeds::OFFER_VAULT_AUTHORITY], bump)]
     pub offer_vault_authority: UncheckedAccount<'info>,
 
     /// CHECK: PDA derivation validated by seeds constraint
@@ -95,32 +104,48 @@ pub struct OpenSwapSell<'info> {
     #[account(mut)]
     pub user_token_out_account: UncheckedAccount<'info>,
 
-    /// CHECK: PDA and data are validated/initialized in instruction logic.
-    #[account(mut)]
+    /// CHECK: PDA derivation is validated by seeds constraint; data is validated/initialized in instruction logic.
+    #[account(
+        mut,
+        seeds = [
+            crate::constants::seeds::CONFIGURABLE_VAULT,
+            crate::constants::seeds::PROP_AMM_PROCEEDS_VAULT
+        ],
+        bump
+    )]
     pub prop_amm_proceeds_vault: UncheckedAccount<'info>,
 
     /// CHECK: Validated and optionally initialized in instruction logic.
     #[account(mut)]
     pub prop_amm_proceeds_token_in_account: UncheckedAccount<'info>,
 
-    /// CHECK: PDA and data are validated/initialized in instruction logic.
-    #[account(mut)]
+    /// CHECK: PDA derivation is validated by seeds constraint; data is validated/initialized in instruction logic.
+    #[account(
+        mut,
+        seeds = [
+            crate::constants::seeds::CONFIGURABLE_VAULT,
+            crate::constants::seeds::PROP_AMM_FEE_VAULT
+        ],
+        bump
+    )]
     pub prop_amm_fee_vault: UncheckedAccount<'info>,
 
     /// CHECK: Validated and optionally initialized in instruction logic.
     #[account(mut)]
     pub prop_amm_fee_token_in_account: UncheckedAccount<'info>,
 
-    /// CHECK: PDA derivation validated in instruction logic
+    /// CHECK: PDA derivation validated by seeds constraint
+    #[account(seeds = [crate::constants::seeds::MINT_AUTHORITY], bump)]
     pub mint_authority: UncheckedAccount<'info>,
 
     pub buffer_accounts: BufferAccrualAccounts<'info>,
 
-    /// CHECK: validated in instruction logic
-    #[account(mut)]
+    /// CHECK: PDA derivation is validated by seeds constraint and the account is optionally initialized in instruction logic.
+    #[account(mut, seeds = [crate::constants::seeds::MARKET_STATS], bump)]
     pub market_stats: UncheckedAccount<'info>,
 
-    /// CHECK: PDA validation and data loading are handled by market stats refresh.
+    /// CHECK: PDA derivation is validated by seeds constraint; data loading is handled by market stats refresh.
+    #[account(seeds = [crate::constants::seeds::CIRCULATING_SUPPLY_EXCLUDED_BALANCE], bump)]
     pub circulating_supply_excluded_balance: UncheckedAccount<'info>,
 
     /// CHECK: validated in instruction logic

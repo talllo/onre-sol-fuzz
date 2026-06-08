@@ -1,7 +1,7 @@
 use crate::constants::{seeds, MAX_BASIS_POINTS};
 use crate::instructions::buffer::accounts::{
-    BufferAccrualAccountsBumps, __client_accounts_buffer_accrual_accounts,
-    __cpi_client_accounts_buffer_accrual_accounts,
+    __client_accounts_buffer_accrual_accounts, __cpi_client_accounts_buffer_accrual_accounts,
+    BufferAccrualAccountsBumps,
 };
 use crate::instructions::buffer::{
     accrue_buffer::accrue_buffer_from_accounts, BufferAccrualAccounts, BufferFeeConfigUpdatedEvent,
@@ -32,7 +32,7 @@ pub struct SetBufferFeeConfig<'info> {
     #[account(mut)]
     pub onyc_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    /// CHECK: PDA derivation is validated in instruction logic.
+    /// CHECK: PDA derivation is validated by seeds constraint.
     #[account(seeds = [seeds::OFFER_VAULT_AUTHORITY], bump)]
     pub offer_vault_authority: UncheckedAccount<'info>,
 
@@ -49,11 +49,12 @@ pub struct SetBufferFeeConfig<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 
-    /// CHECK: Validated in instruction logic.
-    #[account(mut)]
+    /// CHECK: PDA derivation is validated by seeds constraint and the account is optionally initialized in settlement helper.
+    #[account(mut, seeds = [seeds::MARKET_STATS], bump)]
     pub market_stats: UncheckedAccount<'info>,
 
-    /// CHECK: PDA validation and data loading are handled by market stats refresh.
+    /// CHECK: PDA derivation is validated by seeds constraint; data loading is handled by market stats refresh.
+    #[account(seeds = [seeds::CIRCULATING_SUPPLY_EXCLUDED_BALANCE], bump)]
     pub circulating_supply_excluded_balance: UncheckedAccount<'info>,
 }
 

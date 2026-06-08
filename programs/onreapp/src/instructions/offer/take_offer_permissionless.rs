@@ -1,7 +1,7 @@
 use crate::constants::seeds;
 use crate::instructions::buffer::accounts::{
-    BufferAccrualAccountsBumps, __client_accounts_buffer_accrual_accounts,
-    __cpi_client_accounts_buffer_accrual_accounts,
+    __client_accounts_buffer_accrual_accounts, __cpi_client_accounts_buffer_accrual_accounts,
+    BufferAccrualAccountsBumps,
 };
 use crate::instructions::buffer::{
     accrue_buffer::{accrue_buffer_from_accounts, store_buffer_post_supply},
@@ -89,6 +89,7 @@ pub struct TakeOfferPermissionless<'info> {
     /// This PDA manages token transfers and burning operations for the
     /// burn/mint architecture when program has mint authority.
     /// CHECK: PDA derivation is validated by seeds constraint
+    #[account(seeds = [seeds::OFFER_VAULT_AUTHORITY], bump)]
     pub vault_authority: UncheckedAccount<'info>,
 
     /// Vault account for temporary token_in storage during burn operations
@@ -120,6 +121,7 @@ pub struct TakeOfferPermissionless<'info> {
     /// This PDA manages the intermediary accounts used for permissionless token
     /// routing, enabling secure transfers without direct user-boss relationships.
     /// CHECK: PDA derivation is validated by seeds constraint
+    #[account(seeds = [seeds::PERMISSIONLESS_AUTHORITY], bump)]
     pub permissionless_authority: UncheckedAccount<'info>,
 
     /// Intermediary account for routing token_in payments

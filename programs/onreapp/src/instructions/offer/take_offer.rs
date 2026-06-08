@@ -1,7 +1,7 @@
 use crate::constants::seeds;
 use crate::instructions::buffer::accounts::{
-    BufferAccrualAccountsBumps, __client_accounts_buffer_accrual_accounts,
-    __cpi_client_accounts_buffer_accrual_accounts,
+    __client_accounts_buffer_accrual_accounts, __cpi_client_accounts_buffer_accrual_accounts,
+    BufferAccrualAccountsBumps,
 };
 use crate::instructions::buffer::{
     accrue_buffer::{accrue_buffer_from_accounts, store_buffer_post_supply},

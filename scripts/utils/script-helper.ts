@@ -963,7 +963,7 @@ export class ScriptHelper {
             .accountsPartial({
                 onycMint: params.onycMint,
                 excludedAccounts: this.pdas.circulatingSupplyExcludedAccountsPda,
-                excludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
+                circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
                 tokenProgram,
                 signer: params.signer,
                 systemProgram: anchor.web3.SystemProgram.programId,
@@ -981,7 +981,7 @@ export class ScriptHelper {
                 tokenInMint: params.tokenInMint,
                 state: this.statePda,
                 onycMint: state.onycMint as PublicKey,
-                excludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
+                circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
                 marketStats: this.pdas.marketStatsPda,
                 signer: params.signer,
                 systemProgram: anchor.web3.SystemProgram.programId,

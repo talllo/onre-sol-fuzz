@@ -14,7 +14,7 @@ export async function executeMarketTvlV2(opts: GlobalOptions & Record<string, an
                 tokenInMint: params.tokenIn,
                 tokenOutMint: params.tokenOut,
                 state: helper.statePda,
-                excludedBalance: helper.pdas.circulatingSupplyExcludedBalancePda,
+                circulatingSupplyExcludedBalance: helper.pdas.circulatingSupplyExcludedBalancePda,
             })
             .view();
 

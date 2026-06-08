@@ -129,8 +129,9 @@ pub struct GetTVLV2<'info> {
     #[account(seeds = [seeds::STATE], bump = state.bump)]
     pub state: Box<Account<'info, State>>,
 
-    /// CHECK: PDA address and data are validated in instruction logic; uninitialized means zero.
-    pub excluded_balance: UncheckedAccount<'info>,
+    /// CHECK: PDA derivation is validated by seeds constraint; uninitialized data means zero.
+    #[account(seeds = [seeds::CIRCULATING_SUPPLY_EXCLUDED_BALANCE], bump)]
+    pub circulating_supply_excluded_balance: UncheckedAccount<'info>,
 }
 
 /// Calculates and returns the current TVL (Total Value Locked) for a specific offer
@@ -206,7 +207,9 @@ pub fn get_tvl_v2(ctx: Context<GetTVLV2>) -> Result<u64> {
 
     let excluded_amount = load_circulating_supply_excluded_balance_amount(
         ctx.program_id,
-        &ctx.accounts.excluded_balance.to_account_info(),
+        &ctx.accounts
+            .circulating_supply_excluded_balance
+            .to_account_info(),
     )?;
 
     let token_supply =

@@ -743,10 +743,64 @@
         },
         {
           "name": "market_stats",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
-          "name": "circulating_supply_excluded_balance"
+          "name": "circulating_supply_excluded_balance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -2365,7 +2419,53 @@
         },
         {
           "name": "offer_proceeds_vault",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  99,
+                  101,
+                  101,
+                  100,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "offer_proceeds_token_in_account",
@@ -2373,7 +2473,48 @@
         },
         {
           "name": "offer_fee_vault",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  102,
+                  101,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "offer_fee_token_in_account",
@@ -2418,7 +2559,28 @@
           "accounts": [
             {
               "name": "buffer_state",
-              "writable": true
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
             },
             {
               "name": "reserve_vault_onyc_account",
@@ -2480,10 +2642,64 @@
         },
         {
           "name": "market_stats",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
-          "name": "circulating_supply_excluded_balance"
+          "name": "circulating_supply_excluded_balance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "main_offer"
@@ -2720,7 +2936,40 @@
           }
         },
         {
-          "name": "excluded_balance"
+          "name": "circulating_supply_excluded_balance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [],
@@ -3079,7 +3328,40 @@
           }
         },
         {
-          "name": "excluded_balance"
+          "name": "circulating_supply_excluded_balance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [],
@@ -4540,7 +4822,28 @@
           "accounts": [
             {
               "name": "buffer_state",
-              "writable": true
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
             },
             {
               "name": "reserve_vault_onyc_account",
@@ -5123,7 +5426,40 @@
           }
         },
         {
-          "name": "redemption_offer"
+          "name": "redemption_offer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_out_mint"
+              },
+              {
+                "kind": "account",
+                "path": "token_in_mint"
+              }
+            ]
+          }
         },
         {
           "name": "state",
@@ -5255,7 +5591,56 @@
         },
         {
           "name": "prop_amm_proceeds_vault",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  112,
+                  114,
+                  111,
+                  99,
+                  101,
+                  101,
+                  100,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "prop_amm_proceeds_token_in_account",
@@ -5263,7 +5648,51 @@
         },
         {
           "name": "prop_amm_fee_vault",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  102,
+                  101,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "prop_amm_fee_token_in_account",
@@ -5336,7 +5765,28 @@
           "accounts": [
             {
               "name": "buffer_state",
-              "writable": true
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
             },
             {
               "name": "reserve_vault_onyc_account",
@@ -5354,10 +5804,64 @@
         },
         {
           "name": "market_stats",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
-          "name": "circulating_supply_excluded_balance"
+          "name": "circulating_supply_excluded_balance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "instructions_sysvar"
@@ -5404,7 +5908,29 @@
       ],
       "accounts": [
         {
-          "name": "offer"
+          "name": "offer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_out_mint"
+              },
+              {
+                "kind": "account",
+                "path": "token_in_mint"
+              }
+            ]
+          }
         },
         {
           "name": "prop_amm_pair_state",
@@ -5490,7 +6016,37 @@
           }
         },
         {
-          "name": "offer_vault_authority"
+          "name": "offer_vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "redemption_vault_authority",
@@ -5568,7 +6124,56 @@
         },
         {
           "name": "prop_amm_proceeds_vault",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  112,
+                  114,
+                  111,
+                  99,
+                  101,
+                  101,
+                  100,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "prop_amm_proceeds_token_in_account",
@@ -5576,21 +6181,109 @@
         },
         {
           "name": "prop_amm_fee_vault",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  102,
+                  101,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "prop_amm_fee_token_in_account",
           "writable": true
         },
         {
-          "name": "mint_authority"
+          "name": "mint_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "buffer_accounts",
           "accounts": [
             {
               "name": "buffer_state",
-              "writable": true
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
             },
             {
               "name": "reserve_vault_onyc_account",
@@ -5608,10 +6301,64 @@
         },
         {
           "name": "market_stats",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
-          "name": "circulating_supply_excluded_balance"
+          "name": "circulating_supply_excluded_balance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "instructions_sysvar"
@@ -6598,7 +7345,40 @@
           ]
         },
         {
-          "name": "excluded_balance"
+          "name": "circulating_supply_excluded_balance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "market_stats",
@@ -6883,7 +7663,28 @@
           "accounts": [
             {
               "name": "buffer_state",
-              "writable": true
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
             },
             {
               "name": "reserve_vault_onyc_account",
@@ -6908,10 +7709,64 @@
         },
         {
           "name": "market_stats",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
-          "name": "circulating_supply_excluded_balance"
+          "name": "circulating_supply_excluded_balance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -7041,7 +7896,28 @@
           "accounts": [
             {
               "name": "buffer_state",
-              "writable": true
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
             },
             {
               "name": "reserve_vault_onyc_account",
@@ -7066,10 +7942,64 @@
         },
         {
           "name": "market_stats",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
-          "name": "circulating_supply_excluded_balance"
+          "name": "circulating_supply_excluded_balance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -8238,7 +9168,37 @@
             "",
             "This PDA manages token transfers and burning operations for the",
             "burn/mint architecture when program has mint authority."
-          ]
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "vault_token_in_account",
@@ -8373,7 +9333,32 @@
             "",
             "This PDA manages the intermediary accounts used for permissionless token",
             "routing, enabling secure transfers without direct user-boss relationships."
-          ]
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110,
+                  108,
+                  101,
+                  115,
+                  115,
+                  45,
+                  49
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "permissionless_token_in_account",
@@ -8949,7 +9934,28 @@
           "accounts": [
             {
               "name": "buffer_state",
-              "writable": true
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
             },
             {
               "name": "reserve_vault_onyc_account",
@@ -9332,7 +10338,28 @@
           "accounts": [
             {
               "name": "buffer_state",
-              "writable": true
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
             },
             {
               "name": "reserve_vault_onyc_account",
@@ -9685,7 +10712,7 @@
           }
         },
         {
-          "name": "excluded_balance",
+          "name": "circulating_supply_excluded_balance",
           "writable": true,
           "pda": {
             "seeds": [

@@ -99,11 +99,12 @@ pub struct BurnForNavIncrease<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 
-    /// CHECK: Validated and optionally initialized in instruction logic.
-    #[account(mut)]
+    /// CHECK: PDA derivation is validated by seeds constraint and the account is optionally initialized in instruction logic.
+    #[account(mut, seeds = [seeds::MARKET_STATS], bump)]
     pub market_stats: UncheckedAccount<'info>,
 
-    /// CHECK: PDA validation and data loading are handled by market info helpers.
+    /// CHECK: PDA derivation is validated by seeds constraint; data loading is handled by market info helpers.
+    #[account(seeds = [seeds::CIRCULATING_SUPPLY_EXCLUDED_BALANCE], bump)]
     pub circulating_supply_excluded_balance: UncheckedAccount<'info>,
 }
 

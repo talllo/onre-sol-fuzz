@@ -61,7 +61,7 @@ pub struct UpdateCirculatingSupplyExcludedBalance<'info> {
         seeds = [seeds::CIRCULATING_SUPPLY_EXCLUDED_BALANCE],
         bump
     )]
-    pub excluded_balance: Account<'info, CirculatingSupplyExcludedBalance>,
+    pub circulating_supply_excluded_balance: Account<'info, CirculatingSupplyExcludedBalance>,
 
     pub token_program: Interface<'info, TokenInterface>,
 
@@ -123,11 +123,11 @@ pub fn update_circulating_supply_excluded_balance(
     }
 
     let clock = Clock::get()?;
-    let excluded_balance = &mut ctx.accounts.excluded_balance;
+    let excluded_balance = &mut ctx.accounts.circulating_supply_excluded_balance;
     excluded_balance.amount = amount;
     excluded_balance.last_updated_at = clock.unix_timestamp;
     excluded_balance.last_updated_slot = clock.slot;
-    excluded_balance.bump = ctx.bumps.excluded_balance;
+    excluded_balance.bump = ctx.bumps.circulating_supply_excluded_balance;
 
     emit!(CirculatingSupplyExcludedBalanceUpdatedEvent {
         amount,

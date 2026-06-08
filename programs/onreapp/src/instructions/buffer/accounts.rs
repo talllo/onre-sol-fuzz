@@ -7,8 +7,8 @@ use anchor_spl::token_interface::{Mint, TokenInterface};
 
 #[derive(Accounts)]
 pub struct BufferAccrualAccounts<'info> {
-    /// CHECK: Parsed and validated only when ONyc accrual is required.
-    #[account(mut)]
+    /// CHECK: PDA derivation is validated by seeds constraint; parsed only when ONyc accrual is required.
+    #[account(mut, seeds = [seeds::BUFFER_STATE], bump)]
     pub buffer_state: UncheckedAccount<'info>,
 
     /// CHECK: Validated in instruction logic against the expected buffer ATA.
