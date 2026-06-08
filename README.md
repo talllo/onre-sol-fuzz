@@ -75,6 +75,13 @@ Most token movement paths use the SPL Token interface and can work with **SPL To
 
 ### BUFFER Yield Model
 
+Prop AMM and BUFFER cover different high-level needs. Prop AMM is the immediate
+liquidity surface for enabled ONyc markets: users can buy or sell through
+automated quotes while accounting stays separate from regular offer flows.
+BUFFER is the reserve-growth surface: it settles time-based reserve accrual
+before ONyc supply changes and keeps reserve, management fee, and performance
+fee accounting separate from redemption liquidity.
+
 The BUFFER module stores two separate inputs for accrual:
 
 | Field           | Source                                                             |

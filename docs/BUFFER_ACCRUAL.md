@@ -2,6 +2,34 @@
 
 This document describes the BUFFER accrual model and the expected state transitions around ONyc supply changes.
 
+## Why BUFFER Exists
+
+BUFFER is the protocol's reserve-growth layer for ONyc supply. It lets the
+program recognize a target gross yield over time, mint that growth into a
+dedicated reserve, and split configured management and performance fees without
+mixing those amounts with offer proceeds, Prop AMM proceeds, or redemption
+liquidity.
+
+At a high level, BUFFER is there to keep ONyc supply changes economically
+continuous. User-facing instructions can mint, burn, buy, sell, or redeem ONyc
+at irregular times, but the reserve yield is time-based. BUFFER settles the
+unpaid interval before those supply changes, then stores the post-change supply
+as the next baseline. That avoids hidden yield gaps, double-counted accrual, and
+ambiguous accounting around supply changes.
+
+The reserve is intentionally separate from redemption liquidity. Redemption
+vaults are used to pay users out. BUFFER reserve and fee vaults account for
+reserve growth and protocol fees. Keeping those domains separate makes it easier
+to reason about solvency, operator withdrawals, market reporting, and audit
+trails.
+
+Use BUFFER to answer these questions:
+
+- How much reserve growth has accrued since the last supply baseline?
+- Which part of that growth belongs to the reserve versus management or
+  performance fees?
+- What ONyc supply should the next accrual interval use as its baseline?
+
 ## State Fields
 
 BUFFER accrual reads and updates these `BufferState` fields:

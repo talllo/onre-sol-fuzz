@@ -13,6 +13,46 @@ The important distinction is that buys and sells use different mechanics:
 
 Prop AMM configuration and pressure tracking are per canonical offer pair. A pair is enabled by its `PropAmmPairState` PDA, derived from the canonical `asset -> ONYC` offer.
 
+## Why Prop AMM Exists
+
+Prop AMM is the protocol's automated liquidity layer around configured ONyc
+asset markets. Regular offers and redemption requests are explicit flows:
+operators configure pricing vectors, users submit requests, and redemption
+admins fulfill them. Prop AMM adds an immediate quote-and-execute path for
+enabled pairs while still using the same offer, redemption, vault, and market
+reporting domains.
+
+The buy side gives users an automated way to buy ONyc from a supported asset.
+It uses normal offer pricing, but routes incoming assets through Prop AMM
+accounting and can refill redemption liquidity up to the configured target.
+That means buy demand can help restore payout liquidity instead of always
+becoming unrestricted proceeds.
+
+The sell side gives users an automated way to sell ONyc back into a supported
+asset, but it must protect redemption liquidity. Sell pricing starts from the
+normal redemption result and then applies the hard-wall curve. The curve makes
+large or rapid sells progressively worse, uses recent sell pressure, and never
+prices against more than the actual redemption vault balance.
+
+Prop AMM is therefore not a separate pool of funds. It is a controlled execution
+surface over existing protocol domains:
+
+- Offers define the canonical asset/ONyc market and buy-side price.
+- Redemption markets define sell-side fees and optional vault targets.
+- Redemption vaults provide actual sell-side payout liquidity.
+- Prop AMM fee and proceeds vaults keep automated-flow accounting separate from
+  regular offer accounting.
+- Market stats provide the TVL input used when a redemption vault target caps
+  effective sell liquidity.
+
+Use Prop AMM to answer these questions:
+
+- Can a user buy or sell immediately without a manual redemption lifecycle?
+- How should automated buy inflows be split between redemption refill and
+  proceeds?
+- How much sell-side liquidity should be exposed after accounting for current
+  vault balance, target liquidity, sell pressure, and trade cadence?
+
 ## Formula History
 
 The first hard-wall implementation in commit `d93b231` used the blended

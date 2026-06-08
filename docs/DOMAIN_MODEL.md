@@ -11,6 +11,29 @@ The structure follows two simple modeling rules:
 
 ONRE coordinates ONYC issuance, asset-backed offers, redemption liquidity, Prop AMM pricing, and accounting vault routing. The program does not treat these as one pool of money: offer activity, Prop AMM activity, fees, proceeds, redemption liquidity, and reserves are separate business domains.
 
+## Liquidity And Reserve Strategy
+
+Two modules exist to keep automated activity and reserve growth explicit instead
+of hiding them inside ordinary offer or redemption balances:
+
+- Prop AMM is the immediate-liquidity layer. It lets enabled markets quote and
+  execute ONyc buys and sells automatically, while still routing assets through
+  redemption liquidity, Prop AMM fee vaults, and Prop AMM proceeds vaults.
+- BUFFER is the reserve-growth layer. It accrues configured reserve yield over
+  time, splits reserve growth from management and performance fees, and stores a
+  supply baseline so later ONyc mints and burns do not blur the accrual period.
+
+Together, these modules separate three concerns that are easy to confuse:
+
+- User liquidity: whether a user can buy or sell ONyc now.
+- Redemption liquidity: how much asset balance is actually available for user
+  payouts.
+- Reserve accounting: how much ONyc growth belongs to reserve support or fees
+  over time.
+
+This separation is the reason Prop AMM and BUFFER use dedicated state and vaults
+instead of reusing ordinary offer vaults.
+
 ## Domain Areas
 
 | Area | What it owns |
