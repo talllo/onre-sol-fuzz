@@ -1,7 +1,7 @@
 import { Buffer } from "buffer";
 import bs58 from "bs58";
 import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
-import { decodeKnownAccount, decodeStateAccount, isDefaultPublicKey, sameStateInfo, u64Seed } from "./account-decoders";
+import { STATE_ACCOUNT_MIN_LENGTH, STATE_ACCOUNT_OFFSETS, decodeKnownAccount, decodeStateAccount, isDefaultPublicKey, sameStateInfo, u64Seed } from "./account-decoders";
 import {
     ASSOCIATED_TOKEN_PROGRAM_ID,
     CONFIGURABLE_VAULT_ACCOUNT_SEEDS,
@@ -12,6 +12,8 @@ import {
     MAINNET_MINTS,
     MAINNET_PROGRAM_ID,
     MAINNET_RPC_URL,
+    OFFER_TOKEN_IN_KEY,
+    OFFER_TOKEN_OUT_KEY,
     PDA_SEEDS,
     PLACEHOLDER_BLOCKHASH,
     REDEMPTION_OFFER_TOKEN_OUT_KEY,
@@ -30,6 +32,7 @@ globalThis.Buffer = Buffer;
 // Runtime state and bootstrapping.
 const state: AppState = {
     rpcUrl: initialRpcUrl(),
+    customRpcUrl: initialCustomRpcUrl(),
     connection: new Connection(initialRpcUrl(), "confirmed"),
     selectedInstructionName: idl.instructions[0]?.name ?? "",
     search: "",
@@ -47,6 +50,14 @@ const accountFetchesInFlight = new Set<string>();
 let instructionListRestoreTimers: number[] = [];
 let pendingInstructionListScrollTop: number | undefined;
 let isRestoringInstructionListScroll = false;
+let surfpoolEnvironment: SurfpoolEnvironment | undefined;
+
+interface SurfpoolEnvironment {
+    rpcUrl?: string;
+    studioUrl?: string;
+    upgradeAuthority?: string;
+    disclaimer?: string;
+}
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) {
@@ -55,18 +66,56 @@ if (!app) {
 const appRoot = app;
 
 function initialRpcUrl(): string {
+    const storedCustomRpcUrl = initialCustomRpcUrl();
+    if (storedCustomRpcUrl) return customRpcProxyUrl(storedCustomRpcUrl);
+
     const storedRpcUrl = localStorage.getItem("onre-ui-rpc-url");
     if (!storedRpcUrl || storedRpcUrl === MAINNET_RPC_URL || storedRpcUrl === DEFAULT_RPC_PATH) return defaultRpcUrl();
+    if (isExternalRpcUrl(storedRpcUrl)) return customRpcProxyUrl(storedRpcUrl);
     return storedRpcUrl;
+}
+
+function initialCustomRpcUrl(): string | undefined {
+    const storedCustomRpcUrl = localStorage.getItem("onre-ui-custom-rpc-url");
+    if (storedCustomRpcUrl) return storedCustomRpcUrl;
+
+    const storedRpcUrl = localStorage.getItem("onre-ui-rpc-url");
+    if (storedRpcUrl && isExternalRpcUrl(storedRpcUrl)) return storedRpcUrl;
+    return undefined;
 }
 
 function defaultRpcUrl(): string {
     return `${window.location.origin}${DEFAULT_RPC_PATH}`;
 }
 
+function browserRpcUrl(rpcUrl: string): string {
+    return rpcUrl.startsWith("/") ? `${window.location.origin}${rpcUrl}` : rpcUrl;
+}
+
+function surfpoolRpcUrl(): string {
+    return browserRpcUrl(surfpoolEnvironment?.rpcUrl ?? DEFAULT_RPC_PATH);
+}
+
+function isSurfpoolRpcSelected(): boolean {
+    return !state.customRpcUrl && state.rpcUrl === surfpoolRpcUrl();
+}
+
+function rpcInputValue(): string {
+    return state.customRpcUrl ?? state.rpcUrl;
+}
+
+function customRpcProxyUrl(target: string): string {
+    return `${window.location.origin}/custom-rpc?target=${encodeURIComponent(target)}`;
+}
+
+function isExternalRpcUrl(rpcUrl: string): boolean {
+    return /^https?:\/\//i.test(rpcUrl);
+}
+
 function boot(): void {
     initializeSelectedInstruction();
     render();
+    void loadSurfpoolEnvironment();
     void refreshStateDerivedAccounts();
 }
 
@@ -132,12 +181,20 @@ function render(): void {
             </header>
 
             <section class="rpc-band">
-                <label for="rpc-url">RPC URL</label>
-                <input id="rpc-url" value="${escapeHtml(state.rpcUrl)}" />
-                <button id="apply-rpc">Apply</button>
+                <div class="rpc-copy">
+                    <span>RPC</span>
+                    <small>${surfpoolEnvironment ? "Docker Surfpool detected" : "Custom RPCs are proxied by this UI"}</small>
+                </div>
+                <div class="rpc-mode">
+                    <button id="use-surfpool-rpc" class="${isSurfpoolRpcSelected() ? "active" : ""}">Use Surfpool</button>
+                    <input id="rpc-url" value="${escapeHtml(rpcInputValue())}" placeholder="Paste custom RPC URL" />
+                    <button id="apply-rpc" class="${isSurfpoolRpcSelected() ? "" : "active"}">Use Custom</button>
+                </div>
                 <button id="ping-rpc">Ping</button>
                 <button id="refresh-accounts">Refresh Accounts</button>
             </section>
+
+            ${renderCheatcodeBand()}
 
             <section class="workspace">
                 <aside class="sidebar">
@@ -195,6 +252,42 @@ function render(): void {
     bindEvents();
     restoreInstructionListScroll();
     scrollOutputToBottom();
+}
+
+function renderCheatcodeBand(): string {
+    const boss = state.stateInfo?.boss.toBase58() ?? "";
+    const redemptionAdmin = state.stateInfo?.redemptionAdmin.toBase58() ?? "";
+    const fundTarget = state.walletPublicKey?.toBase58() ?? boss;
+    const disclaimer = surfpoolEnvironment?.disclaimer ?? "Surfpool cheatcodes only work against a local Surfpool RPC. They are not available on the production mainnet program.";
+    return `
+        <section class="cheatcode-band">
+            <div class="cheatcode-copy">
+                <strong>Surfpool cheatcodes</strong>
+                <span>${escapeHtml(disclaimer)}</span>
+                ${surfpoolEnvironment?.upgradeAuthority ? `<small>Upgrade wallet <code>${escapeHtml(compactAddress(surfpoolEnvironment.upgradeAuthority))}</code></small>` : ""}
+            </div>
+            <div class="cheatcode-fields">
+                <label>
+                    <span>Boss</span>
+                    <input id="cheat-boss" class="monospace" value="${escapeHtml(boss)}" placeholder="Boss address" />
+                </label>
+                <label>
+                    <span>Redemption admin</span>
+                    <input id="cheat-redemption-admin" class="monospace" value="${escapeHtml(redemptionAdmin)}" placeholder="Redemption admin address" />
+                </label>
+                <button id="apply-state-cheatcodes" class="primary">Set State</button>
+                <label>
+                    <span>SOL target</span>
+                    <input id="cheat-fund-address" class="monospace" value="${escapeHtml(fundTarget)}" placeholder="Address to fund on Surfpool" />
+                </label>
+                <label class="short-field">
+                    <span>Lamports</span>
+                    <input id="cheat-fund-lamports" inputmode="numeric" value="10000000000000" />
+                </label>
+                <button id="fund-sol-cheatcode">Fund SOL</button>
+            </div>
+        </section>
+    `;
 }
 
 function renderInstructionList(): string {
@@ -285,6 +378,9 @@ function renderAccounts(instruction: IdlInstruction): string {
 
 function renderAccountControl(flat: FlatAccount, value: string): string {
     const lowerName = flat.account.name.toLowerCase();
+    if (lowerName === "offer") {
+        return renderOfferControl(flat, value);
+    }
     if (lowerName === "redemption_offer") {
         return renderRedemptionOfferControl(flat, value);
     }
@@ -327,6 +423,42 @@ function renderAccountControl(flat: FlatAccount, value: string): string {
             <input data-account="${flat.fullName}" class="monospace" value="${escapeHtml(value)}" placeholder="Paste address" />
             <button type="button" data-account-wallet="${flat.fullName}" ${state.walletPublicKey ? "" : "disabled"}>Wallet</button>
             <button type="button" data-account-derive="${flat.fullName}" ${flat.account.pda ? "" : "disabled"}>Derive</button>
+        </div>
+    `;
+}
+
+function renderOfferControl(flat: FlatAccount, value: string): string {
+    const usesInstructionMints = Boolean(accountValueByName("token_in_mint") && accountValueByName("token_out_mint"));
+    return `
+        ${renderDerivedRow(flat, value)}
+        ${usesInstructionMints ? "" : renderOfferMintPickers()}
+        <input type="hidden" data-account="${flat.fullName}" value="${escapeHtml(value)}" />
+    `;
+}
+
+function renderOfferMintPickers(): string {
+    return `
+        <div class="offer-mint-grid">
+            ${renderOfferTokenPicker(OFFER_TOKEN_IN_KEY, "Token in", MAINNET_MINTS.usdc)}
+            ${renderOfferTokenPicker(OFFER_TOKEN_OUT_KEY, "Token out", onycMint())}
+        </div>
+    `;
+}
+
+function renderOfferTokenPicker(key: string, label: string, fallback: PublicKey): string {
+    const value = state.derivationValues[key] ?? fallback.toBase58();
+    const selected = tokenLabel(value);
+    return `
+        <div class="picker-stack">
+            <small>${label}</small>
+            <div class="token-picker">
+                ${TOKEN_CHOICES.map((token) => {
+                    const active = selected === token.label ? "active" : "";
+                    return `<button type="button" class="${active}" data-offer-mint-key="${key}" data-offer-mint-value="${token.value.toBase58()}">${token.label}</button>`;
+                }).join("")}
+                <button type="button" class="${selected ? "" : "active"}" data-offer-mint-custom="${key}">Custom</button>
+            </div>
+            ${selected ? "" : `<input data-offer-mint-custom-input="${key}" class="monospace custom-account" value="${escapeHtml(value)}" placeholder="${label} mint address" />`}
         </div>
     `;
 }
@@ -396,9 +528,12 @@ function renderRedemptionOfferTokenOutPicker(): string {
 // DOM events. Keep event handlers thin: update state, call helpers, then render.
 function bindEvents(): void {
     document.querySelector("#wallet-button")?.addEventListener("click", () => void toggleWallet());
+    document.querySelector("#use-surfpool-rpc")?.addEventListener("click", useSurfpoolRpc);
     document.querySelector("#apply-rpc")?.addEventListener("click", applyRpcUrl);
     document.querySelector("#ping-rpc")?.addEventListener("click", () => void pingRpc());
     document.querySelector("#refresh-accounts")?.addEventListener("click", () => void refreshAccountsFromChain());
+    document.querySelector("#apply-state-cheatcodes")?.addEventListener("click", () => void applySurfpoolStateCheatcodes());
+    document.querySelector("#fund-sol-cheatcode")?.addEventListener("click", () => void fundSolWithSurfpoolCheatcode());
     document.querySelector("#build-tx")?.addEventListener("click", () => void buildAndReport());
     document.querySelector("#simulate-tx")?.addEventListener("click", () => void simulate());
     document.querySelector("#send-tx")?.addEventListener("click", () => void send());
@@ -502,6 +637,39 @@ function bindEvents(): void {
         });
     }
 
+    for (const button of document.querySelectorAll<HTMLButtonElement>("[data-offer-mint-value]")) {
+        button.addEventListener("click", () => {
+            const key = button.dataset.offerMintKey!;
+            state.derivationValues[key] = button.dataset.offerMintValue ?? "";
+            markOfferDependentAccountsAuto();
+            deriveAccounts();
+            render();
+            void refreshDecodedDerivedAccounts();
+        });
+    }
+
+    for (const button of document.querySelectorAll<HTMLButtonElement>("[data-offer-mint-custom]")) {
+        button.addEventListener("click", () => {
+            const key = button.dataset.offerMintCustom!;
+            state.derivationValues[key] = "";
+            markOfferDependentAccountsAuto();
+            deriveAccounts();
+            render();
+        });
+    }
+
+    for (const input of document.querySelectorAll<HTMLInputElement>("[data-offer-mint-custom-input]")) {
+        input.addEventListener("input", () => {
+            const key = input.dataset.offerMintCustomInput!;
+            state.derivationValues[key] = input.value.trim();
+            markOfferDependentAccountsAuto();
+            deriveAccounts();
+            updateAccountInputs();
+            void refreshDecodedDerivedAccounts();
+        });
+        input.addEventListener("change", () => render());
+    }
+
     for (const button of document.querySelectorAll<HTMLButtonElement>("[data-redemption-offer-token]")) {
         button.addEventListener("click", () => {
             state.derivationValues[REDEMPTION_OFFER_TOKEN_OUT_KEY] = button.dataset.redemptionOfferToken ?? "";
@@ -569,6 +737,24 @@ function bindEvents(): void {
     }
 }
 
+async function loadSurfpoolEnvironment(): Promise<void> {
+    try {
+        const response = await fetch("/surfpool-env.json", { cache: "no-store" });
+        if (!response.ok) return;
+        surfpoolEnvironment = (await response.json()) as SurfpoolEnvironment;
+        if (surfpoolEnvironment.rpcUrl && !state.customRpcUrl) {
+            const rpcUrl = browserRpcUrl(surfpoolEnvironment.rpcUrl);
+            setRpcEndpoint(rpcUrl);
+            localStorage.setItem("onre-ui-rpc-url", rpcUrl);
+            localStorage.removeItem("onre-ui-custom-rpc-url");
+            void refreshStateDerivedAccounts();
+        }
+        render();
+    } catch {
+        // This file exists only in the Docker Surfpool environment.
+    }
+}
+
 function updateAccountInputs(): void {
     for (const input of document.querySelectorAll<HTMLInputElement>("[data-account]")) {
         const name = input.dataset.account!;
@@ -622,16 +808,38 @@ function findWallet(): SolanaWallet | undefined {
 function applyRpcUrl(): void {
     const input = document.querySelector<HTMLInputElement>("#rpc-url");
     const rpcUrl = input?.value.trim() || defaultRpcUrl();
+    setCustomRpcUrl(rpcUrl);
+    appendOutput(`Custom RPC set: ${rpcUrl}`);
+    render();
+    void refreshStateDerivedAccounts();
+}
+
+function useSurfpoolRpc(): void {
+    const rpcUrl = surfpoolRpcUrl();
+    state.customRpcUrl = undefined;
+    setRpcEndpoint(rpcUrl);
+    localStorage.setItem("onre-ui-rpc-url", rpcUrl);
+    localStorage.removeItem("onre-ui-custom-rpc-url");
+    appendOutput(`Surfpool RPC set: ${rpcUrl}`);
+    render();
+    void refreshStateDerivedAccounts();
+}
+
+function setCustomRpcUrl(rpcUrl: string): void {
+    state.customRpcUrl = rpcUrl;
+    const endpoint = isExternalRpcUrl(rpcUrl) ? customRpcProxyUrl(rpcUrl) : rpcUrl;
+    setRpcEndpoint(endpoint);
+    localStorage.setItem("onre-ui-rpc-url", endpoint);
+    localStorage.setItem("onre-ui-custom-rpc-url", rpcUrl);
+}
+
+function setRpcEndpoint(rpcUrl: string): void {
     state.rpcUrl = rpcUrl;
     state.connection = new Connection(rpcUrl, "confirmed");
     state.stateInfo = undefined;
     state.decodedAccounts = {};
     state.accountExistence = {};
     accountFetchesInFlight.clear();
-    localStorage.setItem("onre-ui-rpc-url", rpcUrl);
-    appendOutput(`RPC set: ${rpcUrl}`);
-    render();
-    void refreshStateDerivedAccounts();
 }
 
 async function pingRpc(): Promise<void> {
@@ -649,6 +857,102 @@ async function refreshAccountsFromChain(): Promise<void> {
     await refreshDecodedDerivedAccounts();
     appendOutput("Account resolver refreshed from RPC.");
     render();
+}
+
+async function applySurfpoolStateCheatcodes(): Promise<void> {
+    try {
+        const bossValue = document.querySelector<HTMLInputElement>("#cheat-boss")?.value.trim();
+        const redemptionAdminValue = document.querySelector<HTMLInputElement>("#cheat-redemption-admin")?.value.trim();
+        const boss = bossValue ? new PublicKey(bossValue) : undefined;
+        const redemptionAdmin = redemptionAdminValue ? new PublicKey(redemptionAdminValue) : undefined;
+        if (!boss && !redemptionAdmin) {
+            throw new Error("Enter a boss or redemption admin address.");
+        }
+
+        await patchStateAccountAuthorities({ boss, redemptionAdmin });
+        state.stateInfo = undefined;
+        state.decodedAccounts = {};
+        state.accountExistence = {};
+        accountFetchesInFlight.clear();
+        await refreshStateDerivedAccounts();
+        appendOutput(
+            ["Surfpool state cheatcode applied.", boss ? `Boss: ${boss.toBase58()}` : undefined, redemptionAdmin ? `Redemption admin: ${redemptionAdmin.toBase58()}` : undefined]
+                .filter(Boolean)
+                .join("\n"),
+        );
+    } catch (error) {
+        appendOutput(`Surfpool cheatcode error: ${errorMessage(error)}`);
+    }
+    render();
+}
+
+async function patchStateAccountAuthorities(params: { boss?: PublicKey; redemptionAdmin?: PublicKey }): Promise<void> {
+    const statePda = findPda(["state"]);
+    const account = await state.connection.getAccountInfo(statePda, "confirmed");
+    if (!account) {
+        throw new Error(`State account not found at ${statePda.toBase58()}`);
+    }
+
+    const data = Buffer.from(account.data);
+    if (data.length < STATE_ACCOUNT_MIN_LENGTH) {
+        throw new Error(`State account is too short to patch (${data.length} bytes).`);
+    }
+    if (params.boss) data.set(params.boss.toBuffer(), STATE_ACCOUNT_OFFSETS.boss);
+    if (params.redemptionAdmin) data.set(params.redemptionAdmin.toBuffer(), STATE_ACCOUNT_OFFSETS.redemptionAdmin);
+
+    await surfnetRpc("surfnet_setAccount", [
+        statePda.toBase58(),
+        {
+            lamports: account.lamports,
+            owner: account.owner.toBase58(),
+            executable: account.executable,
+            data: data.toString("hex"),
+        },
+    ]);
+}
+
+async function fundSolWithSurfpoolCheatcode(): Promise<void> {
+    try {
+        const targetValue = document.querySelector<HTMLInputElement>("#cheat-fund-address")?.value.trim();
+        const lamportsValue = document.querySelector<HTMLInputElement>("#cheat-fund-lamports")?.value.trim() ?? "";
+        if (!targetValue) throw new Error("Enter an address to fund.");
+        const target = new PublicKey(targetValue);
+        const lamports = Number(lamportsValue);
+        if (!Number.isSafeInteger(lamports) || lamports <= 0) {
+            throw new Error("Lamports must be a positive safe integer.");
+        }
+        await setSurfpoolLamports(target, lamports);
+        appendOutput(`Surfpool SOL funded: ${target.toBase58()} = ${lamports} lamports`);
+    } catch (error) {
+        appendOutput(`Surfpool fund error: ${errorMessage(error)}`);
+    }
+    render();
+}
+
+async function setSurfpoolLamports(publicKey: PublicKey, lamports: number): Promise<void> {
+    const account = await state.connection.getAccountInfo(publicKey, "confirmed");
+    await surfnetRpc("surfnet_setAccount", [
+        publicKey.toBase58(),
+        {
+            lamports,
+            owner: (account?.owner ?? SystemProgram.programId).toBase58(),
+            executable: account?.executable ?? false,
+            data: account ? Buffer.from(account.data).toString("hex") : "",
+        },
+    ]);
+}
+
+async function surfnetRpc<T>(method: string, params: unknown[]): Promise<T> {
+    const response = await fetch(state.rpcUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "onre-ui-cheatcode", method, params }),
+    });
+    const body = (await response.json()) as { result?: T; error?: unknown };
+    if (body.error) {
+        throw new Error(`${method} failed. Is the RPC URL a running Surfpool instance? ${JSON.stringify(body.error)}`);
+    }
+    return body.result as T;
 }
 
 async function refreshAccountsForSelectedInstruction(): Promise<void> {
@@ -929,10 +1233,16 @@ function markAccountAuto(accountName: string): void {
     }
 }
 
+function markOfferDependentAccountsAuto(): void {
+    markAccountAuto("offer");
+    markAccountAuto("prop_amm_pair_state");
+}
+
 function shouldAutoDeriveByDefault(account: IdlAccount): boolean {
     const lowerName = account.name.toLowerCase();
     return (
         Boolean(account.pda || account.address) ||
+        lowerName === "offer" ||
         lowerName === "boss" ||
         lowerName === "new_boss" ||
         lowerName === "redemption_admin" ||
@@ -1047,6 +1357,9 @@ function deriveConfigurableVaultPda(kindSeed: string): PublicKey {
 }
 
 function deriveOfferPda(): PublicKey | undefined {
+    const redemptionOffer = decodedAccountByName("redemption_offer", "redemption_offer");
+    if (!offerHasInstructionMints() && redemptionOffer?.kind === "redemption_offer") return redemptionOffer.value.offer;
+
     const [tokenInMint, tokenOutMint] = offerSeedMints();
     if (tokenInMint && tokenOutMint) return findPda(["offer", tokenInMint, tokenOutMint]);
     if (state.stateInfo?.mainOffer && selectedInstruction().name !== "set_main_offer") return state.stateInfo.mainOffer;
@@ -1080,10 +1393,30 @@ function offerSeedMints(): [PublicKey | undefined, PublicKey | undefined] {
     const instructionName = selectedInstruction().name;
     const tokenInMint = publicKeyFromAccountValue("token_in_mint");
     const tokenOutMint = publicKeyFromAccountValue("token_out_mint");
+    if (!tokenInMint && !tokenOutMint) return offerDerivationMints();
     if (["make_redemption_offer", "fulfill_redemption_request", "open_swap_sell", "quote_swap_sell"].includes(instructionName)) {
         return [tokenOutMint ?? MAINNET_MINTS.usdc, tokenInMint ?? onycMint()];
     }
     return [tokenInMint, tokenOutMint];
+}
+
+function offerHasInstructionMints(): boolean {
+    return Boolean(publicKeyFromAccountValue("token_in_mint") || publicKeyFromAccountValue("token_out_mint"));
+}
+
+function offerDerivationMints(): [PublicKey | undefined, PublicKey | undefined] {
+    return [derivationMintValue(OFFER_TOKEN_IN_KEY, MAINNET_MINTS.usdc), derivationMintValue(OFFER_TOKEN_OUT_KEY, onycMint())];
+}
+
+function derivationMintValue(key: string, fallback: PublicKey): PublicKey | undefined {
+    const value = state.derivationValues[key];
+    if (value === "") return undefined;
+    if (!value) return fallback;
+    try {
+        return new PublicKey(value);
+    } catch {
+        return undefined;
+    }
 }
 
 function redemptionOfferSeedMints(): [PublicKey | undefined, PublicKey | undefined] {

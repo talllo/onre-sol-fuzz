@@ -10,6 +10,17 @@ This UI is intentionally split by maintenance task so future agents can edit one
 - `format.ts`: display, escaping, JSON, and error-message helpers.
 - `styles.css`: visual layout and interaction styling.
 
+RPC behavior:
+
+- The UI exposes a `Use Surfpool` action that targets the Docker/Vite `/rpc` proxy by default, so browser users do not need the container-internal RPC URL.
+- `Use Custom` stores the pasted RPC URL but sends browser traffic through Vite's `/custom-rpc?target=...` proxy. This avoids public RPCs rejecting localhost browser `Origin` headers.
+
+Important account derivation behavior:
+
+- `offer` accounts derive from `token_in_mint` and `token_out_mint` when those instruction accounts exist.
+- If an instruction has `offer` without those mint accounts, `main.ts` renders token-in/token-out selectors backed by `offer.token_in_mint` and `offer.token_out_mint` derivation values.
+- `redemption_offer` derives from ONyc plus the selected/explicit asset mint.
+
 When adding support for an instruction:
 
 1. Put new static IDs or seed names in `constants.ts`.

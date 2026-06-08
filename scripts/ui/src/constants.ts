@@ -42,6 +42,8 @@ export const CONFIGURABLE_VAULT_ACCOUNT_SEEDS: Record<string, string> = {
     prop_amm_proceeds_vault: "prop_amm_proceeds",
 };
 
+export const OFFER_TOKEN_IN_KEY = "offer.token_in_mint";
+export const OFFER_TOKEN_OUT_KEY = "offer.token_out_mint";
 export const REDEMPTION_OFFER_TOKEN_OUT_KEY = "redemption_offer.token_out_mint";
 export const REDEMPTION_REQUEST_COUNTER_KEY = "redemption_request.counter";
 

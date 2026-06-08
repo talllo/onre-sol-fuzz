@@ -1,0 +1,41 @@
+FROM solanafoundation/anchor:v1.0.2
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN apt-get update && apt-get install -y \
+    bash \
+    ca-certificates \
+    curl \
+    git \
+    libssl-dev \
+    pkg-config \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.nvm/versions/node/v22.12.0/bin:/root/.local/bin:${PATH}"
+
+RUN rustup toolchain install 1.96.0 --profile minimal && rustup default 1.96.0
+RUN source /root/.nvm/nvm.sh && \
+    nvm install 22.12.0 && \
+    nvm alias default 22.12.0 && \
+    npm install -g pnpm@9.15.4 && \
+    node --version
+RUN curl -fsSL https://run.surfpool.run/ | bash && \
+    SURFPOOL_BIN="$(command -v surfpool || find /root -type f -name surfpool | head -n 1)" && \
+    test -n "$SURFPOOL_BIN" && \
+    install -m 0755 "$SURFPOOL_BIN" /usr/local/bin/surfpool && \
+    surfpool --version
+
+WORKDIR /workspace
+
+COPY package.json pnpm-lock.yaml .npmrc ./
+RUN pnpm install --frozen-lockfile --config.optional=true || pnpm install --config.optional=true
+RUN pnpm add --save-dev @rolldown/binding-linux-x64-gnu@1.0.3 --lockfile=false
+
+COPY . .
+RUN anchor build
+RUN chmod +x scripts/docker/surfpool-entrypoint.sh
+
+EXPOSE 5173 8899 8900 18488
+
+CMD ["scripts/docker/surfpool-entrypoint.sh"]

@@ -23,7 +23,7 @@ async function main() {
         console.log("Skipping program deploy because SURFPOOL_REGRESSION_SKIP_DEPLOY=1");
     } else {
         await setProgramAuthority(runtime.authority.publicKey);
-        solanaProgramDeploy(authorityPath);
+        await solanaProgramDeploy(authorityPath);
     }
 
     await overrideForkGovernance(runtime);

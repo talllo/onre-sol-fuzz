@@ -162,6 +162,27 @@ pnpm ui
 
 The UI always targets the mainnet production program ID: `onreuGhHHgVzMWSkj2oQDLDtvvGvoepBPkqyaubFcwe`. The RPC URL is configurable in the UI; dev mode defaults to `/rpc`, a Vite proxy to public mainnet RPC, and operators can paste Surfpool or a private mainnet endpoint.
 
+The UI includes Surfpool cheatcode controls for setting `state.boss`, setting `state.redemption_admin`, and funding SOL on a fork. These controls only work against a running Surfpool RPC in the background. They call Surfpool-only RPC methods and do not work against the production mainnet program or a normal Solana RPC endpoint.
+
+### Docker Surfpool UI
+
+Use the Docker Surfpool environment when you want one command to start a mainnet fork, create a local upgrade authority wallet, fund it, upgrade the forked OnRe program, patch fork governance to that wallet, and serve the UI.
+
+```bash
+pnpm docker:surfpool
+```
+
+Open the UI at `http://127.0.0.1:5173`. Surfpool RPC is exposed at `http://127.0.0.1:8899`, WebSocket at `ws://127.0.0.1:8900`, and Surfpool Studio at `http://127.0.0.1:18488`.
+
+The generated upgrade authority wallet is stored in the `surfpool-wallet` Docker volume at `/workspace/.docker-surfpool/upgrade-authority.json`. Remove the volume if you want a fresh wallet on the next run.
+
+Optional environment overrides:
+
+```bash
+SURFPOOL_DATASOURCE_RPC_URL=https://your-mainnet-rpc.example pnpm docker:surfpool
+SURFPOOL_AIRDROP_LAMPORTS=20000000000000 pnpm docker:surfpool
+```
+
 ### BUFFER CLI Notes
 
 The current CLI exposes only a subset of the on-chain BUFFER flow:
@@ -232,6 +253,12 @@ Surfpool regression tests assume you have already started a mainnet fork with St
 
 ```bash
 pnpm surfpool:regression
+```
+
+To only prepare a running Surfpool fork for manual UI usage, upgrade the program and patch fork governance without running the full regression suite:
+
+```bash
+pnpm surfpool:setup
 ```
 
 Useful environment overrides:

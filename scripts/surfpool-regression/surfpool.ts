@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 
 import { LOCAL_RPC_URL, ONRE_SO_PATH, PROGRAM_ID, STUDIO_URL } from "./constants";
 import { repoPath, resolveAuthorityPath } from "./runtime";
@@ -10,10 +11,10 @@ export function regressionFlag(name: string): boolean {
     return process.env[`SURFPOOL_REGRESSION_${name}`] === "1" || process.env[`SURFPOOL_SMOKE_${name}`] === "1";
 }
 
-export async function requireSurfpoolRunning(): Promise<void> {
-    await waitForRpc(5_000);
+export async function requireSurfpoolRunning(timeoutMs = 5_000): Promise<void> {
+    await waitForRpc(timeoutMs);
     if (!regressionFlag("NO_STUDIO")) {
-        await waitForStudio(5_000);
+        await waitForStudio(timeoutMs);
     }
 
     console.log(`Using existing Surfpool RPC: ${LOCAL_RPC_URL}`);
@@ -91,21 +92,52 @@ export function anchorBuild(): void {
     run("anchor", ["build"]);
 }
 
-export function solanaProgramDeploy(authorityPath = resolveAuthorityPath()): void {
-    run("solana", [
-        "program",
-        "deploy",
-        repoPath(ONRE_SO_PATH),
-        "--url",
-        LOCAL_RPC_URL,
-        "--program-id",
-        PROGRAM_ID.toBase58(),
-        "--upgrade-authority",
-        authorityPath,
-        "--keypair",
-        authorityPath,
-        "--use-rpc",
-    ]);
+export async function solanaProgramDeploy(authorityPath = resolveAuthorityPath()): Promise<void> {
+    if (process.env.SURFPOOL_REGRESSION_TRANSACTIONAL_DEPLOY === "1") {
+        const maxSignAttempts = process.env.SURFPOOL_REGRESSION_DEPLOY_MAX_SIGN_ATTEMPTS ?? "20";
+        run("solana", [
+            "program",
+            "deploy",
+            repoPath(ONRE_SO_PATH),
+            "--url",
+            LOCAL_RPC_URL,
+            "--program-id",
+            PROGRAM_ID.toBase58(),
+            "--upgrade-authority",
+            authorityPath,
+            "--keypair",
+            authorityPath,
+            "--use-rpc",
+            "--skip-preflight",
+            "--max-sign-attempts",
+            maxSignAttempts,
+        ]);
+        return;
+    }
+
+    const binaryPath = repoPath(ONRE_SO_PATH);
+    const program = readFileSync(binaryPath);
+    const chunkSize = Number(process.env.SURFPOOL_REGRESSION_WRITE_PROGRAM_CHUNK_BYTES ?? `${512 * 1024}`);
+    if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0) {
+        throw new Error(`Invalid SURFPOOL_REGRESSION_WRITE_PROGRAM_CHUNK_BYTES: ${chunkSize}`);
+    }
+
+    console.log(`Writing program with surfnet_writeProgram: ${binaryPath} (${program.length} bytes)`);
+    for (let offset = 0; offset < program.length; offset += chunkSize) {
+        const chunk = program.subarray(offset, Math.min(offset + chunkSize, program.length));
+        await surfnetRpc("surfnet_writeProgram", [PROGRAM_ID.toBase58(), chunk.toString("hex"), offset]);
+        console.log(`  ok program chunk ${offset}-${offset + chunk.length}`);
+    }
+    await setProgramAuthority(readAuthorityPubkey(authorityPath));
+    console.log(`  ok fork program bytes -> ${PROGRAM_ID.toBase58()}`);
+}
+
+function readAuthorityPubkey(authorityPath: string): PublicKey {
+    const secretKey = JSON.parse(readFileSync(authorityPath, "utf8")) as number[];
+    if (!Array.isArray(secretKey)) {
+        throw new Error(`Invalid authority keypair file: ${authorityPath}`);
+    }
+    return Keypair.fromSecretKey(Uint8Array.from(secretKey)).publicKey;
 }
 
 function run(command: string, args: string[]): void {

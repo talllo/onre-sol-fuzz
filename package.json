@@ -14,9 +14,11 @@
     "script:devnet-test": "NETWORK=devnet-test tsx",
     "script:devnet-dev": "NETWORK=devnet-dev tsx",
     "surfpool:regression": "tsx scripts/surfpool-regression/run.ts",
+    "surfpool:setup": "tsx scripts/surfpool-regression/setup-upgrade.ts",
     "cli": "tsx scripts/cli/index.ts",
     "ui": "vite --config scripts/ui/vite.config.ts",
-    "ui:build": "vite build --config scripts/ui/vite.config.ts"
+    "ui:build": "vite build --config scripts/ui/vite.config.ts",
+    "docker:surfpool": "docker compose -f docker-compose.surfpool.yml up --build"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
