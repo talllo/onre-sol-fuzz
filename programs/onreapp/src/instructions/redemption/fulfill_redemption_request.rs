@@ -193,7 +193,7 @@ pub struct FulfillRedemptionRequest<'info> {
 /// - Decrements `redemption_offer.requested_redemptions` by `amount`
 /// - Increments `redemption_offer.executed_redemptions` by `amount`
 /// - Burns or transfers token_in based on mint authority
-/// - Mints or transfers token_out to user
+/// - Transfers token_out from the redemption vault to the user
 ///
 /// # Events
 /// * `RedemptionRequestFulfilledEvent` - Emitted with fulfillment details
@@ -485,13 +485,6 @@ fn execute_fulfill_redemption_request(
         vault_token_out_account: params.vault_token_out_account,
         user_token_out_account: params.user_token_out_account,
         mint_authority_pda: &params.mint_authority.to_account_info(),
-        mint_authority_bump: params.mint_authority_bump,
-        // Redemption fulfillment burns program-controlled ONyc on the input side
-        // and pays out the paired asset from the redemption vault. The program
-        // is not expected to hold mint authority for that asset, so token-out
-        // mint caps are intentionally disabled for this transfer-only leg.
-        token_out_max_supply: 0,
-        token_out_max_mint_amount: 0,
     })?;
 
     if let Some(accrual) = accrual {

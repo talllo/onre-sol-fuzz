@@ -1765,7 +1765,7 @@ fn test_fulfill_redemption_request_with_apr_growth() {
 }
 
 #[test]
-fn test_fulfill_redemption_request_burn_and_mint() {
+fn test_fulfill_redemption_request_burn_and_transfer() {
     let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
@@ -1820,17 +1820,18 @@ fn test_fulfill_redemption_request_burn_and_mint() {
     let (mint_authority_pda, _) = find_mint_authority_pda();
     set_mint_authority(&mut svm, &onyc_mint, &mint_authority_pda);
 
-    // Transfer mint authority of usdc to program's mint_authority PDA (for mint)
-    set_mint_authority(&mut svm, &usdc_mint, &mint_authority_pda);
-
     let user = Keypair::new();
     svm.airdrop(&user.pubkey(), 10 * INITIAL_LAMPORTS).unwrap();
     create_token_account(&mut svm, &onyc_mint, &user.pubkey(), 1_000_000_000);
 
     let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
     create_token_account(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
-    // No need for usdc in vault when minting
-    create_token_account(&mut svm, &usdc_mint, &redemption_vault_authority, 0);
+    create_token_account(
+        &mut svm,
+        &usdc_mint,
+        &redemption_vault_authority,
+        10_000_000_000,
+    );
     create_token_account(&mut svm, &onyc_mint, &boss, 0);
     create_token_account(&mut svm, &usdc_mint, &user.pubkey(), 0);
 
@@ -1864,11 +1865,11 @@ fn test_fulfill_redemption_request_burn_and_mint() {
     );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
-    // With burn+mint mode:
+    // With burn+transfer mode:
     // fee=5%, net = 950_000_000 onyc
     // Net burned from vault, fee transferred to fee vault PDA ATA
     // token_out = 950_000_000 * 1.0 * 10^6 / (10^9 * 10^9) = 950_000
-    // usdc minted to user
+    // usdc transferred from the redemption vault to user
     let user_usdc_ata = get_associated_token_address(&user.pubkey(), &usdc_mint);
     assert_eq!(get_token_balance(&svm, &user_usdc_ata), 950_000);
 
@@ -2405,14 +2406,13 @@ fn test_fulfill_redemption_token2022_transfer_mode() {
 }
 
 #[test]
-fn test_fulfill_redemption_token2022_burn_mint_mode() {
+fn test_fulfill_redemption_token2022_burn_transfer_mode() {
     let (mut svm, payer, usdc_mint, onyc_mint) = setup_redemption_token2022();
     let boss = payer.pubkey();
 
-    // Transfer mint authority to program for both mints
+    // Transfer ONyc mint authority to program so fulfillment burns the input side.
     let (mint_authority_pda, _) = find_mint_authority_pda();
     set_mint_authority(&mut svm, &onyc_mint, &mint_authority_pda);
-    set_mint_authority(&mut svm, &usdc_mint, &mint_authority_pda);
 
     let user = Keypair::new();
     svm.airdrop(&user.pubkey(), 10 * INITIAL_LAMPORTS).unwrap();
@@ -2420,7 +2420,12 @@ fn test_fulfill_redemption_token2022_burn_mint_mode() {
 
     let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
     create_token_account(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
-    create_token_account_2022(&mut svm, &usdc_mint, &redemption_vault_authority, 0);
+    create_token_account_2022(
+        &mut svm,
+        &usdc_mint,
+        &redemption_vault_authority,
+        10_000_000_000,
+    );
 
     create_token_account(&mut svm, &onyc_mint, &boss, 0);
     create_token_account_2022(&mut svm, &usdc_mint, &user.pubkey(), 0);
@@ -2456,7 +2461,7 @@ fn test_fulfill_redemption_token2022_burn_mint_mode() {
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
     // fee=5%, net=950_000_000, burned from vault; fee=50_000_000 to fee vault PDA ATA
-    // token_out = 950_000 usdc minted to user
+    // token_out = 950_000 usdc transferred from the redemption vault to user
     let user_usdc_ata = get_associated_token_address_2022(&user.pubkey(), &usdc_mint);
     assert_eq!(get_token_balance(&svm, &user_usdc_ata), 950_000);
 

@@ -2,8 +2,7 @@ use crate::constants::{seeds, PRICE_DECIMALS};
 use crate::instructions::market_info::offer_valuation_utils::compute_offer_current_price;
 use crate::instructions::Offer;
 use crate::utils::{
-    burn_tokens, calculate_fees, has_transfer_fee, mint_tokens, program_controls_mint,
-    transfer_tokens,
+    burn_tokens, calculate_fees, has_transfer_fee, program_controls_mint, transfer_tokens,
 };
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
@@ -115,7 +114,7 @@ pub fn process_redemption_core(
 ///
 /// This structure contains all the accounts and parameters needed to execute
 /// a complete redemption token exchange, handling token_in burning/transfer
-/// and token_out minting/transfer based on mint authority.
+/// and token_out transfer from the redemption vault.
 pub struct ExecuteRedemptionOpsParams<'a, 'info> {
     /// SPL Token program for token_in operations
     pub token_in_program: &'a Interface<'info, TokenInterface>,
@@ -151,16 +150,8 @@ pub struct ExecuteRedemptionOpsParams<'a, 'info> {
     pub user_token_out_account: &'a InterfaceAccount<'info, TokenAccount>,
 
     // Mint authority params
-    /// PDA for mint authority operations
+    /// PDA for detecting whether token_in should be burned.
     pub mint_authority_pda: &'a AccountInfo<'info>,
-    /// Bump seed for mint authority PDA
-    pub mint_authority_bump: u8,
-
-    // State params
-    /// Maximum supply cap for token_out minting (0 = no cap)
-    pub token_out_max_supply: u64,
-    /// Maximum amount allowed in one token_out mint operation (0 = no cap)
-    pub token_out_max_mint_amount: u64,
 }
 
 #[allow(clippy::items_after_test_module)]
@@ -232,8 +223,8 @@ mod tests {
 ///   - Transfer net amount to configured proceeds destination and fee to fee destination
 ///
 /// # Token Out Processing
-/// - If program has mint authority: mint directly to user
-/// - If program lacks mint authority: transfer from vault to user
+/// - Transfer token_out from the redemption vault to the user. Redemption payout
+///   assets are pre-funded vault liquidity, not program-minted supply.
 ///
 /// # Arguments
 /// * `params` - Complete parameter structure containing all required accounts and amounts
@@ -296,37 +287,16 @@ pub fn execute_redemption_operations(params: ExecuteRedemptionOpsParams) -> Resu
         )?;
     }
 
-    // Step 2: Distribute token_out to user
-    let has_token_out_mint_authority =
-        program_controls_mint(params.token_out_mint, params.mint_authority_pda);
-
-    if has_token_out_mint_authority {
-        // Mint token_out directly to user
-        let mint_authority_signer_seeds: &[&[&[u8]]] =
-            &[&[seeds::MINT_AUTHORITY, &[params.mint_authority_bump]]];
-
-        mint_tokens(
-            params.token_out_program,
-            params.token_out_mint,
-            &params.user_token_out_account.to_account_info(),
-            params.mint_authority_pda,
-            mint_authority_signer_seeds,
-            params.token_out_amount,
-            params.token_out_max_supply,
-            params.token_out_max_mint_amount,
-        )?;
-    } else {
-        // Transfer token_out from vault to user
-        transfer_tokens(
-            params.token_out_mint,
-            params.token_out_program,
-            params.vault_token_out_account,
-            params.user_token_out_account,
-            params.redemption_vault_authority,
-            Some(vault_authority_signer_seeds),
-            params.token_out_amount,
-        )?;
-    }
+    // Step 2: Distribute token_out from pre-funded redemption vault liquidity.
+    transfer_tokens(
+        params.token_out_mint,
+        params.token_out_program,
+        params.vault_token_out_account,
+        params.user_token_out_account,
+        params.redemption_vault_authority,
+        Some(vault_authority_signer_seeds),
+        params.token_out_amount,
+    )?;
 
     Ok(())
 }

@@ -151,9 +151,7 @@ flowchart TD
     InMintMode -- yes --> Burn[Burn net token in from redemption vault]
     InMintMode -- no --> OfferProceeds[OfferProceeds vault]
 
-    Out --> OutMintMode{Program controls token out mint}
-    OutMintMode -- yes --> Mint[Mint token out to redeemer]
-    OutMintMode -- no --> Pay[Transfer token out from redemption vault to redeemer]
+    Out --> Pay[Transfer token out from redemption vault to redeemer]
 
     Calc --> RequestUpdate[Increase fulfilled amount]
     RequestUpdate --> OfferCounters[Update requested and executed redemptions]
@@ -164,6 +162,7 @@ Notes:
 - Fees are paid in token-in from the locked redemption-vault balance.
 - If token-in is program-controlled, net token-in is burned.
 - If token-in is not program-controlled, net token-in moves to `OfferProceeds`.
+- Token-out is paid from pre-funded redemption-vault liquidity; redemption fulfillment does not mint token-out.
 - If the fulfillment completes the request, the request account closes.
 
 ## Redemption Request Cancellation
@@ -233,15 +232,14 @@ flowchart TD
     InMintMode -- yes --> Burn[Burn net token in from redemption vault]
     InMintMode -- no --> AmmProceeds[PropAmmProceeds vault]
 
-    FinalOut --> OutMintMode{Program controls token out mint}
-    OutMintMode -- yes --> Mint[Mint token out to user]
-    OutMintMode -- no --> Pay[Transfer token out from redemption vault to user]
+    FinalOut --> Pay[Transfer token out from redemption vault to user]
 ```
 
 Notes:
 
 - Prop AMM sell uses `PropAmmFee` and `PropAmmProceeds`.
 - Sell execution calculates the quote and checks `minimum_out` before staging user token-in in the redemption vault. If the program controls the token-in mint, the net amount is burned from the redemption vault; otherwise it routes to `PropAmmProceeds`.
+- Sell execution pays token-out from pre-funded redemption-vault liquidity; it does not mint token-out.
 - Sell execution refreshes `MarketStats` before resolving the hard-wall reserve. Quote and execution read TVL for hard-wall reserve only when `vault_target_bps > 0`; when `vault_target_bps == 0`, the hard-wall reserve resolves to the actual vault balance without reading TVL.
 - If sell execution later accrues BUFFER before burning ONYC, the hard-wall reserve is not recomputed again after that accrual.
 - The hard wall is always bounded by the actual redemption vault token-out balance.

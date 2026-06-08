@@ -87,12 +87,17 @@ fn setup_fee_routing() -> FeeRoutingCtx {
     // Pre-create vault ATAs (required by fulfill, not init_if_needed)
     let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
     create_token_account(&mut svm, &onyc_mint, &redemption_vault_authority, 0);
-    create_token_account(&mut svm, &usdc_mint, &redemption_vault_authority, 0);
+    create_token_account(
+        &mut svm,
+        &usdc_mint,
+        &redemption_vault_authority,
+        10_000_000_000,
+    );
 
-    // Transfer mint authority to program PDA (burn+mint mode)
+    // Transfer ONyc mint authority to the program PDA so fulfill burns token-in.
+    // USDC remains externally controlled and is paid from redemption-vault liquidity.
     let (mint_authority_pda, _) = find_mint_authority_pda();
     set_mint_authority(&mut svm, &onyc_mint, &mint_authority_pda);
-    set_mint_authority(&mut svm, &usdc_mint, &mint_authority_pda);
 
     FeeRoutingCtx {
         svm,
