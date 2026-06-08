@@ -3135,11 +3135,11 @@ export type Onreapp = {
     {
       "name": "getTvl",
       "docs": [
-        "Gets the current TVL (Total Value Locked) for a specific offer.",
+        "Gets the current TVL (Total Value Locked) for an ONyc offer.",
         "",
         "Delegates to `market_info::get_tvl`.",
-        "This legacy read-only instruction calculates TVL from circulating token_out supply:",
-        "total token_out mint supply minus the offer-vault token_out ATA and boss token_out ATA balances.",
+        "This legacy read-only instruction calculates TVL from circulating ONyc supply:",
+        "total ONyc mint supply minus the offer-vault ONyc ATA and boss ONyc ATA balances.",
         "TVL = circulating_supply * current_NAV / 10^9.",
         "Emits a `GetTVLEvent` upon success.",
         "",
@@ -3147,7 +3147,7 @@ export type Onreapp = {
         "- `ctx`: Context for `GetTVL`.",
         "",
         "# Returns",
-        "- `Ok(tvl)`: The calculated TVL in token_out base units"
+        "- `Ok(tvl)`: The calculated TVL in ONyc base units"
       ],
       "discriminator": [
         88,
@@ -3272,7 +3272,7 @@ export type Onreapp = {
     {
       "name": "getTvlV2",
       "docs": [
-        "Gets TVL using the cached excluded-balance PDA."
+        "Gets ONyc TVL using the cached excluded-balance PDA."
       ],
       "discriminator": [
         64,

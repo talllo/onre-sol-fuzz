@@ -638,11 +638,11 @@ pub mod onreapp {
         market_info::get_nav_adjustment(ctx)
     }
 
-    /// Gets the current TVL (Total Value Locked) for a specific offer.
+    /// Gets the current TVL (Total Value Locked) for an ONyc offer.
     ///
     /// Delegates to `market_info::get_tvl`.
-    /// This legacy read-only instruction calculates TVL from circulating token_out supply:
-    /// total token_out mint supply minus the offer-vault token_out ATA and boss token_out ATA balances.
+    /// This legacy read-only instruction calculates TVL from circulating ONyc supply:
+    /// total ONyc mint supply minus the offer-vault ONyc ATA and boss ONyc ATA balances.
     /// TVL = circulating_supply * current_NAV / 10^9.
     /// Emits a `GetTVLEvent` upon success.
     ///
@@ -650,7 +650,7 @@ pub mod onreapp {
     /// - `ctx`: Context for `GetTVL`.
     ///
     /// # Returns
-    /// - `Ok(tvl)`: The calculated TVL in token_out base units
+    /// - `Ok(tvl)`: The calculated TVL in ONyc base units
     pub fn get_tvl(ctx: Context<GetTVL>) -> Result<u64> {
         market_info::get_tvl(ctx)
     }
@@ -687,7 +687,7 @@ pub mod onreapp {
         market_info::refresh_market_stats(ctx)
     }
 
-    /// Gets TVL using the cached excluded-balance PDA.
+    /// Gets ONyc TVL using the cached excluded-balance PDA.
     pub fn get_tvl_v2(ctx: Context<GetTVLV2>) -> Result<u64> {
         market_info::get_tvl_v2(ctx)
     }

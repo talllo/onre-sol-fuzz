@@ -18,11 +18,11 @@ fn setup_offer_with_vector(
     solana_sdk::pubkey::Pubkey,
     solana_sdk::pubkey::Pubkey,
 ) {
-    let (mut svm, payer, _onyc_mint) = setup_initialized();
+    let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
     let token_in = create_mint(&mut svm, &payer, 9, &boss);
-    let token_out = create_mint(&mut svm, &payer, 9, &boss);
+    let token_out = onyc_mint;
 
     let ix = build_make_offer_ix(
         &boss,
@@ -952,11 +952,11 @@ fn test_get_apy_multiple_vectors_uses_most_recent() {
 
 #[test]
 fn test_get_tvl_different_price() {
-    let (mut svm, payer, _onyc_mint) = setup_initialized();
+    let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
     let token_in = create_mint(&mut svm, &payer, 9, &boss);
-    let token_out = create_mint(&mut svm, &payer, 9, &boss);
+    let token_out = onyc_mint;
 
     let ix = build_make_offer_ix(
         &boss,
@@ -999,11 +999,11 @@ fn test_get_tvl_different_price() {
 
 #[test]
 fn test_get_tvl_after_time_advancement() {
-    let (mut svm, payer, _onyc_mint) = setup_initialized();
+    let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
     let token_in = create_mint(&mut svm, &payer, 9, &boss);
-    let token_out = create_mint(&mut svm, &payer, 9, &boss);
+    let token_out = onyc_mint;
 
     let ix = build_make_offer_ix(
         &boss,
@@ -1691,12 +1691,62 @@ fn test_get_tvl_wrong_token_out_mint() {
 }
 
 #[test]
-fn test_get_tvl_multiple_vectors_uses_most_recent() {
+fn test_get_tvl_rejects_non_onyc_token_out_offer() {
     let (mut svm, payer, _onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
     let token_in = create_mint(&mut svm, &payer, 9, &boss);
     let token_out = create_mint(&mut svm, &payer, 9, &boss);
+
+    let ix = build_make_offer_ix(
+        &boss,
+        &token_in,
+        &token_out,
+        0,
+        false,
+        false,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let current_time = get_clock_time(&svm);
+    let ix = build_add_offer_vector_ix(
+        &boss,
+        &token_in,
+        &token_out,
+        None,
+        current_time,
+        1_000_000_000,
+        0,
+        86400,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_clock_by(&mut svm, 1);
+
+    let mut mint_data = svm.get_account(&token_out).unwrap();
+    mint_data.data[36..44].copy_from_slice(&1_000_000_000_000u64.to_le_bytes());
+    svm.set_account(token_out, mint_data).unwrap();
+
+    let ix = build_get_tvl_ix(&boss, &token_in, &token_out);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(result.is_err(), "get_tvl should reject non-ONyc token_out");
+
+    let ix = build_get_tvl_v2_ix(&token_in, &token_out);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "get_tvl_v2 should reject non-ONyc token_out"
+    );
+}
+
+#[test]
+fn test_get_tvl_multiple_vectors_uses_most_recent() {
+    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+
+    let token_in = create_mint(&mut svm, &payer, 9, &boss);
+    let token_out = onyc_mint;
 
     let ix = build_make_offer_ix(
         &boss,
@@ -1757,11 +1807,13 @@ fn test_get_tvl_multiple_vectors_uses_most_recent() {
 
 #[test]
 fn test_get_tvl_token2022() {
-    let (mut svm, payer, _onyc_mint) = setup_initialized();
+    let (mut svm, payer) = setup();
     let boss = payer.pubkey();
 
     let token_in = create_mint_2022(&mut svm, &payer, 6, &boss);
     let token_out = create_mint_2022(&mut svm, &payer, 9, &boss);
+    let ix = build_initialize_ix(&boss, &token_out);
+    send_tx(&mut svm, &[ix], &[&payer]).expect("initialize failed");
 
     let ix = build_make_offer_ix(
         &boss,

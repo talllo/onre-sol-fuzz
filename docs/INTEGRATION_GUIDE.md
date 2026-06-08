@@ -128,7 +128,7 @@ console.log(`APY: ${apyPercent.toFixed(2)}%`); // e.g., 10.50%
 {
   offer: PublicKey,          // PDA: ["offer", tokenInMint, tokenOutMint]
   tokenInMint: PublicKey,
-  tokenOutMint: PublicKey,
+  tokenOutMint: PublicKey,   // must be the configured ONyc mint
   state: PublicKey,          // PDA: ["state"]
   circulatingSupplyExcludedBalance: PublicKey // PDA: ["circ_supply_excl_balance"]
 }
@@ -204,9 +204,10 @@ const supply = await program.methods
 console.log(`Circulating Supply: ${supply.toString()}`);
 ```
 
-`get_tvl` and `get_circulating_supply` remain legacy views that subtract the
-offer-vault and boss ATAs directly. The V2 views use the cached excluded-balance
-PDA, which is also what `refresh_market_stats` and the Prop AMM paths use.
+`get_tvl` and `get_circulating_supply` remain legacy ONyc views that subtract
+the offer-vault and boss ATAs directly. The V2 views use the cached ONyc
+excluded-balance PDA, which is also what `refresh_market_stats` and the Prop AMM
+paths use.
 
 ---
 
