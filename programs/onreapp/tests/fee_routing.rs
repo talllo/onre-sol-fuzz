@@ -137,7 +137,8 @@ fn create_and_fulfill(ctx: &mut FeeRoutingCtx) {
         &TOKEN_PROGRAM_ID,
         REDEMPTION_AMOUNT,
     );
-    let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
+    let cu_ix =
+        ComputeBudgetInstruction::set_compute_unit_limit(coverage_compute_unit_limit(300_000));
     send_tx(&mut ctx.svm, &[cu_ix, ix], &[&ctx.payer]).unwrap();
     advance_slot(&mut ctx.svm);
 }

@@ -26,6 +26,14 @@ pub fn send_tx(
     result
 }
 
+pub fn coverage_compute_unit_limit(normal_limit: u32) -> u32 {
+    if std::env::var_os("SBF_TRACE_DIR").is_some() {
+        1_400_000
+    } else {
+        normal_limit
+    }
+}
+
 fn log_compute_profile(
     ixs: &[Instruction],
     result: &Result<litesvm::types::TransactionMetadata, litesvm::types::FailedTransactionMetadata>,

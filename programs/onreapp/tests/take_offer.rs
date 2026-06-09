@@ -145,7 +145,8 @@ fn test_price_first_interval() {
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
-    let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
+    let cu_ix =
+        ComputeBudgetInstruction::set_compute_unit_limit(coverage_compute_unit_limit(300_000));
     send_tx(&mut ctx.svm, &[cu_ix, ix], &[&ctx.payer, &ctx.user]).unwrap();
 
     let user_onyc = get_token_balance(
@@ -192,7 +193,8 @@ fn test_take_offer_with_fractional_day_price_window() {
 
     create_token_account(&mut ctx.svm, &ctx.onyc_mint, &ctx.user.pubkey(), 0);
     let ix = build_default_take_offer_ix(&ctx, 2_000_000);
-    let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(320_000);
+    let cu_ix =
+        ComputeBudgetInstruction::set_compute_unit_limit(coverage_compute_unit_limit(320_000));
     send_tx(&mut ctx.svm, &[cu_ix, ix], &[&ctx.payer, &ctx.user]).unwrap();
 
     let user_onyc = get_token_balance(

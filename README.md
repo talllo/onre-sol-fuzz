@@ -263,6 +263,10 @@ Run the coverage flow from the repo root:
 ```bash
 rm -rf sbf_trace_dir coverage
 cargo build-sbf --debug --tools-version v1.52 --arch v1
+cp target/deploy/debug/onreapp.so target/deploy/onreapp.so
+cp target/deploy/debug/onreapp.so.debug target/deploy/onreapp.so.debug
+cp target/deploy/debug/onreapp.so.debug target/deploy/onreapp.debug
+cargo clean -p onreapp
 SBF_TRACE_DIR=$PWD/sbf_trace_dir cargo test -p onreapp --tests -- --nocapture
 sbpf-coverage \
   --src-path=$PWD/programs/onreapp/src \
@@ -273,6 +277,11 @@ open coverage/index.html
 ```
 
 Generated `sbf_trace_dir/` and `coverage/` directories are local build artifacts.
+The copy step is required because debug SBF builds are emitted under
+`target/deploy/debug/`, while the Rust LiteSVM tests embed
+`target/deploy/onreapp.so`.
+After coverage, remove the staged `target/deploy/onreapp.*` files before
+building a normal release artifact.
 
 ## Cross-Chain Transfers
 
