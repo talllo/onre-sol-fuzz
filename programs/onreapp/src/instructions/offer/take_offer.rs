@@ -388,6 +388,7 @@ pub fn take_offer<'info>(
         token_in_amount,
         &ctx.accounts.token_in_mint,
         &ctx.accounts.token_out_mint,
+        offer.fee_basis_points,
     )?;
     execute_token_operations(ExecTokenOpsParams {
         token_in_program: &ctx.accounts.token_in_program,
@@ -486,6 +487,7 @@ pub fn execute_take_offer_v2<'info>(
         token_in_amount,
         &ctx.accounts.token_in_mint,
         &ctx.accounts.token_out_mint,
+        offer.fee_basis_points,
     )?;
     let redemption_vault_target_bps = load_redemption_offer_vault_target_bps_for_offer(
         ctx.program_id,

@@ -304,11 +304,11 @@ pub struct TakeOfferPermissionlessV2<'info> {
 
     /// CHECK: PDA and data are validated/initialized in instruction logic.
     #[account(mut)]
-    pub offer_fee_vault: UncheckedAccount<'info>,
+    pub permissionless_offer_fee_vault: UncheckedAccount<'info>,
 
     /// CHECK: Validated and optionally initialized in instruction logic.
     #[account(mut)]
-    pub offer_fee_token_in_account: UncheckedAccount<'info>,
+    pub permissionless_offer_fee_token_in_account: UncheckedAccount<'info>,
 
     /// CHECK: PDA derivation is validated by explicit key check in the handler
     pub mint_authority: UncheckedAccount<'info>,
@@ -438,6 +438,7 @@ pub fn take_offer_permissionless<'info>(
         None,
         None,
         None,
+        None,
         &ctx.accounts.system_program,
     )
 }
@@ -487,11 +488,11 @@ pub fn take_offer_permissionless_v2<'info>(
         token_program_id: ctx.accounts.token_out_program.key(),
         invalid_account_error: crate::OnreError::InvalidUserTokenOutAccount,
     })?;
-    let offer_fee_token_in_account = get_or_create_configurable_vault_token_account::<
-        { ConfigurableVaultKind::OfferFee.as_u8() },
+    let permissionless_offer_fee_token_in_account = get_or_create_configurable_vault_token_account::<
+        { ConfigurableVaultKind::PermissionlessOfferFee.as_u8() },
     >(ConfigurableVaultTokenAccountParams {
-        vault: &ctx.accounts.offer_fee_vault,
-        token_account: &ctx.accounts.offer_fee_token_in_account,
+        vault: &ctx.accounts.permissionless_offer_fee_vault,
+        token_account: &ctx.accounts.permissionless_offer_fee_token_in_account,
         payer: ctx.accounts.user.to_account_info(),
         mint_account: ctx.accounts.token_in_mint.to_account_info(),
         token_program: ctx.accounts.token_in_program.to_account_info(),
@@ -499,6 +500,10 @@ pub fn take_offer_permissionless_v2<'info>(
         system_program: ctx.accounts.system_program.to_account_info(),
         program_id: ctx.program_id,
     })?;
+    let fee_basis_points_permissionless = {
+        let offer = ctx.accounts.offer.load()?;
+        offer.permissionless_fee_basis_points()
+    };
     execute_take_offer_permissionless(
         ctx.program_id,
         &ctx.accounts.offer,
@@ -514,7 +519,7 @@ pub fn take_offer_permissionless_v2<'info>(
         &permissionless_token_in_account,
         &ctx.accounts.permissionless_authority,
         &offer_proceeds_token_in_account,
-        &offer_fee_token_in_account,
+        &permissionless_offer_fee_token_in_account,
         &ctx.accounts.vault_token_in_account,
         &ctx.accounts.vault_authority,
         &ctx.accounts.token_out_program,
@@ -522,6 +527,7 @@ pub fn take_offer_permissionless_v2<'info>(
         &permissionless_token_out_account,
         &user_token_out_account,
         &ctx.accounts.mint_authority,
+        Some(fee_basis_points_permissionless),
         Some(&ctx.accounts.buffer_accounts),
         Some(PermissionlessMarketStatsRefresh {
             market_stats: &ctx.accounts.market_stats,
@@ -562,6 +568,7 @@ pub(crate) fn execute_take_offer_permissionless<'info>(
     permissionless_token_out_account: &InterfaceAccount<'info, TokenAccount>,
     user_token_out_account: &InterfaceAccount<'info, TokenAccount>,
     mint_authority: &UncheckedAccount<'info>,
+    fee_basis_points_override: Option<u16>,
     buffer_accounts: Option<&BufferAccrualAccounts<'info>>,
     market_stats_refresh: Option<PermissionlessMarketStatsRefresh<'_, 'info>>,
     redemption_vault_refill: Option<PermissionlessRedemptionVaultRefill<'info, 'info>>,
@@ -600,7 +607,13 @@ pub(crate) fn execute_take_offer_permissionless<'info>(
         instructions_sysvar,
     )?;
 
-    let result = process_offer_core(&offer, token_in_amount, token_in_mint, token_out_mint)?;
+    let result = process_offer_core(
+        &offer,
+        token_in_amount,
+        token_in_mint,
+        token_out_mint,
+        fee_basis_points_override.unwrap_or(offer.fee_basis_points),
+    )?;
     let buffer_is_initialized = if let Some(accounts) = buffer_accounts {
         accounts.check_is_initialized(program_id)?
     } else {

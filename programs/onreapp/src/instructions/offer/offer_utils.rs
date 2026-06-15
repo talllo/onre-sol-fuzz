@@ -87,6 +87,7 @@ pub fn verify_offer_approval(
 /// * `token_in_amount` - Amount of token_in being provided by the user
 /// * `token_in_mint` - The token_in mint for decimal and validation information
 /// * `token_out_mint` - The token_out mint for decimal and validation information
+/// * `fee_basis_points` - Fee in basis points to apply for this execution path
 ///
 /// # Returns
 /// * `Ok(OfferProcessResult)` - Containing current price, token amounts, and fees
@@ -96,6 +97,7 @@ pub fn process_offer_core(
     token_in_amount: u64,
     token_in_mint: &InterfaceAccount<Mint>,
     token_out_mint: &InterfaceAccount<Mint>,
+    fee_basis_points: u16,
 ) -> Result<OfferProcessResult> {
     let current_time = Clock::get()?.unix_timestamp as u64;
 
@@ -107,6 +109,7 @@ pub fn process_offer_core(
         token_out_mint.key(),
         token_out_mint.decimals,
         current_time,
+        fee_basis_points,
     )
 }
 
@@ -118,6 +121,7 @@ fn process_offer_core_at(
     token_out_mint_key: Pubkey,
     token_out_decimals: u8,
     current_time: u64,
+    fee_basis_points: u16,
 ) -> Result<OfferProcessResult> {
     require!(token_in_amount > 0, crate::OnreError::InvalidAmount);
     offer.require_mints(token_in_mint_key, token_out_mint_key)?;
@@ -133,7 +137,7 @@ fn process_offer_core_at(
         active_vector.price_fix_duration,
     )?;
 
-    let fee_amounts = calculate_fees(token_in_amount, offer.fee_basis_points)?;
+    let fee_amounts = calculate_fees(token_in_amount, fee_basis_points)?;
 
     // Calculate how many token_out to give for the provided token_in_amount
     let token_out_amount = calculate_token_out_amount(
@@ -458,6 +462,7 @@ mod tests {
             token_out_mint,
             6,
             1,
+            offer.fee_basis_points,
         );
 
         assert!(result.is_err());
@@ -477,6 +482,7 @@ mod tests {
             Pubkey::new_unique(),
             6,
             1,
+            offer.fee_basis_points,
         );
 
         assert!(result.is_err());
@@ -493,8 +499,16 @@ mod tests {
             active_vector_for_test(),
         );
 
-        let result =
-            process_offer_core_at(&offer, 1_000_000, token_in_mint, 6, token_out_mint, 6, 1);
+        let result = process_offer_core_at(
+            &offer,
+            1_000_000,
+            token_in_mint,
+            6,
+            token_out_mint,
+            6,
+            1,
+            offer.fee_basis_points,
+        );
 
         assert!(result.is_err());
     }
@@ -513,8 +527,16 @@ mod tests {
             },
         );
 
-        let result =
-            process_offer_core_at(&offer, 1_000_000, token_in_mint, 6, token_out_mint, 6, 1);
+        let result = process_offer_core_at(
+            &offer,
+            1_000_000,
+            token_in_mint,
+            6,
+            token_out_mint,
+            6,
+            1,
+            offer.fee_basis_points,
+        );
 
         assert!(result.is_err());
     }

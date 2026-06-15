@@ -209,7 +209,7 @@ pub(crate) fn validate_prop_amm_pair_for_side(
 }
 
 pub(crate) struct RedemptionOfferConfig {
-    pub fee_basis_points: u16,
+    pub fee_basis_points_prop_amm_sell: u16,
     pub vault_target_bps: u16,
 }
 
@@ -229,14 +229,14 @@ pub(crate) fn redemption_offer_config(
     )?
     else {
         return Ok(RedemptionOfferConfig {
-            fee_basis_points: 0,
+            fee_basis_points_prop_amm_sell: 0,
             vault_target_bps: 0,
         });
     };
     redemption_offer.require_enabled()?;
 
     Ok(RedemptionOfferConfig {
-        fee_basis_points: redemption_offer.fee_basis_points,
+        fee_basis_points_prop_amm_sell: redemption_offer.fee_basis_points_prop_amm_sell,
         vault_target_bps: redemption_offer.vault_target_bps,
     })
 }
@@ -695,14 +695,19 @@ pub fn build_swap_buy_quote(
         SwapSide::Buy,
     )?;
 
-    let result = process_offer_core(offer, token_in_amount, token_in_mint, token_out_mint).map(
-        |result| SwapQuoteComputation {
-            current_price: result.current_price,
-            token_in_net_amount: result.token_in_net_amount,
-            token_in_fee_amount: result.token_in_fee_amount,
-            token_out_amount: result.token_out_amount,
-        },
-    )?;
+    let result = process_offer_core(
+        offer,
+        token_in_amount,
+        token_in_mint,
+        token_out_mint,
+        offer.permissionless_fee_basis_points(),
+    )
+    .map(|result| SwapQuoteComputation {
+        current_price: result.current_price,
+        token_in_net_amount: result.token_in_net_amount,
+        token_in_fee_amount: result.token_in_fee_amount,
+        token_out_amount: result.token_out_amount,
+    })?;
 
     Ok(SwapQuote {
         offer: offer_key,
@@ -854,7 +859,7 @@ pub fn quote_swap_sell(ctx: Context<QuoteSwapSell>, token_in_amount: u64) -> Res
         &ctx.accounts.prop_amm_pair_state,
         actual_liquidity,
         hard_wall_reserve,
-        redemption_config.fee_basis_points,
+        redemption_config.fee_basis_points_prop_amm_sell,
         token_in_amount,
         &ctx.accounts.token_in_mint,
         &ctx.accounts.token_out_mint,
