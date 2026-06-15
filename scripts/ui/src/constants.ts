@@ -5,6 +5,7 @@ import type { Idl } from "./types";
 export const MAINNET_PROGRAM_ID = new PublicKey("onreuGhHHgVzMWSkj2oQDLDtvvGvoepBPkqyaubFcwe");
 export const MAINNET_RPC_URL = "https://api.mainnet-beta.solana.com";
 export const DEFAULT_RPC_PATH = "/rpc";
+export const DEFAULT_PROGRAM_ID = parseProgramId(import.meta.env.VITE_ONRE_PROGRAM_ID) ?? MAINNET_PROGRAM_ID;
 export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 export const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 export const SYSVAR_INSTRUCTIONS_PUBKEY = new PublicKey("Sysvar1nstructions1111111111111111111111111");
@@ -26,18 +27,24 @@ export const TOKEN_CHOICES = [
 
 export const CONFIGURABLE_VAULT_KIND_SEEDS: Record<string, string> = {
     OfferFee: "offer_fee",
+    PermissionlessOfferFee: "permissionless_offer_fee",
+    RedemptionFee: "redemption_fee",
     ManagementFee: "management_fee",
     PerformanceFee: "performance_fee",
-    PropAmmFee: "prop_amm_fee",
+    PropAmmBuyFee: "prop_amm_buy_fee",
+    PropAmmSellFee: "prop_amm_sell_fee",
     OfferProceeds: "offer_proceeds",
     PropAmmProceeds: "prop_amm_proceeds",
 };
 
 export const CONFIGURABLE_VAULT_ACCOUNT_SEEDS: Record<string, string> = {
     offer_fee_vault: "offer_fee",
+    permissionless_offer_fee_vault: "permissionless_offer_fee",
+    redemption_fee_vault: "redemption_fee",
     management_fee_vault: "management_fee",
     performance_fee_vault: "performance_fee",
-    prop_amm_fee_vault: "prop_amm_fee",
+    prop_amm_buy_fee_vault: "prop_amm_buy_fee",
+    prop_amm_sell_fee_vault: "prop_amm_sell_fee",
     offer_proceeds_vault: "offer_proceeds",
     prop_amm_proceeds_vault: "prop_amm_proceeds",
 };
@@ -61,6 +68,15 @@ export const PDA_SEEDS: Record<string, string> = {
     excluded_accounts: "circ_supply_excl_accounts",
 };
 
-export const idl = { ...idlJson, address: MAINNET_PROGRAM_ID.toBase58() } as Idl;
+export const idl = { ...idlJson, address: DEFAULT_PROGRAM_ID.toBase58() } as Idl;
 export const instructionByName = new Map(idl.instructions.map((ix) => [ix.name, ix]));
 export const typeByName = new Map((idl.types ?? []).map((typeDef) => [typeDef.name, typeDef]));
+
+function parseProgramId(value: string | undefined): PublicKey | undefined {
+    if (!value) return undefined;
+    try {
+        return new PublicKey(value);
+    } catch {
+        return undefined;
+    }
+}

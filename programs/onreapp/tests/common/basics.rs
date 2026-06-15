@@ -24,6 +24,8 @@ pub const OFFER_VAULT_AUTHORITY_SEED: &[u8] = b"offer_vault_authority";
 pub const REDEMPTION_OFFER_VAULT_AUTHORITY_SEED: &[u8] = b"redemption_offer_vault_authority";
 pub const CONFIGURABLE_VAULT_SEED: &[u8] = b"configurable_vault";
 pub const OFFER_FEE_VAULT_SEED: &[u8] = b"offer_fee";
+pub const PERMISSIONLESS_OFFER_FEE_VAULT_SEED: &[u8] = b"permissionless_offer_fee";
+pub const REDEMPTION_FEE_VAULT_SEED: &[u8] = b"redemption_fee";
 pub const PERMISSIONLESS_AUTHORITY_SEED: &[u8] = b"permissionless-1";
 pub const MINT_AUTHORITY_SEED: &[u8] = b"mint_authority";
 pub const MARKET_STATS_SEED: &[u8] = b"market_stats";
@@ -34,7 +36,8 @@ pub const BUFFER_STATE_SEED: &[u8] = b"buffer_state";
 pub const RESERVE_VAULT_AUTHORITY_SEED: &[u8] = b"reserve_vault_authority";
 pub const MANAGEMENT_FEE_VAULT_SEED: &[u8] = b"management_fee";
 pub const PERFORMANCE_FEE_VAULT_SEED: &[u8] = b"performance_fee";
-pub const PROP_AMM_FEE_VAULT_SEED: &[u8] = b"prop_amm_fee";
+pub const PROP_AMM_BUY_FEE_VAULT_SEED: &[u8] = b"prop_amm_buy_fee";
+pub const PROP_AMM_SELL_FEE_VAULT_SEED: &[u8] = b"prop_amm_sell_fee";
 pub const OFFER_PROCEEDS_VAULT_SEED: &[u8] = b"offer_proceeds";
 
 pub const PROP_AMM_PROCEEDS_VAULT_SEED: &[u8] = b"prop_amm_proceeds";
@@ -107,6 +110,20 @@ pub fn find_offer_fee_vault_pda() -> (Pubkey, u8) {
     )
 }
 
+pub fn find_permissionless_offer_fee_vault_pda() -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[CONFIGURABLE_VAULT_SEED, PERMISSIONLESS_OFFER_FEE_VAULT_SEED],
+        &PROGRAM_ID,
+    )
+}
+
+pub fn find_redemption_fee_vault_pda() -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[CONFIGURABLE_VAULT_SEED, REDEMPTION_FEE_VAULT_SEED],
+        &PROGRAM_ID,
+    )
+}
+
 pub fn find_management_fee_vault_pda() -> (Pubkey, u8) {
     Pubkey::find_program_address(
         &[CONFIGURABLE_VAULT_SEED, MANAGEMENT_FEE_VAULT_SEED],
@@ -121,9 +138,16 @@ pub fn find_performance_fee_vault_pda() -> (Pubkey, u8) {
     )
 }
 
-pub fn find_prop_amm_fee_vault_pda() -> (Pubkey, u8) {
+pub fn find_prop_amm_buy_fee_vault_pda() -> (Pubkey, u8) {
     Pubkey::find_program_address(
-        &[CONFIGURABLE_VAULT_SEED, PROP_AMM_FEE_VAULT_SEED],
+        &[CONFIGURABLE_VAULT_SEED, PROP_AMM_BUY_FEE_VAULT_SEED],
+        &PROGRAM_ID,
+    )
+}
+
+pub fn find_prop_amm_sell_fee_vault_pda() -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[CONFIGURABLE_VAULT_SEED, PROP_AMM_SELL_FEE_VAULT_SEED],
         &PROGRAM_ID,
     )
 }

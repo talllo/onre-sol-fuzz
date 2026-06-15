@@ -110,9 +110,12 @@ pub enum ConfigurableVaultKind {
     OfferFee,
     ManagementFee,
     PerformanceFee,
-    PropAmmFee,
+    PropAmmBuyFee,
     OfferProceeds,
     PropAmmProceeds,
+    PermissionlessOfferFee,
+    RedemptionFee,
+    PropAmmSellFee,
 }
 
 impl ConfigurableVaultKind {
@@ -121,9 +124,12 @@ impl ConfigurableVaultKind {
             Self::OfferFee => crate::constants::seeds::OFFER_FEE_VAULT,
             Self::ManagementFee => crate::constants::seeds::MANAGEMENT_FEE_VAULT,
             Self::PerformanceFee => crate::constants::seeds::PERFORMANCE_FEE_VAULT,
-            Self::PropAmmFee => crate::constants::seeds::PROP_AMM_FEE_VAULT,
+            Self::PropAmmBuyFee => crate::constants::seeds::PROP_AMM_BUY_FEE_VAULT,
             Self::OfferProceeds => crate::constants::seeds::OFFER_PROCEEDS_VAULT,
             Self::PropAmmProceeds => crate::constants::seeds::PROP_AMM_PROCEEDS_VAULT,
+            Self::PermissionlessOfferFee => crate::constants::seeds::PERMISSIONLESS_OFFER_FEE_VAULT,
+            Self::RedemptionFee => crate::constants::seeds::REDEMPTION_FEE_VAULT,
+            Self::PropAmmSellFee => crate::constants::seeds::PROP_AMM_SELL_FEE_VAULT,
         }
     }
 
@@ -132,9 +138,12 @@ impl ConfigurableVaultKind {
             Self::OfferFee => 0,
             Self::ManagementFee => 1,
             Self::PerformanceFee => 2,
-            Self::PropAmmFee => 3,
+            Self::PropAmmBuyFee => 3,
             Self::OfferProceeds => 4,
             Self::PropAmmProceeds => 5,
+            Self::PermissionlessOfferFee => 6,
+            Self::RedemptionFee => 7,
+            Self::PropAmmSellFee => 8,
         }
     }
 }

@@ -13,9 +13,12 @@ impl<const KIND: u8> ConfigurableVaultInit<KIND> {
             0 => ConfigurableVaultKind::OfferFee,
             1 => ConfigurableVaultKind::ManagementFee,
             2 => ConfigurableVaultKind::PerformanceFee,
-            3 => ConfigurableVaultKind::PropAmmFee,
+            3 => ConfigurableVaultKind::PropAmmBuyFee,
             4 => ConfigurableVaultKind::OfferProceeds,
             5 => ConfigurableVaultKind::PropAmmProceeds,
+            6 => ConfigurableVaultKind::PermissionlessOfferFee,
+            7 => ConfigurableVaultKind::RedemptionFee,
+            8 => ConfigurableVaultKind::PropAmmSellFee,
             _ => unreachable!("invalid configurable vault kind"),
         }
     }
@@ -31,14 +34,24 @@ impl<const KIND: u8> PdaAccountInit for ConfigurableVaultInit<KIND> {
             ConfigurableVaultKind::PerformanceFee => {
                 &[seeds::CONFIGURABLE_VAULT, seeds::PERFORMANCE_FEE_VAULT]
             }
-            ConfigurableVaultKind::PropAmmFee => {
-                &[seeds::CONFIGURABLE_VAULT, seeds::PROP_AMM_FEE_VAULT]
+            ConfigurableVaultKind::PropAmmBuyFee => {
+                &[seeds::CONFIGURABLE_VAULT, seeds::PROP_AMM_BUY_FEE_VAULT]
             }
             ConfigurableVaultKind::OfferProceeds => {
                 &[seeds::CONFIGURABLE_VAULT, seeds::OFFER_PROCEEDS_VAULT]
             }
             ConfigurableVaultKind::PropAmmProceeds => {
                 &[seeds::CONFIGURABLE_VAULT, seeds::PROP_AMM_PROCEEDS_VAULT]
+            }
+            ConfigurableVaultKind::PermissionlessOfferFee => &[
+                seeds::CONFIGURABLE_VAULT,
+                seeds::PERMISSIONLESS_OFFER_FEE_VAULT,
+            ],
+            ConfigurableVaultKind::RedemptionFee => {
+                &[seeds::CONFIGURABLE_VAULT, seeds::REDEMPTION_FEE_VAULT]
+            }
+            ConfigurableVaultKind::PropAmmSellFee => {
+                &[seeds::CONFIGURABLE_VAULT, seeds::PROP_AMM_SELL_FEE_VAULT]
             }
         }
     }

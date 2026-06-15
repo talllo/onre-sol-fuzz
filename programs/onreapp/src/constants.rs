@@ -48,14 +48,23 @@ pub mod seeds {
     /// Seed suffix for offer fee vault authority
     pub const OFFER_FEE_VAULT: &[u8] = b"offer_fee";
 
+    /// Seed suffix for permissionless offer fee vault authority
+    pub const PERMISSIONLESS_OFFER_FEE_VAULT: &[u8] = b"permissionless_offer_fee";
+
+    /// Seed suffix for redemption fee vault authority
+    pub const REDEMPTION_FEE_VAULT: &[u8] = b"redemption_fee";
+
     /// Seed suffix for management fee vault authority
     pub const MANAGEMENT_FEE_VAULT: &[u8] = b"management_fee";
 
     /// Seed suffix for performance fee vault authority
     pub const PERFORMANCE_FEE_VAULT: &[u8] = b"performance_fee";
 
-    /// Seed suffix for prop AMM fee vault authority
-    pub const PROP_AMM_FEE_VAULT: &[u8] = b"prop_amm_fee";
+    /// Seed suffix for prop AMM buy fee vault authority
+    pub const PROP_AMM_BUY_FEE_VAULT: &[u8] = b"prop_amm_buy_fee";
+
+    /// Seed suffix for prop AMM sell fee vault authority
+    pub const PROP_AMM_SELL_FEE_VAULT: &[u8] = b"prop_amm_sell_fee";
 
     /// Seed suffix for net proceeds vault authority
     pub const OFFER_PROCEEDS_VAULT: &[u8] = b"offer_proceeds";

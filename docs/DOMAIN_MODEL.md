@@ -18,7 +18,7 @@ of hiding them inside ordinary offer or redemption balances:
 
 - Prop AMM is the immediate-liquidity layer. It lets enabled markets quote and
   execute ONyc buys and sells automatically, while still routing assets through
-  redemption liquidity, Prop AMM fee vaults, and Prop AMM proceeds vaults.
+  redemption liquidity, Prop AMM buy/sell fee vaults, and Prop AMM proceeds vaults.
 - BUFFER is the reserve-growth layer. It accrues configured reserve yield over
   time, splits reserve growth from management and performance fees, and stores a
   supply baseline so later ONyc mints and burns do not blur the accrual period.
@@ -42,7 +42,7 @@ instead of reusing ordinary offer vaults.
 | Asset offers | Supported asset markets where users exchange an asset for ONYC. |
 | Redemption markets | ONYC-to-asset redemption configuration, requests and fulfillment. |
 | Prop AMM liquidity | Automated buy/sell pricing for configured asset markets. |
-| Accounting vaults | Separate fee and proceeds buckets for offer and Prop AMM flows. |
+| Accounting vaults | Separate fee and proceeds buckets for offer, permissionless, redemption admin, and Prop AMM flows. |
 | Market reporting | NAV, TVL, APY and circulating supply snapshots. |
 | Buffer reserve | Separate reserve management and buffer accrual. |
 
@@ -180,12 +180,14 @@ flowchart TD
         RedemptionOffer[Redemption offer]
         RedemptionRequest[Redemption request]
         RedemptionVault[Redemption vault]
+        RedemptionFee[Redemption fee vault]
     end
 
     subgraph PropAmmDomain[Prop AMM domain]
         PropAmmBuy[Automated ONYC buy]
         PropAmmSell[Automated ONYC sell]
-        PropAmmFee[Prop AMM fee vault]
+        PropAmmBuyFee[Prop AMM buy fee vault]
+        PropAmmSellFee[Prop AMM sell fee vault]
         PropAmmProceeds[Prop AMM proceeds vault]
     end
 
@@ -194,13 +196,14 @@ flowchart TD
     TakeOffer --> RedemptionVault
 
     RedemptionOffer --> RedemptionRequest
+    RedemptionOffer --> RedemptionFee
     RedemptionRequest --> RedemptionVault
     RedemptionVault --> RedemptionPayouts[Redemption payouts]
 
-    PropAmmBuy --> PropAmmFee
+    PropAmmBuy --> PropAmmBuyFee
     PropAmmBuy --> PropAmmProceeds
     PropAmmBuy --> RedemptionVault
-    PropAmmSell --> PropAmmFee
+    PropAmmSell --> PropAmmSellFee
     PropAmmSell --> RedemptionVault
     RedemptionVault --> AmmSellPayouts[Sell payouts]
 ```
@@ -209,9 +212,12 @@ flowchart TD
 
 | Value bucket | Business source | Purpose |
 | --- | --- | --- |
-| Offer fee vault | Take-offer and redemption fulfillment fees | Fee accounting for regular offer and redemption activity. |
+| Offer fee vault | Regular take-offer fees | Fee accounting for regular offer execution. |
+| Permissionless offer fee vault | Permissionless take-offer fees | Fee accounting for permissionless offer execution. |
+| Redemption fee vault | Redemption fulfillment fees | Fee accounting for manually fulfilled redemption requests. |
 | Offer proceeds vault | Net offer inflow and non-burned redemption token-in not routed to redemption liquidity | Accounting destination for normal offer proceeds and redemption fulfillment proceeds. |
-| Prop AMM fee vault | Prop AMM buy and sell fees | Fee accounting for Prop AMM activity. |
+| Prop AMM buy fee vault | Prop AMM buy fees | Fee accounting for automated buy activity. |
+| Prop AMM sell fee vault | Prop AMM sell redemption fees | Fee accounting for automated sell activity. |
 | Prop AMM proceeds vault | Net Prop AMM inflow not routed to redemption liquidity | Accounting destination for Prop AMM proceeds. |
 | Redemption vault | Redemption requests, redemption payouts, and capped refill inflows | Liquidity pool used by redemption and Prop AMM sell paths. |
 | Reserve vault | Buffer reserve | Reserve backing for buffer operations. |
@@ -225,8 +231,11 @@ flowchart TD
     ReserveVaultAuthority[Reserve vault authority PDA] --> ReserveTokenAccount[Reserve ONYC ATA]
 
     OfferFeeVault[Offer fee vault PDA] --> OfferFeeTokenAccounts[Offer fee ATAs by mint]
+    PermissionlessOfferFeeVault[Permissionless offer fee vault PDA] --> PermissionlessOfferFeeTokenAccounts[Permissionless offer fee ATAs by mint]
+    RedemptionFeeVault[Redemption fee vault PDA] --> RedemptionFeeTokenAccounts[Redemption fee ATAs by mint]
     OfferProceedsVault[Offer proceeds vault PDA] --> OfferProceedsTokenAccounts[Offer proceeds ATAs by mint]
-    PropAmmFeeVault[Prop AMM fee vault PDA] --> PropAmmFeeTokenAccounts[Prop AMM fee ATAs by mint]
+    PropAmmBuyFeeVault[Prop AMM buy fee vault PDA] --> PropAmmBuyFeeTokenAccounts[Prop AMM buy fee ATAs by mint]
+    PropAmmSellFeeVault[Prop AMM sell fee vault PDA] --> PropAmmSellFeeTokenAccounts[Prop AMM sell fee ATAs by mint]
     PropAmmProceedsVault[Prop AMM proceeds vault PDA] --> PropAmmProceedsTokenAccounts[Prop AMM proceeds ATAs by mint]
     ManagementFeeVault[Management fee vault PDA] --> ManagementFeeTokenAccounts[Management fee ATAs by mint]
     PerformanceFeeVault[Performance fee vault PDA] --> PerformanceFeeTokenAccounts[Performance fee ATAs by mint]
@@ -394,9 +403,12 @@ flowchart TD
 
 | Kind | Seed suffix | Business bucket |
 | --- | --- | --- |
-| `OfferFee` | `offer_fee` | Regular offer and redemption fulfillment fees. |
+| `OfferFee` | `offer_fee` | Regular offer fees. |
+| `PermissionlessOfferFee` | `permissionless_offer_fee` | Permissionless offer fees. |
+| `RedemptionFee` | `redemption_fee` | Redemption fulfillment fees. |
 | `OfferProceeds` | `offer_proceeds` | Regular offer net proceeds. |
-| `PropAmmFee` | `prop_amm_fee` | Prop AMM fees. |
+| `PropAmmBuyFee` | `prop_amm_buy_fee` | Prop AMM buy fees. |
+| `PropAmmSellFee` | `prop_amm_sell_fee` | Prop AMM sell fees. |
 | `PropAmmProceeds` | `prop_amm_proceeds` | Prop AMM net proceeds. |
 | `ManagementFee` | `management_fee` | Buffer management fees. |
 | `PerformanceFee` | `performance_fee` | Buffer performance fees. |
@@ -405,6 +417,6 @@ flowchart TD
 
 - Offer markets, redemption markets, Prop AMM settings, and accounting vaults are separate concepts.
 - A redemption offer is the redemption market linked to an offer.
-- Offer and Prop AMM accounting are separated into different fee and proceeds vaults.
+- Offer, permissionless, redemption admin, and Prop AMM accounting are separated into different fee and proceeds vaults.
 - The redemption vault target controls capped refill routing and can cap Prop AMM sell-side effective liquidity.
 - Prop AMM sell quotes cannot price against more than actual redemption vault liquidity; configured targets only reduce available curve liquidity.

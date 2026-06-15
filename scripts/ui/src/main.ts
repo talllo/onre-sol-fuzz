@@ -6,11 +6,11 @@ import {
     ASSOCIATED_TOKEN_PROGRAM_ID,
     CONFIGURABLE_VAULT_ACCOUNT_SEEDS,
     CONFIGURABLE_VAULT_KIND_SEEDS,
+    DEFAULT_PROGRAM_ID,
     DEFAULT_RPC_PATH,
     idl,
     instructionByName,
     MAINNET_MINTS,
-    MAINNET_PROGRAM_ID,
     MAINNET_RPC_URL,
     OFFER_TOKEN_IN_KEY,
     OFFER_TOKEN_OUT_KEY,
@@ -33,6 +33,7 @@ globalThis.Buffer = Buffer;
 const state: AppState = {
     rpcUrl: initialRpcUrl(),
     customRpcUrl: initialCustomRpcUrl(),
+    programId: initialProgramId(),
     connection: new Connection(initialRpcUrl(), "confirmed"),
     selectedInstructionName: idl.instructions[0]?.name ?? "",
     search: "",
@@ -66,10 +67,14 @@ if (!app) {
 const appRoot = app;
 
 function initialRpcUrl(): string {
+    const envRpcUrl = import.meta.env.VITE_ONRE_RPC_URL;
     const storedCustomRpcUrl = initialCustomRpcUrl();
     if (storedCustomRpcUrl) return customRpcProxyUrl(storedCustomRpcUrl);
 
     const storedRpcUrl = localStorage.getItem("onre-ui-rpc-url");
+    if (envRpcUrl && (!storedRpcUrl || storedRpcUrl === MAINNET_RPC_URL || storedRpcUrl === DEFAULT_RPC_PATH)) {
+        return isExternalRpcUrl(envRpcUrl) ? customRpcProxyUrl(envRpcUrl) : envRpcUrl;
+    }
     if (!storedRpcUrl || storedRpcUrl === MAINNET_RPC_URL || storedRpcUrl === DEFAULT_RPC_PATH) return defaultRpcUrl();
     if (isExternalRpcUrl(storedRpcUrl)) return customRpcProxyUrl(storedRpcUrl);
     return storedRpcUrl;
@@ -82,6 +87,16 @@ function initialCustomRpcUrl(): string | undefined {
     const storedRpcUrl = localStorage.getItem("onre-ui-rpc-url");
     if (storedRpcUrl && isExternalRpcUrl(storedRpcUrl)) return storedRpcUrl;
     return undefined;
+}
+
+function initialProgramId(): PublicKey {
+    const storedProgramId = localStorage.getItem("onre-ui-program-id");
+    if (!storedProgramId) return DEFAULT_PROGRAM_ID;
+    try {
+        return new PublicKey(storedProgramId);
+    } catch {
+        return DEFAULT_PROGRAM_ID;
+    }
 }
 
 function defaultRpcUrl(): string {
@@ -140,7 +155,7 @@ function initializeSelectedInstruction(): void {
 
 async function refreshStateDerivedAccounts(): Promise<void> {
     try {
-        const statePda = PublicKey.findProgramAddressSync([Buffer.from("state")], MAINNET_PROGRAM_ID)[0];
+        const statePda = PublicKey.findProgramAddressSync([Buffer.from("state")], state.programId)[0];
         const accountInfo = await state.connection.getAccountInfo(statePda, "confirmed");
         if (!accountInfo) return;
         const stateInfo = decodeStateAccount(accountInfo.data);
@@ -170,8 +185,8 @@ function render(): void {
             <header class="topbar">
                 <div class="brand">
                     <span class="brand-mark">OnRe</span>
-                    <span class="brand-subtitle">Mainnet operations</span>
-                    <span class="program-pill monospace">${compactAddress(MAINNET_PROGRAM_ID.toBase58())}</span>
+                    <span class="brand-subtitle">Operations</span>
+                    <span class="program-pill monospace">${compactAddress(state.programId.toBase58())}</span>
                 </div>
                 <div class="walletbar">
                     <span class="status-dot ${state.walletPublicKey ? "online" : ""}"></span>
@@ -190,6 +205,9 @@ function render(): void {
                     <input id="rpc-url" value="${escapeHtml(rpcInputValue())}" placeholder="Paste custom RPC URL" />
                     <button id="apply-rpc" class="${isSurfpoolRpcSelected() ? "" : "active"}">Use Custom</button>
                 </div>
+                <label for="program-id">Program ID</label>
+                <input id="program-id" value="${escapeHtml(state.programId.toBase58())}" />
+                <button id="apply-program">Apply Program</button>
                 <button id="ping-rpc">Ping</button>
                 <button id="refresh-accounts">Refresh Accounts</button>
             </section>
@@ -530,6 +548,7 @@ function bindEvents(): void {
     document.querySelector("#wallet-button")?.addEventListener("click", () => void toggleWallet());
     document.querySelector("#use-surfpool-rpc")?.addEventListener("click", useSurfpoolRpc);
     document.querySelector("#apply-rpc")?.addEventListener("click", applyRpcUrl);
+    document.querySelector("#apply-program")?.addEventListener("click", applyProgramId);
     document.querySelector("#ping-rpc")?.addEventListener("click", () => void pingRpc());
     document.querySelector("#refresh-accounts")?.addEventListener("click", () => void refreshAccountsFromChain());
     document.querySelector("#apply-state-cheatcodes")?.addEventListener("click", () => void applySurfpoolStateCheatcodes());
@@ -570,6 +589,12 @@ function bindEvents(): void {
     document.querySelector<HTMLInputElement>("#rpc-url")?.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
             applyRpcUrl();
+        }
+    });
+
+    document.querySelector<HTMLInputElement>("#program-id")?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            applyProgramId();
         }
     });
 
@@ -809,7 +834,8 @@ function applyRpcUrl(): void {
     const input = document.querySelector<HTMLInputElement>("#rpc-url");
     const rpcUrl = input?.value.trim() || defaultRpcUrl();
     setCustomRpcUrl(rpcUrl);
-    appendOutput(`Custom RPC set: ${rpcUrl}`);
+    const programChanged = applyProgramIdFromInput();
+    appendOutput(`Custom RPC set: ${rpcUrl}${programChanged ? `\nProgram: ${state.programId.toBase58()}` : ""}`);
     render();
     void refreshStateDerivedAccounts();
 }
@@ -820,7 +846,8 @@ function useSurfpoolRpc(): void {
     setRpcEndpoint(rpcUrl);
     localStorage.setItem("onre-ui-rpc-url", rpcUrl);
     localStorage.removeItem("onre-ui-custom-rpc-url");
-    appendOutput(`Surfpool RPC set: ${rpcUrl}`);
+    const programChanged = applyProgramIdFromInput();
+    appendOutput(`Surfpool RPC set: ${rpcUrl}${programChanged ? `\nProgram: ${state.programId.toBase58()}` : ""}`);
     render();
     void refreshStateDerivedAccounts();
 }
@@ -840,6 +867,37 @@ function setRpcEndpoint(rpcUrl: string): void {
     state.decodedAccounts = {};
     state.accountExistence = {};
     accountFetchesInFlight.clear();
+}
+
+function applyProgramId(): void {
+    if (!applyProgramIdFromInput()) return;
+    appendOutput(`Program set: ${state.programId.toBase58()}`);
+    render();
+    void refreshStateDerivedAccounts();
+}
+
+function applyProgramIdFromInput(): boolean {
+    const programInput = document.querySelector<HTMLInputElement>("#program-id");
+    const rawProgramId = programInput?.value.trim() || DEFAULT_PROGRAM_ID.toBase58();
+    let programId: PublicKey;
+
+    try {
+        programId = new PublicKey(rawProgramId);
+    } catch {
+        appendOutput(`Invalid program ID: ${rawProgramId}`);
+        render();
+        return false;
+    }
+
+    if (state.programId.equals(programId)) return false;
+    state.programId = programId;
+    localStorage.setItem("onre-ui-program-id", programId.toBase58());
+    state.stateInfo = undefined;
+    state.decodedAccounts = {};
+    state.accountExistence = {};
+    accountFetchesInFlight.clear();
+    initializeSelectedInstruction();
+    return true;
 }
 
 async function pingRpc(): Promise<void> {
@@ -1101,7 +1159,7 @@ function buildInstruction(): TransactionInstruction {
     const data = Buffer.concat([Buffer.from(instruction.discriminator), ...((instruction.args ?? []).map((arg) => encodeType(arg.type, parseArgValue(arg))) ?? [])]);
 
     return new TransactionInstruction({
-        programId: MAINNET_PROGRAM_ID,
+        programId: state.programId,
         keys,
         data,
     });
@@ -1170,7 +1228,7 @@ function deriveAccountValue(account: IdlAccount, fullName: string): string {
     if (lowerName === "token_program" || lowerName === "token_in_program" || lowerName === "token_out_program") return TOKEN_PROGRAM_ID.toBase58();
     if (lowerName === "associated_token_program") return ASSOCIATED_TOKEN_PROGRAM_ID.toBase58();
     if (lowerName === "instructions_sysvar") return SYSVAR_INSTRUCTIONS_PUBKEY.toBase58();
-    if (lowerName === "program") return MAINNET_PROGRAM_ID.toBase58();
+    if (lowerName === "program") return state.programId.toBase58();
     if (lowerName === "onyc_mint") return onycMint().toBase58();
     if (lowerName === "token_in_mint") return defaultTokenInMint().toBase58();
     if (lowerName === "token_out_mint") return defaultTokenOutMint().toBase58();
@@ -1289,10 +1347,13 @@ function inferTokenAccountMint(lowerName: string): PublicKey | undefined {
 }
 
 function inferTokenAccountOwner(lowerName: string): PublicKey | undefined {
+    if (lowerName.includes("permissionless_offer_fee")) return deriveConfigurableVaultPda("permissionless_offer_fee");
     if (lowerName.includes("offer_fee")) return deriveConfigurableVaultPda("offer_fee");
+    if (lowerName.includes("redemption_fee")) return deriveConfigurableVaultPda("redemption_fee");
     if (lowerName.includes("management_fee")) return deriveConfigurableVaultPda("management_fee");
     if (lowerName.includes("performance_fee")) return deriveConfigurableVaultPda("performance_fee");
-    if (lowerName.includes("prop_amm_fee")) return deriveConfigurableVaultPda("prop_amm_fee");
+    if (lowerName.includes("prop_amm_buy_fee")) return deriveConfigurableVaultPda("prop_amm_buy_fee");
+    if (lowerName.includes("prop_amm_sell_fee")) return deriveConfigurableVaultPda("prop_amm_sell_fee");
     if (lowerName.includes("offer_proceeds")) return deriveConfigurableVaultPda("offer_proceeds");
     if (lowerName.includes("prop_amm_proceeds")) return deriveConfigurableVaultPda("prop_amm_proceeds");
     if (lowerName.includes("reserve_vault")) return deriveFixedPda("reserve_vault_authority");
@@ -1474,7 +1535,7 @@ function findPda(seeds: Array<string | PublicKey | Uint8Array | Buffer>): Public
             if (seed instanceof PublicKey) return seed.toBuffer();
             return seed;
         }),
-        MAINNET_PROGRAM_ID,
+        state.programId,
     )[0];
 }
 
@@ -1492,7 +1553,7 @@ function tryDerivePda(pda: IdlPda): PublicKey | undefined {
     try {
         const seeds = pda.seeds.map(resolveSeed);
         if (seeds.some((seed) => !seed)) return undefined;
-        const programId = pda.program ? seedToProgramId(pda.program) : MAINNET_PROGRAM_ID;
+        const programId = pda.program ? seedToProgramId(pda.program) : state.programId;
         if (!programId) return undefined;
         return PublicKey.findProgramAddressSync(seeds as Uint8Array[], programId)[0];
     } catch {

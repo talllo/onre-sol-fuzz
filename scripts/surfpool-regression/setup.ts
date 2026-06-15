@@ -103,7 +103,7 @@ export async function ensureMarketStats(runtime: SmokeRuntime, mainOffer: Public
             tokenInMint: MINTS.usdc,
             state: PDAS.state,
             onycMint: MINTS.onyc,
-            excludedBalance: PDAS.circulatingSupplyExcludedBalance,
+            circulatingSupplyExcludedBalance: PDAS.circulatingSupplyExcludedBalance,
             marketStats: PDAS.marketStats,
             signer: runtime.authority.publicKey,
             systemProgram: SystemProgram.programId,
