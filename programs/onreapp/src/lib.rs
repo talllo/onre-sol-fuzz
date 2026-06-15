@@ -271,6 +271,27 @@ pub mod onreapp {
         offer::update_offer_fee(ctx, new_fee_basis_points)
     }
 
+    /// Updates the fee basis points used only by permissionless offer execution.
+    ///
+    /// Delegates to `offer::update_offer_permissionless_fee`.
+    pub fn update_offer_permissionless_fee(
+        ctx: Context<UpdateOfferPermissionlessFee>,
+        new_fee_basis_points_permissionless: u16,
+    ) -> Result<()> {
+        offer::update_offer_permissionless_fee(ctx, new_fee_basis_points_permissionless)
+    }
+
+    /// Updates the fee basis points used only by Prop AMM sell-side redemptions.
+    pub fn update_redemption_offer_prop_amm_sell_fee(
+        ctx: Context<UpdateRedemptionOfferFee>,
+        new_fee_basis_points_prop_amm_sell: u16,
+    ) -> Result<()> {
+        redemption::update_redemption_offer_prop_amm_sell_fee(
+            ctx,
+            new_fee_basis_points_prop_amm_sell,
+        )
+    }
+
     /// Enables or disables one offer.
     ///
     /// Boss or admins can disable an offer. Only boss can re-enable it.
@@ -791,14 +812,16 @@ pub mod onreapp {
     /// # Arguments
     /// - `ctx`: Context for `MakeRedemptionOffer`.
     /// - `fee_basis_points`: Fee in basis points, capped at 1000 bps (10%).
+    /// - `fee_basis_points_prop_amm_sell`: Prop AMM sell fee in basis points, capped at 1000 bps (10%).
     ///
     /// # Access Control
     /// - Only the boss or redemption_admin can call this instruction
     pub fn make_redemption_offer(
         ctx: Context<MakeRedemptionOffer>,
         fee_basis_points: u16,
+        fee_basis_points_prop_amm_sell: u16,
     ) -> Result<()> {
-        redemption::make_redemption_offer(ctx, fee_basis_points)
+        redemption::make_redemption_offer(ctx, fee_basis_points, fee_basis_points_prop_amm_sell)
     }
 
     pub fn set_redemption_offer_disabled(

@@ -21,6 +21,8 @@ pub struct RedemptionOfferCreatedEvent {
     pub token_out_mint: Pubkey,
     /// Fee in basis points, capped at 1000 bps (10%), charged when fulfilling redemption requests.
     pub fee_basis_points: u16,
+    /// Fee in basis points, capped at 1000 bps (10%), charged when Prop AMM sell fulfills redemptions.
+    pub fee_basis_points_prop_amm_sell: u16,
     /// Target token-out vault balance as basis points of TVL.
     pub vault_target_bps: u16,
 }
@@ -150,11 +152,12 @@ pub struct MakeRedemptionOffer<'info> {
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
 /// * `fee_basis_points` - Fee in basis points charged when fulfilling redemption requests
+/// * `fee_basis_points_prop_amm_sell` - Fee in basis points charged when Prop AMM sell fulfills redemptions
 ///
 /// # Returns
 /// * `Ok(())` - If the redemption offer is successfully created
 /// * `Err(crate::OnreError::Unauthorized)` - If caller is neither boss nor redemption_admin (validated in accounts)
-/// * `Err(crate::OnreError::InvalidFee)` - If fee_basis_points exceeds 1000 basis points (10%)
+/// * `Err(crate::OnreError::InvalidFee)` - If either fee exceeds 1000 basis points (10%)
 ///
 /// # Access Control
 /// - Only the boss or redemption_admin can call this instruction
@@ -169,10 +172,15 @@ pub struct MakeRedemptionOffer<'info> {
 pub fn make_redemption_offer(
     ctx: Context<MakeRedemptionOffer>,
     fee_basis_points: u16,
+    fee_basis_points_prop_amm_sell: u16,
 ) -> Result<()> {
     // Validate fee is within valid range (0-1000 basis points = 0-10%)
     require!(
         fee_basis_points <= MAX_ALLOWED_FEE_BPS,
+        crate::OnreError::InvalidFee
+    );
+    require!(
+        fee_basis_points_prop_amm_sell <= MAX_ALLOWED_FEE_BPS,
         crate::OnreError::InvalidFee
     );
 
@@ -182,6 +190,7 @@ pub fn make_redemption_offer(
     redemption_offer.token_in_mint = ctx.accounts.token_in_mint.key();
     redemption_offer.token_out_mint = ctx.accounts.token_out_mint.key();
     redemption_offer.fee_basis_points = fee_basis_points;
+    redemption_offer.fee_basis_points_prop_amm_sell = fee_basis_points_prop_amm_sell;
     redemption_offer.vault_target_bps = 0;
     redemption_offer.executed_redemptions = 0;
     redemption_offer.requested_redemptions = 0;
@@ -190,9 +199,10 @@ pub fn make_redemption_offer(
     redemption_offer.bump = ctx.bumps.redemption_offer;
 
     msg!(
-        "Redemption offer created at: {}, fee: {}",
+        "Redemption offer created at: {}, fee: {}, prop AMM sell fee: {}",
         ctx.accounts.redemption_offer.key(),
-        fee_basis_points
+        fee_basis_points,
+        fee_basis_points_prop_amm_sell
     );
 
     emit!(RedemptionOfferCreatedEvent {
@@ -201,6 +211,7 @@ pub fn make_redemption_offer(
         token_in_mint: ctx.accounts.token_in_mint.key(),
         token_out_mint: ctx.accounts.token_out_mint.key(),
         fee_basis_points,
+        fee_basis_points_prop_amm_sell,
         vault_target_bps: 0,
     });
 

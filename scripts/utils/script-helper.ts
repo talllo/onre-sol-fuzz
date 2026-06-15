@@ -39,9 +39,12 @@ export { NETWORK_CONFIGS, printConfigSummary };
 
 const CONFIGURABLE_VAULTS = {
     "offer-fee": { seed: "offer_fee", kind: { offerFee: {} } },
+    "permissionless-offer-fee": { seed: "permissionless_offer_fee", kind: { permissionlessOfferFee: {} } },
+    "redemption-fee": { seed: "redemption_fee", kind: { redemptionFee: {} } },
     "management-fee": { seed: "management_fee", kind: { managementFee: {} } },
     "performance-fee": { seed: "performance_fee", kind: { performanceFee: {} } },
-    "prop-amm-fee": { seed: "prop_amm_fee", kind: { propAmmFee: {} } },
+    "prop-amm-buy-fee": { seed: "prop_amm_buy_fee", kind: { propAmmBuyFee: {} } },
+    "prop-amm-sell-fee": { seed: "prop_amm_sell_fee", kind: { propAmmSellFee: {} } },
     "offer-proceeds": { seed: "offer_proceeds", kind: { offerProceeds: {} } },
     "prop-amm-proceeds": { seed: "prop_amm_proceeds", kind: { propAmmProceeds: {} } },
 } as const;
@@ -356,6 +359,17 @@ export class ScriptHelper {
             .instruction();
     }
 
+    async buildUpdateOfferPermissionlessFeeIx(params: { tokenInMint: PublicKey; tokenOutMint: PublicKey; newFeeBasisPointsPermissionless: number; boss: PublicKey }) {
+        return await this.program.methods
+            .updateOfferPermissionlessFee(params.newFeeBasisPointsPermissionless)
+            .accountsPartial({
+                tokenInMint: params.tokenInMint,
+                tokenOutMint: params.tokenOutMint,
+                boss: params.boss,
+            })
+            .instruction();
+    }
+
     async buildSetOfferDisabledIx(params: { tokenInMint: PublicKey; tokenOutMint: PublicKey; disabled: boolean; signer: PublicKey }) {
         return await this.program.methods
             .setOfferDisabled(params.disabled)
@@ -562,8 +576,8 @@ export class ScriptHelper {
                 redemptionVaultTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, this.pdas.redemptionVaultAuthorityPda, true, tokenInProgram),
                 offerProceedsVault: this.getConfigurableVaultPda("offer-proceeds"),
                 offerProceedsTokenInAccount: this.getConfigurableVaultAta("offer-proceeds", params.tokenInMint, tokenInProgram),
-                offerFeeVault: this.getConfigurableVaultPda("offer-fee"),
-                offerFeeTokenInAccount: this.getConfigurableVaultAta("offer-fee", params.tokenInMint, tokenInProgram),
+                permissionlessOfferFeeVault: this.getConfigurableVaultPda("permissionless-offer-fee"),
+                permissionlessOfferFeeTokenInAccount: this.getConfigurableVaultAta("permissionless-offer-fee", params.tokenInMint, tokenInProgram),
                 mintAuthority,
                 bufferAccounts: {
                     bufferState: this.pdas.bufferStatePda,
@@ -1104,8 +1118,8 @@ export class ScriptHelper {
                 userTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, params.user, false, tokenOutProgram),
                 propAmmProceedsVault: this.getConfigurableVaultPda("prop-amm-proceeds"),
                 propAmmProceedsTokenInAccount: this.getConfigurableVaultAta("prop-amm-proceeds", params.tokenInMint, tokenInProgram),
-                propAmmFeeVault: this.getConfigurableVaultPda("prop-amm-fee"),
-                propAmmFeeTokenInAccount: this.getConfigurableVaultAta("prop-amm-fee", params.tokenInMint, tokenInProgram),
+                propAmmBuyFeeVault: this.getConfigurableVaultPda("prop-amm-buy-fee"),
+                propAmmBuyFeeTokenInAccount: this.getConfigurableVaultAta("prop-amm-buy-fee", params.tokenInMint, tokenInProgram),
                 permissionlessAuthority: this.pdas.permissionlessVaultAuthorityPda,
                 permissionlessTokenInAccount: getAssociatedTokenAddressSync(params.tokenInMint, this.pdas.permissionlessVaultAuthorityPda, true, tokenInProgram),
                 permissionlessTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, this.pdas.permissionlessVaultAuthorityPda, true, tokenOutProgram),
@@ -1166,8 +1180,8 @@ export class ScriptHelper {
                 userTokenOutAccount: getAssociatedTokenAddressSync(assetMint, params.user, false, tokenOutProgram),
                 propAmmProceedsVault: this.getConfigurableVaultPda("prop-amm-proceeds"),
                 propAmmProceedsTokenInAccount: this.getConfigurableVaultAta("prop-amm-proceeds", onycMint, tokenInProgram),
-                propAmmFeeVault: this.getConfigurableVaultPda("prop-amm-fee"),
-                propAmmFeeTokenInAccount: this.getConfigurableVaultAta("prop-amm-fee", onycMint, tokenInProgram),
+                propAmmSellFeeVault: this.getConfigurableVaultPda("prop-amm-sell-fee"),
+                propAmmSellFeeTokenInAccount: this.getConfigurableVaultAta("prop-amm-sell-fee", onycMint, tokenInProgram),
                 mintAuthority: this.pdas.mintAuthorityPda,
                 bufferAccounts: {
                     bufferState: this.pdas.bufferStatePda,
@@ -1291,10 +1305,11 @@ export class ScriptHelper {
         tokenOutMint: PublicKey;
         tokenOutProgram: PublicKey;
         feeBasisPoints: number;
+        feeBasisPointsPropAmmSell?: number;
         boss: PublicKey;
     }) {
         return await this.program.methods
-            .makeRedemptionOffer(params.feeBasisPoints)
+            .makeRedemptionOffer(params.feeBasisPoints, params.feeBasisPointsPropAmmSell ?? 0)
             .accountsPartial({
                 tokenInMint: params.tokenInMint,
                 tokenInProgram: params.tokenInProgram,
@@ -1375,8 +1390,8 @@ export class ScriptHelper {
                 userTokenOutAccount: getAssociatedTokenAddressSync(params.tokenOutMint, redeemer, false, tokenOutProgram),
                 offerProceedsVault: this.getConfigurableVaultPda("offer-proceeds"),
                 offerProceedsTokenInAccount: this.getConfigurableVaultAta("offer-proceeds", params.tokenInMint, tokenInProgram),
-                offerFeeVault: this.getConfigurableVaultPda("offer-fee"),
-                offerFeeTokenInAccount: this.getConfigurableVaultAta("offer-fee", params.tokenInMint, tokenInProgram),
+                redemptionFeeVault: this.getConfigurableVaultPda("redemption-fee"),
+                redemptionFeeTokenInAccount: this.getConfigurableVaultAta("redemption-fee", params.tokenInMint, tokenInProgram),
                 mintAuthority: this.pdas.mintAuthorityPda,
                 redeemer,
                 redemptionAdmin: params.redemptionAdmin,
@@ -1432,6 +1447,16 @@ export class ScriptHelper {
     async buildUpdateRedemptionOfferFeeIx(params: { redemptionOfferPda: PublicKey; newFeeBasisPoints: number; boss: PublicKey }) {
         return await this.program.methods
             .updateRedemptionOfferFee(params.newFeeBasisPoints)
+            .accountsPartial({
+                redemptionOffer: params.redemptionOfferPda,
+                boss: params.boss,
+            })
+            .instruction();
+    }
+
+    async buildUpdateRedemptionOfferPropAmmSellFeeIx(params: { redemptionOfferPda: PublicKey; newFeeBasisPointsPropAmmSell: number; boss: PublicKey }) {
+        return await this.program.methods
+            .updateRedemptionOfferPropAmmSellFee(params.newFeeBasisPointsPropAmmSell)
             .accountsPartial({
                 redemptionOffer: params.redemptionOfferPda,
                 boss: params.boss,

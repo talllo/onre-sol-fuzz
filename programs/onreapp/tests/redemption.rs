@@ -16,6 +16,20 @@ fn setup_redemption() -> (
     Pubkey,  // redemption token_in_mint = onyc
     Pubkey,  // redemption token_out_mint = usdc
 ) {
+    setup_redemption_with_fees(500, 0)
+}
+
+fn setup_redemption_with_fees(
+    fee_basis_points: u16,
+    fee_basis_points_prop_amm_sell: u16,
+) -> (
+    LiteSVM,
+    Keypair, // payer (boss)
+    Pubkey,  // usdc_mint (token_out of original offer = token_in of redemption)
+    Pubkey,  // onyc_mint
+    Pubkey,  // redemption token_in_mint = onyc
+    Pubkey,  // redemption token_out_mint = usdc
+) {
     let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
@@ -61,11 +75,12 @@ fn setup_redemption() -> (
 
     // Create redemption offer: onyc -> usdc (inverse direction)
     // token_in_mint = onyc, token_out_mint = usdc
-    let ix = build_make_redemption_offer_ix(
+    let ix = build_make_redemption_offer_ix_with_prop_amm_sell_fee(
         &boss,
         &onyc_mint,
         &usdc_mint,
-        500,
+        fee_basis_points,
+        fee_basis_points_prop_amm_sell,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -99,12 +114,23 @@ fn test_make_redemption_offer_success() {
 
     let offer_data = read_redemption_offer(&svm, &redemption_tin, &redemption_tout);
     assert_eq!(offer_data.fee_basis_points, 500);
+    assert_eq!(offer_data.fee_basis_points_prop_amm_sell, 0);
     assert_eq!(offer_data.request_counter, 0);
     assert_eq!(offer_data.executed_redemptions, 0);
     assert_eq!(offer_data.requested_redemptions, 0);
     assert_eq!(offer_data.token_in_mint, redemption_tin);
     assert_eq!(offer_data.token_out_mint, redemption_tout);
     assert_eq!(offer_data.disabled, 0);
+}
+
+#[test]
+fn test_make_redemption_offer_sets_prop_amm_sell_fee() {
+    let (svm, _payer, _usdc, _onyc, redemption_tin, redemption_tout) =
+        setup_redemption_with_fees(500, 300);
+
+    let offer_data = read_redemption_offer(&svm, &redemption_tin, &redemption_tout);
+    assert_eq!(offer_data.fee_basis_points, 500);
+    assert_eq!(offer_data.fee_basis_points_prop_amm_sell, 300);
 }
 
 #[test]
@@ -251,6 +277,45 @@ fn test_make_redemption_offer_rejects_fee_over_max() {
     );
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(result.is_err(), "fee over 1000 bps should fail");
+}
+
+#[test]
+fn test_make_redemption_offer_rejects_prop_amm_sell_fee_over_max() {
+    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+
+    let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
+
+    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_make_offer_ix(
+        &boss,
+        &usdc_mint,
+        &onyc_mint,
+        0,
+        false,
+        false,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_make_redemption_offer_ix_with_prop_amm_sell_fee(
+        &boss,
+        &onyc_mint,
+        &usdc_mint,
+        500,
+        1001,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "Prop AMM sell fee over 1000 bps should fail"
+    );
 }
 
 #[test]
@@ -896,6 +961,64 @@ fn test_update_redemption_offer_fee_rejects_same_fee() {
     let ix = build_update_redemption_offer_fee_ix(&boss, &redemption_tin, &redemption_tout, 500);
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(result.is_err(), "setting same fee should fail (no-op)");
+}
+
+#[test]
+fn test_update_redemption_offer_prop_amm_sell_fee_success() {
+    let (mut svm, payer, _usdc, _onyc, redemption_tin, redemption_tout) = setup_redemption();
+    let boss = payer.pubkey();
+
+    let offer_data = read_redemption_offer(&svm, &redemption_tin, &redemption_tout);
+    assert_eq!(offer_data.fee_basis_points, 500);
+    assert_eq!(offer_data.fee_basis_points_prop_amm_sell, 0);
+
+    let ix = build_update_redemption_offer_prop_amm_sell_fee_ix(
+        &boss,
+        &redemption_tin,
+        &redemption_tout,
+        300,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let offer_data = read_redemption_offer(&svm, &redemption_tin, &redemption_tout);
+    assert_eq!(offer_data.fee_basis_points, 500);
+    assert_eq!(offer_data.fee_basis_points_prop_amm_sell, 300);
+}
+
+#[test]
+fn test_update_redemption_offer_prop_amm_sell_fee_rejects_over_max() {
+    let (mut svm, payer, _usdc, _onyc, redemption_tin, redemption_tout) = setup_redemption();
+    let boss = payer.pubkey();
+
+    let ix = build_update_redemption_offer_prop_amm_sell_fee_ix(
+        &boss,
+        &redemption_tin,
+        &redemption_tout,
+        1001,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "Prop AMM sell fee over 1000 bps should fail"
+    );
+}
+
+#[test]
+fn test_update_redemption_offer_prop_amm_sell_fee_rejects_same_fee() {
+    let (mut svm, payer, _usdc, _onyc, redemption_tin, redemption_tout) = setup_redemption();
+    let boss = payer.pubkey();
+
+    let ix = build_update_redemption_offer_prop_amm_sell_fee_ix(
+        &boss,
+        &redemption_tin,
+        &redemption_tout,
+        0,
+    );
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "setting the same Prop AMM sell fee should fail"
+    );
 }
 
 #[test]
@@ -1874,7 +1997,7 @@ fn test_fulfill_redemption_request_burn_and_transfer() {
     assert_eq!(get_token_balance(&svm, &user_usdc_ata), 950_000);
 
     // Fee vault PDA ATA receives fee in onyc: 50_000_000
-    let (fee_vault_pda, _) = find_offer_fee_vault_pda();
+    let (fee_vault_pda, _) = find_redemption_fee_vault_pda();
     let fee_vault_onyc_ata = get_associated_token_address(&fee_vault_pda, &onyc_mint);
     assert_eq!(get_token_balance(&svm, &fee_vault_onyc_ata), 50_000_000);
 
@@ -2465,7 +2588,7 @@ fn test_fulfill_redemption_token2022_burn_transfer_mode() {
     let user_usdc_ata = get_associated_token_address_2022(&user.pubkey(), &usdc_mint);
     assert_eq!(get_token_balance(&svm, &user_usdc_ata), 950_000);
 
-    let (fee_vault_pda, _) = find_offer_fee_vault_pda();
+    let (fee_vault_pda, _) = find_redemption_fee_vault_pda();
     let fee_vault_onyc_ata = get_associated_token_address(&fee_vault_pda, &onyc_mint);
     assert_eq!(get_token_balance(&svm, &fee_vault_onyc_ata), 50_000_000);
 }
@@ -3139,7 +3262,7 @@ fn fulfill_token2022_with_params(
             proceeds_onyc, net,
             "proceeds vault receives net onyc in transfer mode"
         );
-        let (fee_vault_pda, _) = find_offer_fee_vault_pda();
+        let (fee_vault_pda, _) = find_redemption_fee_vault_pda();
         let fee_vault_ata = get_associated_token_address(&fee_vault_pda, &onyc_mint);
         assert_eq!(
             get_token_balance(&svm, &fee_vault_ata),

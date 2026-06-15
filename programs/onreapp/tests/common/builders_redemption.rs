@@ -10,6 +10,26 @@ pub fn build_make_redemption_offer_ix(
     token_in_program: &Pubkey,
     token_out_program: &Pubkey,
 ) -> Instruction {
+    build_make_redemption_offer_ix_with_prop_amm_sell_fee(
+        signer,
+        token_in_mint,
+        token_out_mint,
+        fee_basis_points,
+        0,
+        token_in_program,
+        token_out_program,
+    )
+}
+
+pub fn build_make_redemption_offer_ix_with_prop_amm_sell_fee(
+    signer: &Pubkey,
+    token_in_mint: &Pubkey,
+    token_out_mint: &Pubkey,
+    fee_basis_points: u16,
+    fee_basis_points_prop_amm_sell: u16,
+    token_in_program: &Pubkey,
+    token_out_program: &Pubkey,
+) -> Instruction {
     let (state_pda, _) = find_state_pda();
     let (offer_pda, _) = find_offer_pda(token_out_mint, token_in_mint);
     let (redemption_vault_authority_pda, _) = find_redemption_vault_authority_pda();
@@ -26,6 +46,7 @@ pub fn build_make_redemption_offer_ix(
     );
     let mut data = ix_discriminator("make_redemption_offer").to_vec();
     data.extend_from_slice(&fee_basis_points.to_le_bytes());
+    data.extend_from_slice(&fee_basis_points_prop_amm_sell.to_le_bytes());
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![
@@ -142,7 +163,7 @@ pub fn build_fulfill_redemption_request_ix(
     let (redemption_request_pda, _) =
         find_redemption_request_pda(&redemption_offer_pda, request_id);
     let (redemption_vault_authority_pda, _) = find_redemption_vault_authority_pda();
-    let (offer_fee_vault_pda, _) = find_offer_fee_vault_pda();
+    let (redemption_fee_vault_pda, _) = find_redemption_fee_vault_pda();
     let (offer_proceeds_vault_pda, _) = find_offer_proceeds_vault_pda();
     let (mint_authority_pda, _) = find_mint_authority_pda();
     let (offer_vault_authority_pda, _) = find_offer_vault_authority_pda();
@@ -167,7 +188,11 @@ pub fn build_fulfill_redemption_request_ix(
     let user_token_out_ata = derive_ata(redeemer, token_out_mint, token_out_program);
     let offer_proceeds_token_in_ata =
         derive_ata(&offer_proceeds_vault_pda, token_in_mint, token_in_program);
-    let offer_fee_token_in_ata = derive_ata(&offer_fee_vault_pda, token_in_mint, token_in_program);
+    let redemption_fee_token_in_ata = derive_ata(
+        &redemption_fee_vault_pda,
+        token_in_mint,
+        token_in_program,
+    );
     let buffer_vault_onyc_ata = derive_ata(
         &reserve_vault_authority_pda,
         token_in_mint,
@@ -197,8 +222,8 @@ pub fn build_fulfill_redemption_request_ix(
             AccountMeta::new(user_token_out_ata, false),
             AccountMeta::new(offer_proceeds_vault_pda, false),
             AccountMeta::new(offer_proceeds_token_in_ata, false),
-            AccountMeta::new(offer_fee_vault_pda, false),
-            AccountMeta::new(offer_fee_token_in_ata, false),
+            AccountMeta::new(redemption_fee_vault_pda, false),
+            AccountMeta::new(redemption_fee_token_in_ata, false),
             AccountMeta::new_readonly(mint_authority_pda, false),
             AccountMeta::new_readonly(*redeemer, false),
             AccountMeta::new(*redemption_admin, true),
@@ -252,6 +277,21 @@ pub fn build_update_redemption_offer_fee_ix(
         token_in_mint,
         token_out_mint,
         &new_fee_basis_points.to_le_bytes(),
+    )
+}
+
+pub fn build_update_redemption_offer_prop_amm_sell_fee_ix(
+    boss: &Pubkey,
+    token_in_mint: &Pubkey,
+    token_out_mint: &Pubkey,
+    new_fee_basis_points_prop_amm_sell: u16,
+) -> Instruction {
+    build_redemption_offer_admin_ix(
+        "update_redemption_offer_prop_amm_sell_fee",
+        boss,
+        token_in_mint,
+        token_out_mint,
+        &new_fee_basis_points_prop_amm_sell.to_le_bytes(),
     )
 }
 
