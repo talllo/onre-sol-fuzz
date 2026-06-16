@@ -12,6 +12,7 @@ import {
     executeRedemptionMakeOffer,
     executeRedemptionSetDisabled,
     executeRedemptionUpdateFee,
+    executeRedemptionUpdatePropAmmSellFee,
     executeRedemptionUpdateVaultTarget,
 } from "../implementations";
 
@@ -35,6 +36,7 @@ export function registerRedemptionCommands(program: Command): void {
         .option("-i, --token-in <mint>", "Token in mint (ONyc)")
         .option("-o, --token-out <mint>", "Token out mint (USDC)")
         .option("-f, --fee <bps>", "Fee in basis points")
+        .option("--prop-amm-sell-fee <bps>", "Prop AMM sell redemption fee in basis points")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeRedemptionMakeOffer(opts);
@@ -54,13 +56,25 @@ export function registerRedemptionCommands(program: Command): void {
     // redemption update-fee
     program
         .command("update-fee")
-        .description("Update redemption offer fee")
+        .description("Update redemption admin fulfillment fee")
         .option("-i, --token-in <mint>", "Token in mint (ONyc)")
         .option("-o, --token-out <mint>", "Token out mint (USDC)")
         .option("-f, --fee <bps>", "New fee in basis points")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeRedemptionUpdateFee(opts);
+        });
+
+    // redemption update-prop-amm-sell-fee
+    program
+        .command("update-prop-amm-sell-fee")
+        .description("Update redemption fee used by Prop AMM sells")
+        .option("-i, --token-in <mint>", "Token in mint (ONyc)")
+        .option("-o, --token-out <mint>", "Token out mint (USDC)")
+        .option("-f, --fee <bps>", "New fee in basis points")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeRedemptionUpdatePropAmmSellFee(opts);
         });
 
     // redemption update-vault-target

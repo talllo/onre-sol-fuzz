@@ -41,6 +41,14 @@ export const redemptionOfferParams: ParamDefinition[] = [
         shortFlag: "-f",
         default: 0,
     },
+    {
+        name: "propAmmSellFee",
+        type: "basisPoints",
+        description: "Prop AMM sell redemption fee in basis points",
+        required: false,
+        flag: "--prop-amm-sell-fee",
+        default: 0,
+    },
 ];
 
 export const createRequestParams: ParamDefinition[] = [

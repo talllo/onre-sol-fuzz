@@ -75,7 +75,7 @@ flowchart TD
     Calc --> Net[Net token in]
     Calc --> Out[Token out amount]
 
-    Fee --> OfferFee[OfferFee vault]
+    Fee --> PermissionlessOfferFee[PermissionlessOfferFee vault]
 
     Net --> InMintMode{Program controls token in mint}
     InMintMode -- yes --> Burn[Burn net token in]
@@ -95,7 +95,8 @@ flowchart TD
 
 Notes:
 
-- The permissionless authority is an intermediary signer. The economic routing matches `take_offer_v2`.
+- `take_offer_permissionless_v2` uses `fee_basis_points_permissionless`, which defaults to `0` for newly created and upgraded offers until the boss calls `update_offer_permissionless_fee`.
+- The permissionless authority is an intermediary signer. V2 permissionless fees route to `PermissionlessOfferFee`; net token-in otherwise follows the same burn, refill, and proceeds rules as `take_offer_v2`.
 - Refill is skipped if the supplied redemption offer account is uninitialized or disabled, the target is zero, `MarketStats` cannot be read, or token-in is program-controlled.
 
 ## Redemption Offer Creation
@@ -108,7 +109,8 @@ flowchart TD
     VaultIn --> Create[Create RedemptionOffer PDA]
     VaultOut --> Create
     Create --> FeeCheck[Require fee within program cap]
-    FeeCheck --> FeeConfig[Set fee bps from input]
+    FeeCheck --> FeeConfig[Set redemption fee bps from input]
+    Create --> PropAmmSellFeeConfig[Set Prop AMM sell fee bps to zero]
     Create --> TargetConfig[Set vault target bps to zero]
     Create --> Counters[Set requested and executed redemptions to zero]
     Create --> Enabled[Set disabled flag to false]
@@ -119,6 +121,7 @@ Notes:
 - The redemption market is the ONYC-to-asset side linked to the offer.
 - Initial `vault_target_bps` is zero, so new redemption markets do not automatically receive refill inflow until configured.
 - Redemption offer creation rejects fee values above the program fee cap.
+- `fee_basis_points` is the redemption admin fulfillment fee. `fee_basis_points_prop_amm_sell` is the Prop AMM sell redemption fee set at redemption offer creation and later adjustable by the boss through `update_redemption_offer_prop_amm_sell_fee`.
 
 ## Redemption Request Creation
 
@@ -145,7 +148,7 @@ flowchart TD
     Calc --> Net[Token in net]
     Calc --> Out[Token out amount]
 
-    Fee --> OfferFee[OfferFee vault]
+    Fee --> RedemptionFee[RedemptionFee vault]
 
     Net --> InMintMode{Program controls token in mint}
     InMintMode -- yes --> Burn[Burn net token in from redemption vault]
@@ -159,7 +162,7 @@ flowchart TD
 
 Notes:
 
-- Fees are paid in token-in from the locked redemption-vault balance.
+- Fees are paid in token-in from the locked redemption-vault balance and route to `RedemptionFee`.
 - If token-in is program-controlled, net token-in is burned.
 - If token-in is not program-controlled, net token-in moves to `OfferProceeds`.
 - Token-out is paid from pre-funded redemption-vault liquidity; redemption fulfillment does not mint token-out.
@@ -189,7 +192,7 @@ flowchart TD
     Calc --> Net[Net asset inflow]
     Calc --> Out[ONYC output]
 
-    Fee --> AmmFee[PropAmmFee vault]
+    Fee --> AmmFee[PropAmmBuyFee vault]
 
     Net --> Split[Calculate refill and proceeds]
     Split --> Refill[Refill amount]
@@ -207,7 +210,7 @@ flowchart TD
 
 Notes:
 
-- Prop AMM buy uses `PropAmmFee` and `PropAmmProceeds`, not the offer accounting vaults.
+- Prop AMM buy uses the offer's `fee_basis_points_permissionless` for fee calculation and routes that fee to `PropAmmBuyFee`. Net inflow routes to `PropAmmProceeds` or redemption-vault refill.
 - Prop AMM buy execution requires the offer's permissionless mode to be enabled. A quote can exist even when execution would reject this gate.
 - Buy pressure relief records the full net asset inflow, independent of how much was refilled.
 - Refill is capped by the redemption market target. Overflow goes to `PropAmmProceeds`.
@@ -226,7 +229,7 @@ flowchart TD
     Calc --> Fee[Token in fee]
     Calc --> Net[Token in net]
 
-    Fee --> AmmFee[PropAmmFee vault]
+    Fee --> AmmSellFee[PropAmmSellFee vault]
 
     Net --> InMintMode{Program controls token in mint}
     InMintMode -- yes --> Burn[Burn net token in from redemption vault]
@@ -237,7 +240,7 @@ flowchart TD
 
 Notes:
 
-- Prop AMM sell uses `PropAmmFee` and `PropAmmProceeds`.
+- Prop AMM sell uses `RedemptionOffer.fee_basis_points_prop_amm_sell` for its percentage redemption fee and routes fees to `PropAmmSellFee`. Net token-in routes to `PropAmmProceeds` or burns, depending on mint authority.
 - Sell execution calculates the quote and checks `minimum_out` before staging user token-in in the redemption vault. If the program controls the token-in mint, the net amount is burned from the redemption vault; otherwise it routes to `PropAmmProceeds`.
 - Sell execution pays token-out from pre-funded redemption-vault liquidity; it does not mint token-out.
 - Sell execution refreshes `MarketStats` before resolving the hard-wall reserve. Quote and execution read TVL for hard-wall reserve only when `vault_target_bps > 0`; when `vault_target_bps == 0`, the hard-wall reserve resolves to the actual vault balance without reading TVL.

@@ -24,6 +24,7 @@ export async function executeRedemptionMakeOffer(opts: GlobalOptions & Record<st
                     tokenInProgram,
                     tokenOutProgram,
                     feeBasisPoints: params.fee,
+                    feeBasisPointsPropAmmSell: params.propAmmSellFee,
                     boss,
                 });
             },
@@ -35,6 +36,7 @@ export async function executeRedemptionMakeOffer(opts: GlobalOptions & Record<st
                     tokenIn: params.tokenIn,
                     tokenOut: params.tokenOut,
                     fee: `${params.fee / 100}% (${params.fee} bps)`,
+                    propAmmSellFee: `${params.propAmmSellFee / 100}% (${params.propAmmSellFee} bps)`,
                 },
             },
         });
