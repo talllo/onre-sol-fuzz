@@ -27,7 +27,8 @@ use anchor_spl::{
 };
 
 use super::config::PropAmmPairState;
-use super::quote::{record_prop_amm_buy, validate_prop_amm_pair_for_side, SwapSide};
+use super::pricing::record_prop_amm_buy;
+use super::validation::{validate_prop_amm_pair_for_side, SwapSide};
 
 #[derive(Accounts)]
 pub struct OpenSwapBuy<'info> {

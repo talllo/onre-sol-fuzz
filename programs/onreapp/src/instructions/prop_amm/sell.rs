@@ -1,4 +1,3 @@
-use crate::constants::seeds;
 use crate::instructions::buffer::accounts::{
     __client_accounts_buffer_accrual_accounts, __cpi_client_accounts_buffer_accrual_accounts,
     BufferAccrualAccountsBumps,
@@ -28,10 +27,11 @@ use anchor_spl::{
 };
 
 use super::config::PropAmmPairState;
-use super::quote::{
-    apply_hard_wall_liquidity_factor, record_prop_amm_sell, redemption_offer_config,
-    resolve_hard_wall_reserve, validate_prop_amm_pair_for_side, SwapSide,
+use super::pricing::{
+    apply_hard_wall_liquidity_factor, record_prop_amm_sell, sell_quote_liquidity_context,
+    validate_market_stats_pda,
 };
+use super::validation::{validate_prop_amm_pair_for_side, SwapSide};
 
 #[derive(Accounts)]
 pub struct OpenSwapSell<'info> {
@@ -195,13 +195,7 @@ fn execute_open_swap_sell<'info>(
     )?;
     let offer = ctx.accounts.offer.load()?;
     offer.require_enabled()?;
-    let (market_stats_pda, _) =
-        Pubkey::find_program_address(&[seeds::MARKET_STATS], ctx.program_id);
-    require_keys_eq!(
-        market_stats_pda,
-        ctx.accounts.market_stats.key(),
-        crate::OnreError::InvalidMarketStatsPda
-    );
+    validate_market_stats_pda(ctx.program_id, &ctx.accounts.market_stats)?;
     let main_offer = load_main_offer(
         ctx.program_id,
         &ctx.accounts.main_offer.to_account_info(),
@@ -218,13 +212,6 @@ fn execute_open_swap_sell<'info>(
         &ctx.accounts.system_program.to_account_info(),
         ctx.program_id,
     )?;
-    let redemption_config = redemption_offer_config(
-        ctx.program_id,
-        &ctx.accounts.redemption_offer,
-        ctx.accounts.offer.key(),
-        ctx.accounts.token_in_mint.key(),
-        ctx.accounts.token_out_mint.key(),
-    )?;
     let redemption_vault_token_out_account = get_associated_token_account(
         &ctx.accounts.redemption_vault_token_out_account,
         &ctx.accounts.redemption_vault_authority.key(),
@@ -232,10 +219,14 @@ fn execute_open_swap_sell<'info>(
         &ctx.accounts.token_out_program.key(),
         crate::OnreError::InvalidVaultTokenOutAccount,
     )?;
-    let hard_wall_reserve = resolve_hard_wall_reserve(
+    let liquidity = sell_quote_liquidity_context(
+        ctx.program_id,
+        &ctx.accounts.redemption_offer,
+        ctx.accounts.offer.key(),
+        ctx.accounts.token_in_mint.key(),
+        ctx.accounts.token_out_mint.key(),
         &ctx.accounts.market_stats,
         redemption_vault_token_out_account.amount,
-        redemption_config.vault_target_bps,
         ctx.accounts.token_out_mint.decimals,
         ctx.accounts.token_in_mint.decimals,
     )?;
@@ -332,14 +323,14 @@ fn execute_open_swap_sell<'info>(
         token_in_amount,
         &ctx.accounts.token_in_mint,
         &ctx.accounts.token_out_mint,
-        redemption_config.fee_basis_points_prop_amm_sell,
+        liquidity.fee_basis_points_prop_amm_sell,
         ctx.accounts.prop_amm_pair_state.minimum_sell_haircut_onyc,
     )?;
     let raw_sell_value_stable = result.token_out_amount;
     result.token_out_amount = apply_hard_wall_liquidity_factor(
         result.token_out_amount,
-        redemption_vault_token_out_account.amount,
-        hard_wall_reserve,
+        liquidity.actual_liquidity,
+        liquidity.hard_wall_reserve,
         &ctx.accounts.prop_amm_pair_state,
     )?;
     require!(

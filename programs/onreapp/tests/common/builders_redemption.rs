@@ -188,11 +188,8 @@ pub fn build_fulfill_redemption_request_ix(
     let user_token_out_ata = derive_ata(redeemer, token_out_mint, token_out_program);
     let offer_proceeds_token_in_ata =
         derive_ata(&offer_proceeds_vault_pda, token_in_mint, token_in_program);
-    let redemption_fee_token_in_ata = derive_ata(
-        &redemption_fee_vault_pda,
-        token_in_mint,
-        token_in_program,
-    );
+    let redemption_fee_token_in_ata =
+        derive_ata(&redemption_fee_vault_pda, token_in_mint, token_in_program);
     let buffer_vault_onyc_ata = derive_ata(
         &reserve_vault_authority_pda,
         token_in_mint,
