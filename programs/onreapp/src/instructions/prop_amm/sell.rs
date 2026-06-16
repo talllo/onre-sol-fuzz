@@ -124,15 +124,15 @@ pub struct OpenSwapSell<'info> {
         mut,
         seeds = [
             crate::constants::seeds::CONFIGURABLE_VAULT,
-            crate::constants::seeds::PROP_AMM_FEE_VAULT
+            crate::constants::seeds::PROP_AMM_SELL_FEE_VAULT
         ],
         bump
     )]
-    pub prop_amm_fee_vault: UncheckedAccount<'info>,
+    pub prop_amm_sell_fee_vault: UncheckedAccount<'info>,
 
     /// CHECK: Validated and optionally initialized in instruction logic.
     #[account(mut)]
-    pub prop_amm_fee_token_in_account: UncheckedAccount<'info>,
+    pub prop_amm_sell_fee_token_in_account: UncheckedAccount<'info>,
 
     /// CHECK: PDA derivation validated by seeds constraint
     #[account(seeds = [crate::constants::seeds::MINT_AUTHORITY], bump)]
@@ -260,15 +260,15 @@ fn execute_open_swap_sell<'info>(
         token_program_id: ctx.accounts.token_out_program.key(),
         invalid_account_error: crate::OnreError::InvalidUserTokenOutAccount,
     })?;
-    let (prop_amm_proceeds_token_in_account, prop_amm_fee_token_in_account) =
+    let (prop_amm_proceeds_token_in_account, prop_amm_sell_fee_token_in_account) =
         get_or_create_configurable_vault_token_account_pair::<
             { ConfigurableVaultKind::PropAmmProceeds.as_u8() },
-            { ConfigurableVaultKind::PropAmmFee.as_u8() },
+            { ConfigurableVaultKind::PropAmmSellFee.as_u8() },
         >(ConfigurableVaultTokenAccountPairParams {
             first_vault: &ctx.accounts.prop_amm_proceeds_vault,
             first_token_account: &ctx.accounts.prop_amm_proceeds_token_in_account,
-            second_vault: &ctx.accounts.prop_amm_fee_vault,
-            second_token_account: &ctx.accounts.prop_amm_fee_token_in_account,
+            second_vault: &ctx.accounts.prop_amm_sell_fee_vault,
+            second_token_account: &ctx.accounts.prop_amm_sell_fee_token_in_account,
             payer: ctx.accounts.user.to_account_info(),
             mint_account: ctx.accounts.token_in_mint.to_account_info(),
             token_program: ctx.accounts.token_in_program.to_account_info(),
@@ -332,7 +332,7 @@ fn execute_open_swap_sell<'info>(
         token_in_amount,
         &ctx.accounts.token_in_mint,
         &ctx.accounts.token_out_mint,
-        redemption_config.fee_basis_points,
+        redemption_config.fee_basis_points_prop_amm_sell,
         ctx.accounts.prop_amm_pair_state.minimum_sell_haircut_onyc,
     )?;
     let raw_sell_value_stable = result.token_out_amount;
@@ -370,7 +370,7 @@ fn execute_open_swap_sell<'info>(
         token_in_fee_amount: result.token_in_fee_amount,
         vault_token_in_account: &redemption_vault_token_in_account,
         token_in_destination_account: &prop_amm_proceeds_token_in_account,
-        fee_destination_token_in_account: &prop_amm_fee_token_in_account,
+        fee_destination_token_in_account: &prop_amm_sell_fee_token_in_account,
         redemption_vault_authority: &ctx.accounts.redemption_vault_authority.to_account_info(),
         redemption_vault_authority_bump: ctx.bumps.redemption_vault_authority,
         token_out_mint: &ctx.accounts.token_out_mint,

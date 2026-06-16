@@ -8,8 +8,8 @@ This document explains the current Prop AMM pricing path implemented in:
 
 The important distinction is that buys and sells use different mechanics:
 
-- Buy: normal offer pricing is used. The only Prop AMM change is where incoming pair assets are routed.
-- Sell: normal redemption pricing is used first, then the hard-wall reserve curve converts the raw sell value into the actual pair-asset output.
+- Buy: permissionless offer pricing is used. The only Prop AMM change is where incoming pair assets are routed.
+- Sell: Prop AMM sell redemption pricing is used first, then the hard-wall reserve curve converts the raw sell value into the actual pair-asset output.
 
 Prop AMM configuration and pressure tracking are per canonical offer pair. A pair is enabled by its `PropAmmPairState` PDA, derived from the canonical `asset -> ONYC` offer.
 
@@ -23,8 +23,9 @@ enabled pairs while still using the same offer, redemption, vault, and market
 reporting domains.
 
 The buy side gives users an automated way to buy ONyc from a supported asset.
-It uses normal offer pricing, but routes incoming assets through Prop AMM
-accounting and can refill redemption liquidity up to the configured target.
+It uses the offer's permissionless fee basis points, routes incoming assets through
+Prop AMM accounting, and can refill redemption liquidity up to the configured
+target.
 That means buy demand can help restore payout liquidity instead of always
 becoming unrestricted proceeds.
 
@@ -38,9 +39,9 @@ Prop AMM is therefore not a separate pool of funds. It is a controlled execution
 surface over existing protocol domains:
 
 - Offers define the canonical asset/ONyc market and buy-side price.
-- Redemption markets define sell-side fees and optional vault targets.
+- Redemption markets define admin fulfillment fees, Prop AMM sell-side fees, and optional vault targets.
 - Redemption vaults provide actual sell-side payout liquidity.
-- Prop AMM fee and proceeds vaults keep automated-flow accounting separate from
+- Prop AMM buy fee and proceeds vaults keep automated-flow accounting separate from
   regular offer accounting.
 - Market stats provide the TVL input used when a redemption vault target caps
   effective sell liquidity.
@@ -116,7 +117,7 @@ haircut described in the rest of this document.
 | `L` | `actual_liquidity` | Current redemption vault balance for the pair asset being paid out. |
 | `V` | effective sell volume | Previous epoch pressure after decay plus current net sell pressure plus this sell's raw value. |
 | `W` | dynamic wall position | Vault-based effective pool size after applying net sell pressure. |
-| `raw` | `result.token_out_amount` before hard wall | Pair-asset output from normal redemption pricing after redemption fee. |
+| `raw` | `result.token_out_amount` before hard wall | Pair-asset output from Prop AMM sell redemption pricing after `fee_basis_points_prop_amm_sell`. |
 | `out` | final `result.token_out_amount` | Actual pair-asset output transferred to the seller. |
 | `h_peg` | `curve_peg_haircut_bps / 10_000` | Additional haircut when utilization is exactly 1. Default is `700`, or 7%. |
 | `e_base` | `curve_exponent_scaled / 10_000` | Base haircut curve exponent. Default is `25_000`, or 2.5. |
@@ -148,7 +149,7 @@ The buy quote is unchanged:
 pair asset input -> process_offer_core(...) -> ONYC output
 ```
 
-In formula form, the offer engine deducts the offer fee from the input first:
+In formula form, the offer engine deducts the offer's permissionless fee from the input first:
 
 ```text
 buy_net = token_in_amount - ceil(token_in_amount * offer_fee_bps / 10_000)
@@ -216,7 +217,7 @@ Sell execution has three conceptual stages.
 
 ### Step 1: Redemption Fee
 
-The sell first runs normal redemption pricing:
+The sell first runs Prop AMM sell redemption pricing:
 
 ```text
 raw = process_redemption_core(
@@ -224,20 +225,20 @@ raw = process_redemption_core(
   token_in_amount,
   token_in_mint,
   token_out_mint,
-  redemption_fee_bps
+  fee_basis_points_prop_amm_sell
 ).token_out_amount
 ```
 
-The redemption fee comes from the redemption offer if initialized and enabled.
+The Prop AMM sell redemption fee comes from `RedemptionOffer.fee_basis_points_prop_amm_sell` if the redemption offer is initialized and enabled.
 If the redemption offer PDA is the correct derived address but uninitialized,
-the fee and target are treated as zero. If the redemption offer exists but is
+the Prop AMM sell fee and target are treated as zero. If the redemption offer exists but is
 disabled, the sell rejects. A zero redemption fee does not bypass
 `minimum_sell_haircut_onyc`.
 
 Conceptually:
 
 ```text
-pct_fee = ceil(token_in_amount * redemption_fee_bps / 10_000)
+pct_fee = ceil(token_in_amount * fee_basis_points_prop_amm_sell / 10_000)
 token_in_fee = max(pct_fee, minimum_sell_haircut_onyc)
 reject if token_in_amount < token_in_fee
 token_in_net = token_in_amount - token_in_fee
@@ -507,14 +508,14 @@ TVL = 66,666.666666666 ONYC
 target_bps = 1,500
 R = 10,000 USDC
 L = 10,000 USDC
-redemption_fee_bps = 500
+fee_basis_points_prop_amm_sell = 500
 user sells enough ONYC that the normal redemption output before fee would be 5,000 USDC
 ```
 
 ### 1. Apply Redemption Fee
 
 ```text
-raw = 5,000 * (1 - 500 / 10,000)
+raw = 5,000 * (1 - fee_basis_points_prop_amm_sell / 10,000)
     = 5,000 * 0.95
     = 4,750 USDC
 ```

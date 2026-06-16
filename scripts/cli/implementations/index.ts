@@ -40,7 +40,10 @@ export { executeOfferList } from "./offer/offer-list";
 export { executeOfferTake } from "./offer/offer-take";
 export { executeOfferAddVector } from "./offer/offer-add-vector";
 export { executeOfferDeleteVector } from "./offer/offer-delete-vector";
-export { executeOfferUpdateFee } from "./offer/offer-update-fee";
+export {
+    executeOfferUpdateFee,
+    executeOfferUpdatePermissionlessFee,
+} from "./offer/offer-update-fee";
 export { executeOfferDeleteAllVectors } from "./offer/offer-delete-all-vectors";
 export { executeOfferSetDisabled } from "./offer/offer-set-disabled";
 
@@ -48,7 +51,10 @@ export { executeOfferSetDisabled } from "./offer/offer-set-disabled";
 export { executeRedemptionMakeOffer } from "./redemption/redemption-make-offer";
 export { executeRedemptionListOffers } from "./redemption/redemption-list-offers";
 export { executeRedemptionFetchOffer } from "./redemption/redemption-fetch-offer";
-export { executeRedemptionUpdateFee } from "./redemption/redemption-update-fee";
+export {
+    executeRedemptionUpdateFee,
+    executeRedemptionUpdatePropAmmSellFee,
+} from "./redemption/redemption-update-fee";
 export { executeRedemptionCreateRequest } from "./redemption/redemption-create-request";
 export { executeRedemptionFetchRequest } from "./redemption/redemption-fetch-request";
 export { executeRedemptionFulfill } from "./redemption/redemption-fulfill";

@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { defineConfig } from "vite";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const rpcProxyTarget = process.env.UI_RPC_PROXY_TARGET ?? "https://api.mainnet-beta.solana.com";
+const rpcProxyTarget = process.env.UI_RPC_PROXY_TARGET ?? process.env.SURFPOOL_RPC_URL ?? process.env.VITE_ONRE_RPC_URL ?? "https://api.mainnet-beta.solana.com";
 const serverHost = process.env.UI_HOST ?? "127.0.0.1";
 const serverPort = Number(process.env.UI_PORT ?? "5173");
 

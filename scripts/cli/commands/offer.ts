@@ -10,6 +10,7 @@ import {
     executeOfferSetDisabled,
     executeOfferTake,
     executeOfferUpdateFee,
+    executeOfferUpdatePermissionlessFee,
 } from "../implementations";
 
 /**
@@ -101,6 +102,18 @@ export function registerOfferCommands(program: Command): void {
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeOfferUpdateFee(opts);
+        });
+
+    // offer update-permissionless-fee
+    program
+        .command("update-permissionless-fee")
+        .description("Update the permissionless fee for an offer")
+        .option("-i, --token-in <mint>", "Token in mint")
+        .option("-o, --token-out <mint>", "Token out mint")
+        .option("-f, --fee <bps>", "New permissionless fee in basis points")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeOfferUpdatePermissionlessFee(opts);
         });
 
     // offer set-disabled

@@ -116,9 +116,9 @@ Typical on-chain BUFFER setup order:
 
 **Prop AMM**: `configure_prop_amm`, `quote_swap_buy`, `quote_swap_sell`, `open_swap_buy`, `open_swap_sell`
 
-**Offers**: `make_offer`, `add_offer_vector`, `delete_offer_vector`, `delete_all_offer_vectors`, `update_offer_fee`, `set_offer_disabled`, `take_offer`, `take_offer_v2`, `take_offer_permissionless`, `take_offer_permissionless_v2`
+**Offers**: `make_offer`, `add_offer_vector`, `delete_offer_vector`, `delete_all_offer_vectors`, `update_offer_fee`, `update_offer_permissionless_fee`, `set_offer_disabled`, `take_offer`, `take_offer_v2`, `take_offer_permissionless`, `take_offer_permissionless_v2`
 
-**Redemption**: `make_redemption_offer`, `set_redemption_offer_disabled`, `create_redemption_request`, `fulfill_redemption_request`, `cancel_redemption_request`, `update_redemption_offer_fee`, `update_redemption_offer_vault_target`
+**Redemption**: `make_redemption_offer`, `set_redemption_offer_disabled`, `create_redemption_request`, `fulfill_redemption_request`, `cancel_redemption_request`, `update_redemption_offer_fee`, `update_redemption_offer_prop_amm_sell_fee`, `update_redemption_offer_vault_target`
 
 **State Operations**: `propose_boss`, `accept_boss`, `add_admin`, `remove_admin`, `clear_admins`, `set_kill_switch`, `set_onyc_mint`, `set_redemption_admin`, `set_main_offer`, `add_approver`, `remove_approver`, `configure_max_supply`, `configure_max_mint_amount`, `close_state`
 
@@ -154,13 +154,18 @@ The CLI accepts `NETWORK` or the `-n` / `--network` flag.
 
 ### Browser UI
 
-A browser UI under `scripts/ui/` exposes the mainnet production program from the generated IDL. It supports injected Solana wallets, account/argument forms for every IDL instruction, automatic resolution of known state fields, PDAs, and ATAs, transaction simulation, wallet signing, and base58 export for external signing workflows.
+A browser UI under `scripts/ui/` exposes the generated IDL through a configurable runtime program ID and RPC URL. It supports injected Solana wallets, account/argument forms for every IDL instruction, automatic resolution of known state fields, PDAs, and ATAs, transaction simulation, wallet signing, and base58 export for external signing workflows.
 
 ```bash
 pnpm ui
 ```
 
-The UI always targets the mainnet production program ID: `onreuGhHHgVzMWSkj2oQDLDtvvGvoepBPkqyaubFcwe`. The RPC URL is configurable in the UI; dev mode defaults to `/rpc`, a Vite proxy to public mainnet RPC, and operators can paste Surfpool or a private mainnet endpoint.
+The UI defaults to the mainnet production program ID: `onreuGhHHgVzMWSkj2oQDLDtvvGvoepBPkqyaubFcwe`. The Program ID and RPC URL are editable in the UI and persisted in browser storage. Dev mode defaults to `/rpc`, a Vite proxy to public mainnet RPC, and the proxy target can be overridden for Surfpool or private endpoints:
+
+```bash
+SURFPOOL_RPC_URL=http://127.0.0.1:8899 pnpm ui
+VITE_ONRE_PROGRAM_ID=<surfpool-program-id> SURFPOOL_RPC_URL=http://127.0.0.1:8899 pnpm ui
+```
 
 The UI includes Surfpool cheatcode controls for setting `state.boss`, setting `state.redemption_admin`, and funding SOL on a fork. These controls only work against a running Surfpool RPC in the background. They call Surfpool-only RPC methods and do not work against the production mainnet program or a normal Solana RPC endpoint.
 
@@ -244,6 +249,7 @@ programs/onreapp/tests/
 ├── take_offer.rs
 ├── take_offer_permissionless.rs
 ├── update_offer_fee.rs
+├── update_offer_permissionless_fee.rs
 └── vault_operations.rs
 ```
 

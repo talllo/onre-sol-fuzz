@@ -26,8 +26,10 @@ pub struct Offer {
     allow_permissionless: u8,
     /// Whether the offer is disabled by emergency controls (0 = false, 1 = true)
     disabled: u8,
+    /// Fee in basis points charged by permissionless offer execution.
+    pub fee_basis_points_permissionless: u16,
     /// Reserved space for future fields
-    reserved: [u8; 130],
+    reserved: [u8; 128],
 }
 
 impl Offer {
@@ -59,6 +61,16 @@ impl Offer {
     /// Sets the disabled state for the offer.
     pub fn set_disabled(&mut self, disabled: bool) {
         self.disabled = if disabled { 1 } else { 0 };
+    }
+
+    /// Returns the fee basis points used by permissionless offer execution.
+    pub fn permissionless_fee_basis_points(&self) -> u16 {
+        self.fee_basis_points_permissionless
+    }
+
+    /// Sets the fee basis points used by permissionless offer execution.
+    pub fn set_permissionless_fee_basis_points(&mut self, fee_basis_points: u16) {
+        self.fee_basis_points_permissionless = fee_basis_points;
     }
 
     /// Ensures the offer is currently enabled.

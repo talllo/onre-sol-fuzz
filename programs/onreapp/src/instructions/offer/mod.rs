@@ -8,6 +8,7 @@ pub mod set_offer_disabled;
 pub mod take_offer;
 pub mod take_offer_permissionless;
 pub mod update_offer_fee;
+pub mod update_offer_permissionless_fee;
 
 pub use add_offer_vector::*;
 pub use delete_all_offer_vectors::*;
@@ -19,3 +20,4 @@ pub use set_offer_disabled::*;
 pub use take_offer::*;
 pub use take_offer_permissionless::*;
 pub use update_offer_fee::*;
+pub use update_offer_permissionless_fee::*;

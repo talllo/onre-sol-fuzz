@@ -414,6 +414,11 @@ fn setup_permissionless_no_approval_with_fee(fee_bps: u16) -> PermissionlessNoAp
     );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
+    if fee_bps != 0 {
+        let ix = build_update_offer_permissionless_fee_ix(&boss, &usdc_mint, &onyc_mint, fee_bps);
+        send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    }
+
     let (offer_pda, _) = find_offer_pda(&usdc_mint, &onyc_mint);
     let ix = build_set_main_offer_ix(&boss, &offer_pda);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
@@ -488,6 +493,84 @@ fn test_permissionless_basic_success() {
         &get_associated_token_address(&ctx.user.pubkey(), &ctx.usdc_mint),
     );
     assert_eq!(user_usdc, 10_000_000_000 - 1_000_100);
+}
+
+#[test]
+fn test_regular_and_permissionless_use_different_offer_fees_for_same_amount() {
+    let mut ctx = setup_permissionless_no_approval_with_fee(0);
+    let boss = ctx.payer.pubkey();
+    let current_time = get_clock_time(&ctx.svm);
+
+    let ix = build_update_offer_fee_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint, 100);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    let ix = build_update_offer_permissionless_fee_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint, 300);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let offer = read_offer(&ctx.svm, &ctx.usdc_mint, &ctx.onyc_mint);
+    assert_eq!(offer.fee_basis_points, 100);
+    assert_eq!(offer.fee_basis_points_permissionless, 300);
+
+    let ix = build_add_offer_vector_ix(
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        Some(current_time),
+        current_time,
+        1_000_000_000,
+        0,
+        86400,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let token_in_amount = 1_000_000;
+    let regular_ix = build_take_offer_v2_ix(
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        token_in_amount,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[regular_ix], &[&ctx.payer, &ctx.user]).unwrap();
+
+    let user_onyc_after_regular = get_token_balance(
+        &ctx.svm,
+        &get_associated_token_address(&ctx.user.pubkey(), &ctx.onyc_mint),
+    );
+    assert_eq!(user_onyc_after_regular, 990_000_000);
+
+    let permissionless_ix = build_take_offer_permissionless_v2_ix(
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        token_in_amount,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[permissionless_ix], &[&ctx.payer, &ctx.user]).unwrap();
+
+    let user_onyc_after_permissionless = get_token_balance(
+        &ctx.svm,
+        &get_associated_token_address(&ctx.user.pubkey(), &ctx.onyc_mint),
+    );
+    assert_eq!(
+        user_onyc_after_permissionless - user_onyc_after_regular,
+        970_000_000
+    );
+
+    let offer_fee_ata = get_associated_token_address(&find_offer_fee_vault_pda().0, &ctx.usdc_mint);
+    let permissionless_fee_ata =
+        get_associated_token_address(&find_permissionless_offer_fee_vault_pda().0, &ctx.usdc_mint);
+    let proceeds_ata =
+        get_associated_token_address(&find_offer_proceeds_vault_pda().0, &ctx.usdc_mint);
+
+    assert_eq!(get_token_balance(&ctx.svm, &offer_fee_ata), 10_000);
+    assert_eq!(get_token_balance(&ctx.svm, &permissionless_fee_ata), 30_000);
+    assert_eq!(get_token_balance(&ctx.svm, &proceeds_ata), 1_960_000);
 }
 
 #[test]
@@ -1083,7 +1166,8 @@ fn test_permissionless_fee_calculations_when_minting() {
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
 
-    // Legacy take_offer_permissionless sends the full amount to the boss account.
+    // Legacy take_offer_permissionless keeps the historical routing: net and fee both
+    // land in the boss token-in account when token-in is not program-controlled.
     let proceeds_usdc = get_token_balance(
         &ctx.svm,
         &get_associated_token_address(&boss, &ctx.usdc_mint),

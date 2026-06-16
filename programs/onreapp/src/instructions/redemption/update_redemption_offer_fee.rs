@@ -19,6 +19,14 @@ pub struct RedemptionOfferFeeUpdatedEvent {
 }
 
 #[event]
+pub struct RedemptionOfferPropAmmSellFeeUpdatedEvent {
+    pub redemption_offer_pda: Pubkey,
+    pub old_fee_basis_points_prop_amm_sell: u16,
+    pub new_fee_basis_points_prop_amm_sell: u16,
+    pub boss: Pubkey,
+}
+
+#[event]
 pub struct RedemptionOfferVaultTargetUpdatedEvent {
     pub redemption_offer_pda: Pubkey,
     pub old_vault_target_bps: u16,
@@ -118,6 +126,34 @@ pub fn update_redemption_offer_fee(
         redemption_offer_pda: ctx.accounts.redemption_offer.key(),
         old_fee_basis_points,
         new_fee_basis_points,
+        boss: ctx.accounts.boss.key(),
+    });
+
+    Ok(())
+}
+
+pub fn update_redemption_offer_prop_amm_sell_fee(
+    ctx: Context<UpdateRedemptionOfferFee>,
+    new_fee_basis_points_prop_amm_sell: u16,
+) -> Result<()> {
+    require!(
+        new_fee_basis_points_prop_amm_sell <= MAX_ALLOWED_FEE_BPS,
+        crate::OnreError::InvalidFee
+    );
+
+    let redemption_offer = &mut ctx.accounts.redemption_offer;
+    require!(
+        new_fee_basis_points_prop_amm_sell != redemption_offer.fee_basis_points_prop_amm_sell,
+        crate::OnreError::NoChange
+    );
+
+    let old_fee_basis_points_prop_amm_sell = redemption_offer.fee_basis_points_prop_amm_sell;
+    redemption_offer.fee_basis_points_prop_amm_sell = new_fee_basis_points_prop_amm_sell;
+
+    emit!(RedemptionOfferPropAmmSellFeeUpdatedEvent {
+        redemption_offer_pda: ctx.accounts.redemption_offer.key(),
+        old_fee_basis_points_prop_amm_sell,
+        new_fee_basis_points_prop_amm_sell,
         boss: ctx.accounts.boss.key(),
     });
 

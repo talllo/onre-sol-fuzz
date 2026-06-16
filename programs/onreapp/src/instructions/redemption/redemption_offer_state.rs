@@ -28,7 +28,7 @@ pub struct RedemptionOffer {
     /// This tracks ONyc tokens that are locked in pending redemption requests.
     /// Uses u128 for aggregate accounting across requests.
     pub requested_redemptions: u128,
-    /// Fee in basis points (1000 = 10%) charged when fulfilling redemption requests
+    /// Fee in basis points (1000 = 10%) charged when the redemption admin fulfills requests
     pub fee_basis_points: u16,
     /// Counter for sequential redemption request numbering
     /// Increments with each new redemption request created
@@ -42,8 +42,10 @@ pub struct RedemptionOffer {
     pub vault_target_bps: u16,
     /// Whether the redemption offer is disabled by targeted emergency controls (0 = false, 1 = true)
     disabled: u8,
+    /// Fee in basis points (1000 = 10%) charged when Prop AMM sell fulfills redemptions
+    pub fee_basis_points_prop_amm_sell: u16,
     /// Reserved space for future fields
-    pub reserved: [u8; 106],
+    pub reserved: [u8; 104],
 }
 
 impl RedemptionOffer {

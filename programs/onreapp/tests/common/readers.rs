@@ -27,6 +27,7 @@ pub struct OfferData {
     pub needs_approval: u8,
     pub allow_permissionless: u8,
     pub disabled: u8,
+    pub fee_basis_points_permissionless: u16,
 }
 
 impl OfferData {
@@ -81,6 +82,9 @@ pub fn read_offer(svm: &LiteSVM, token_in_mint: &Pubkey, token_out_mint: &Pubkey
     let allow_permissionless = data[offset];
     offset += 1;
     let disabled = data[offset];
+    offset += 1;
+    let fee_basis_points_permissionless =
+        u16::from_le_bytes(data[offset..offset + 2].try_into().unwrap());
 
     OfferData {
         token_in_mint: tin,
@@ -91,6 +95,7 @@ pub fn read_offer(svm: &LiteSVM, token_in_mint: &Pubkey, token_out_mint: &Pubkey
         needs_approval,
         allow_permissionless,
         disabled,
+        fee_basis_points_permissionless,
     }
 }
 
@@ -269,6 +274,7 @@ pub struct RedemptionOfferData {
     pub executed_redemptions: u128,
     pub requested_redemptions: u128,
     pub fee_basis_points: u16,
+    pub fee_basis_points_prop_amm_sell: u16,
     pub vault_target_bps: u16,
     pub request_counter: u64,
     pub disabled: u8,
@@ -303,6 +309,9 @@ pub fn read_redemption_offer(
     let vault_target_bps = u16::from_le_bytes(data[offset..offset + 2].try_into().unwrap());
     offset += 2;
     let disabled = data[offset];
+    offset += 1;
+    let fee_basis_points_prop_amm_sell =
+        u16::from_le_bytes(data[offset..offset + 2].try_into().unwrap());
     RedemptionOfferData {
         offer,
         token_in_mint: tin,
@@ -310,6 +319,7 @@ pub fn read_redemption_offer(
         executed_redemptions,
         requested_redemptions,
         fee_basis_points,
+        fee_basis_points_prop_amm_sell,
         vault_target_bps,
         request_counter,
         disabled,

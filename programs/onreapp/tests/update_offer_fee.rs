@@ -35,11 +35,68 @@ fn test_update_fee_success() {
     let (mut svm, payer, token_in, token_out) = setup_offer();
     let boss = payer.pubkey();
 
+    let offer = read_offer(&svm, &token_in, &token_out);
+    assert_eq!(offer.fee_basis_points_permissionless, 0);
+
     let ix = build_update_offer_fee_ix(&boss, &token_in, &token_out, 1000);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
     let offer = read_offer(&svm, &token_in, &token_out);
     assert_eq!(offer.fee_basis_points, 1000);
+    assert_eq!(offer.fee_basis_points_permissionless, 0);
+}
+
+#[test]
+fn test_update_permissionless_fee_success() {
+    let (mut svm, payer, token_in, token_out) = setup_offer();
+    let boss = payer.pubkey();
+
+    let ix = build_update_offer_permissionless_fee_ix(&boss, &token_in, &token_out, 750);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let offer = read_offer(&svm, &token_in, &token_out);
+    assert_eq!(offer.fee_basis_points, 500);
+    assert_eq!(offer.fee_basis_points_permissionless, 750);
+}
+
+#[test]
+fn test_update_permissionless_fee_to_zero() {
+    let (mut svm, payer, token_in, token_out) = setup_offer();
+    let boss = payer.pubkey();
+
+    let ix = build_update_offer_permissionless_fee_ix(&boss, &token_in, &token_out, 600);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let ix = build_update_offer_permissionless_fee_ix(&boss, &token_in, &token_out, 0);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let offer = read_offer(&svm, &token_in, &token_out);
+    assert_eq!(offer.fee_basis_points_permissionless, 0);
+}
+
+#[test]
+fn test_update_permissionless_fee_rejects_over_max() {
+    let (mut svm, payer, token_in, token_out) = setup_offer();
+    let boss = payer.pubkey();
+
+    let ix = build_update_offer_permissionless_fee_ix(&boss, &token_in, &token_out, 1001);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(result.is_err(), "permissionless fee over 1000 should fail");
+}
+
+#[test]
+fn test_update_permissionless_fee_rejects_non_boss() {
+    let (mut svm, _payer, token_in, token_out) = setup_offer();
+
+    let non_boss = Keypair::new();
+    svm.airdrop(&non_boss.pubkey(), INITIAL_LAMPORTS).unwrap();
+
+    let ix =
+        build_update_offer_permissionless_fee_ix(&non_boss.pubkey(), &token_in, &token_out, 1000);
+    let result = send_tx(&mut svm, &[ix], &[&non_boss]);
+    assert!(
+        result.is_err(),
+        "non-boss should not be able to update permissionless fee"
+    );
 }
 
 #[test]

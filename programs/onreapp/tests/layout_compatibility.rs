@@ -132,6 +132,7 @@ fn redemption_offer_deserializes_legacy_master_layout() {
     assert_eq!(redemption_offer.bump, 251);
     assert_eq!(redemption_offer.vault_target_bps, 0);
     assert!(!redemption_offer.is_disabled());
+    assert_eq!(redemption_offer.fee_basis_points_prop_amm_sell, 0);
 }
 
 #[test]

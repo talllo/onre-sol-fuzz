@@ -27,6 +27,7 @@ fn test_make_offer_succeeds() {
     assert_eq!(offer.token_in_mint, token_in);
     assert_eq!(offer.token_out_mint, token_out);
     assert_eq!(offer.fee_basis_points, 500);
+    assert_eq!(offer.fee_basis_points_permissionless, 0);
     assert_eq!(offer.disabled, 0);
 }
 

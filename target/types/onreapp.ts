@@ -2478,7 +2478,7 @@ export type Onreapp = {
           "writable": true
         },
         {
-          "name": "offerFeeVault",
+          "name": "redemptionFeeVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2508,11 +2508,16 @@ export type Onreapp = {
               {
                 "kind": "const",
                 "value": [
-                  111,
-                  102,
-                  102,
-                  101,
                   114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
                   95,
                   102,
                   101,
@@ -2523,7 +2528,7 @@ export type Onreapp = {
           }
         },
         {
-          "name": "offerFeeTokenInAccount",
+          "name": "redemptionFeeTokenInAccount",
           "writable": true
         },
         {
@@ -4286,6 +4291,7 @@ export type Onreapp = {
         "# Arguments",
         "- `ctx`: Context for `MakeRedemptionOffer`.",
         "- `fee_basis_points`: Fee in basis points, capped at 1000 bps (10%).",
+        "- `fee_basis_points_prop_amm_sell`: Prop AMM sell fee in basis points, capped at 1000 bps (10%).",
         "",
         "# Access Control",
         "- Only the boss or redemption_admin can call this instruction"
@@ -4623,6 +4629,10 @@ export type Onreapp = {
       "args": [
         {
           "name": "feeBasisPoints",
+          "type": "u16"
+        },
+        {
+          "name": "feeBasisPointsPropAmmSell",
           "type": "u16"
         }
       ]
@@ -5647,7 +5657,7 @@ export type Onreapp = {
           "writable": true
         },
         {
-          "name": "propAmmFeeVault",
+          "name": "propAmmBuyFeeVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -5686,6 +5696,10 @@ export type Onreapp = {
                   109,
                   109,
                   95,
+                  98,
+                  117,
+                  121,
+                  95,
                   102,
                   101,
                   101
@@ -5695,7 +5709,7 @@ export type Onreapp = {
           }
         },
         {
-          "name": "propAmmFeeTokenInAccount",
+          "name": "propAmmBuyFeeTokenInAccount",
           "writable": true
         },
         {
@@ -6180,7 +6194,7 @@ export type Onreapp = {
           "writable": true
         },
         {
-          "name": "propAmmFeeVault",
+          "name": "propAmmSellFeeVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -6219,6 +6233,11 @@ export type Onreapp = {
                   109,
                   109,
                   95,
+                  115,
+                  101,
+                  108,
+                  108,
+                  95,
                   102,
                   101,
                   101
@@ -6228,7 +6247,7 @@ export type Onreapp = {
           }
         },
         {
-          "name": "propAmmFeeTokenInAccount",
+          "name": "propAmmSellFeeTokenInAccount",
           "writable": true
         },
         {
@@ -9919,11 +9938,11 @@ export type Onreapp = {
           "writable": true
         },
         {
-          "name": "offerFeeVault",
+          "name": "permissionlessOfferFeeVault",
           "writable": true
         },
         {
-          "name": "offerFeeTokenInAccount",
+          "name": "permissionlessOfferFeeTokenInAccount",
           "writable": true
         },
         {
@@ -10870,6 +10889,103 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "updateOfferPermissionlessFee",
+      "docs": [
+        "Updates the fee basis points used only by permissionless offer execution.",
+        "",
+        "Delegates to `offer::update_offer_permissionless_fee`."
+      ],
+      "discriminator": [
+        211,
+        4,
+        141,
+        85,
+        85,
+        236,
+        195,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "docs": [
+            "The offer account whose permissionless fee will be updated."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenInMint",
+          "docs": [
+            "The input token mint account for offer validation."
+          ]
+        },
+        {
+          "name": "tokenOutMint",
+          "docs": [
+            "The output token mint account for offer validation."
+          ]
+        },
+        {
+          "name": "state",
+          "docs": [
+            "Program state account containing boss authorization."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "docs": [
+            "The boss account authorized to update offer fees."
+          ],
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "newFeeBasisPointsPermissionless",
+          "type": "u16"
+        }
+      ]
+    },
+    {
       "name": "updateRedemptionOfferFee",
       "docs": [
         "Updates the fee configuration for a specific redemption offer.",
@@ -10971,6 +11087,102 @@ export type Onreapp = {
       "args": [
         {
           "name": "newFeeBasisPoints",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "updateRedemptionOfferPropAmmSellFee",
+      "docs": [
+        "Updates the fee basis points used only by Prop AMM sell-side redemptions."
+      ],
+      "discriminator": [
+        160,
+        118,
+        162,
+        32,
+        102,
+        148,
+        239,
+        5
+      ],
+      "accounts": [
+        {
+          "name": "redemptionOffer",
+          "docs": [
+            "The redemption offer account whose configuration will be updated."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "redemption_offer.token_in_mint",
+                "account": "redemptionOffer"
+              },
+              {
+                "kind": "account",
+                "path": "redemption_offer.token_out_mint",
+                "account": "redemptionOffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "state",
+          "docs": [
+            "Program state account containing boss authorization"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "docs": [
+            "The boss account authorized to update redemption offer fees"
+          ],
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "newFeeBasisPointsPropAmmSell",
           "type": "u16"
         }
       ]
@@ -12116,6 +12328,19 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "offerPermissionlessFeeUpdatedEvent",
+      "discriminator": [
+        140,
+        216,
+        176,
+        227,
+        74,
+        173,
+        69,
+        147
+      ]
+    },
+    {
       "name": "offerTakenEvent",
       "discriminator": [
         64,
@@ -12282,6 +12507,19 @@ export type Onreapp = {
         154,
         166,
         156
+      ]
+    },
+    {
+      "name": "redemptionOfferPropAmmSellFeeUpdatedEvent",
+      "discriminator": [
+        20,
+        70,
+        77,
+        133,
+        173,
+        84,
+        139,
+        47
       ]
     },
     {
@@ -13761,13 +13999,22 @@ export type Onreapp = {
             "name": "performanceFee"
           },
           {
-            "name": "propAmmFee"
+            "name": "propAmmBuyFee"
           },
           {
             "name": "offerProceeds"
           },
           {
             "name": "propAmmProceeds"
+          },
+          {
+            "name": "permissionlessOfferFee"
+          },
+          {
+            "name": "redemptionFee"
+          },
+          {
+            "name": "propAmmSellFee"
           }
         ]
       }
@@ -14435,6 +14682,13 @@ export type Onreapp = {
             "type": "u8"
           },
           {
+            "name": "feeBasisPointsPermissionless",
+            "docs": [
+              "Fee in basis points charged by permissionless offer execution."
+            ],
+            "type": "u16"
+          },
+          {
             "name": "reserved",
             "docs": [
               "Reserved space for future fields"
@@ -14442,7 +14696,7 @@ export type Onreapp = {
             "type": {
               "array": [
                 "u8",
-                130
+                128
               ]
             }
           }
@@ -14568,6 +14822,45 @@ export type Onreapp = {
               "Whether the offer allows permissionless operations"
             ],
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "offerPermissionlessFeeUpdatedEvent",
+      "docs": [
+        "Event emitted when an offer's permissionless fee is updated."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offerPda",
+            "docs": [
+              "The PDA address of the offer whose permissionless fee was updated."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "oldFeeBasisPointsPermissionless",
+            "docs": [
+              "Previous permissionless fee in basis points (1000 = 10%)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "newFeeBasisPointsPermissionless",
+            "docs": [
+              "New permissionless fee in basis points (1000 = 10%)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "boss",
+            "docs": [
+              "The boss account that authorized the fee update."
+            ],
+            "type": "pubkey"
           }
         ]
       }
@@ -15228,7 +15521,7 @@ export type Onreapp = {
           {
             "name": "feeBasisPoints",
             "docs": [
-              "Fee in basis points (1000 = 10%) charged when fulfilling redemption requests"
+              "Fee in basis points (1000 = 10%) charged when the redemption admin fulfills requests"
             ],
             "type": "u16"
           },
@@ -15265,6 +15558,13 @@ export type Onreapp = {
             "type": "u8"
           },
           {
+            "name": "feeBasisPointsPropAmmSell",
+            "docs": [
+              "Fee in basis points (1000 = 10%) charged when Prop AMM sell fulfills redemptions"
+            ],
+            "type": "u16"
+          },
+          {
             "name": "reserved",
             "docs": [
               "Reserved space for future fields"
@@ -15272,7 +15572,7 @@ export type Onreapp = {
             "type": {
               "array": [
                 "u8",
-                106
+                104
               ]
             }
           }
@@ -15321,6 +15621,13 @@ export type Onreapp = {
             "name": "feeBasisPoints",
             "docs": [
               "Fee in basis points, capped at 1000 bps (10%), charged when fulfilling redemption requests."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "feeBasisPointsPropAmmSell",
+            "docs": [
+              "Fee in basis points, capped at 1000 bps (10%), charged when Prop AMM sell fulfills redemptions."
             ],
             "type": "u16"
           },
@@ -15390,6 +15697,30 @@ export type Onreapp = {
             "docs": [
               "The boss account that authorized the fee update"
             ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "redemptionOfferPropAmmSellFeeUpdatedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "redemptionOfferPda",
+            "type": "pubkey"
+          },
+          {
+            "name": "oldFeeBasisPointsPropAmmSell",
+            "type": "u16"
+          },
+          {
+            "name": "newFeeBasisPointsPropAmmSell",
+            "type": "u16"
+          },
+          {
+            "name": "boss",
             "type": "pubkey"
           }
         ]

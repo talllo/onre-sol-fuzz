@@ -10,7 +10,7 @@ Granular fees are applied to both directions to capture protocol revenue and man
 
 **Buy Quote (`token_out_amount`):**
 
-Prop AMM buys use the normal offer engine. The active offer vector determines the current price, the offer fee is deducted from the asset input, and the net input is converted into ONYC output. A buy quote can exist even when buy execution later rejects because the offer's permissionless mode is disabled.
+Prop AMM buys use the offer engine with the offer's permissionless fee basis points. The active offer vector determines the current price, the permissionless offer fee is deducted from the asset input, and the net input is converted into ONYC output. A buy quote can exist even when buy execution later rejects because the offer's permissionless mode is disabled.
 
 $$
 \mathrm{buy\_net} = \mathrm{token\_in\_amount} - \left\lceil \frac{\mathrm{token\_in\_amount} \times \mathrm{offer\_fee\_bps}}{10,000} \right\rceil
@@ -22,10 +22,10 @@ $$
 
 **Raw Sell Value (`raw_sell_value_stable`):**
 
-Before hard-wall dampening, the sell path applies the greater of the redemption offer fee and `minimum_sell_haircut_onyc`:
+Before hard-wall dampening, the sell path applies the greater of `RedemptionOffer.fee_basis_points_prop_amm_sell` and `minimum_sell_haircut_onyc`:
 
 $$
-\mathrm{pct\_fee} = \left\lceil \frac{\mathrm{token\_in\_amount} \times \mathrm{redemption\_fee\_bps}}{10,000} \right\rceil
+\mathrm{pct\_fee} = \left\lceil \frac{\mathrm{token\_in\_amount} \times \mathrm{fee\_basis\_points\_prop\_amm\_sell}}{10,000} \right\rceil
 $$
 
 $$
@@ -40,7 +40,7 @@ $$
 \mathrm{raw\_sell\_value} = \frac{\mathrm{sell\_net} \times \mathrm{current\_offer\_price} \times 10^{\mathrm{token\_out\_decimals}}}{10^{\mathrm{token\_in\_decimals}} \times 10^9}
 $$
 
-If the redemption offer PDA is valid but uninitialized, `redemption_fee_bps = 0` and `vault_target_bps = 0`. If the redemption offer exists but is disabled, sells reject. A zero redemption fee does not bypass `minimum_sell_haircut_onyc`.
+If the redemption offer PDA is valid but uninitialized, `fee_basis_points_prop_amm_sell = 0` and `vault_target_bps = 0`. If the redemption offer exists but is disabled, sells reject. A zero Prop AMM sell fee does not bypass `minimum_sell_haircut_onyc`.
 
 ONYC has 9 decimals. Volume tracking is normalized to the pair asset mint's base units. USDC examples assume 6 decimals:
 

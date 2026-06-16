@@ -129,6 +129,14 @@ fn overwrite_pair_state_pubkey(svm: &mut litesvm::LiteSVM, offer: &Pubkey, offse
     svm.set_account(pair_state_pda, account).unwrap();
 }
 
+fn get_balance_or_zero(svm: &litesvm::LiteSVM, ata: &Pubkey) -> u64 {
+    if svm.get_account(ata).is_some() {
+        get_token_balance(svm, ata)
+    } else {
+        0
+    }
+}
+
 fn add_prop_amm_vector(ctx: &mut PropAmmCtx) {
     let boss = ctx.payer.pubkey();
     let current_time = get_clock_time(&ctx.svm);
@@ -1120,8 +1128,86 @@ fn test_open_swap_sell_applies_default_minimum_haircut() {
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
 
     let fee_vault_ata =
-        get_associated_token_address(&find_prop_amm_fee_vault_pda().0, &ctx.onyc_mint);
+        get_associated_token_address(&find_prop_amm_sell_fee_vault_pda().0, &ctx.onyc_mint);
     assert_eq!(get_token_balance(&ctx.svm, &fee_vault_ata), 10_000_000_000);
+}
+
+#[test]
+fn test_open_swap_sell_uses_prop_amm_sell_redemption_fee_and_vault() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    prepare_prop_amm_sell_side(&mut ctx, 100);
+
+    let ix = build_update_redemption_offer_prop_amm_sell_fee_ix(
+        &boss,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        300,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let sell_amount = 1_000_000_000;
+    let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.onyc_mint, &ctx.usdc_mint, sell_amount);
+    let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
+    let quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
+    assert_eq!(quote.token_in_fee_amount, 30_000_000);
+    assert_eq!(quote.token_in_net_amount, 970_000_000);
+
+    let ix = build_open_swap_sell_ix(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        sell_amount,
+        quote.minimum_out,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
+
+    let sell_fee_ata =
+        get_associated_token_address(&find_prop_amm_sell_fee_vault_pda().0, &ctx.onyc_mint);
+    let old_prop_amm_buy_fee_ata =
+        get_associated_token_address(&find_prop_amm_buy_fee_vault_pda().0, &ctx.onyc_mint);
+    assert_eq!(get_token_balance(&ctx.svm, &sell_fee_ata), 30_000_000);
+    assert_eq!(get_balance_or_zero(&ctx.svm, &old_prop_amm_buy_fee_ata), 0);
+}
+
+#[test]
+fn test_open_swap_buy_uses_permissionless_offer_fee() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+    add_prop_amm_vector(&mut ctx);
+
+    let ix = build_update_offer_fee_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint, 100);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    let ix = build_update_offer_permissionless_fee_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint, 300);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let buy_amount = 1_000_000;
+    let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.usdc_mint, &ctx.onyc_mint, buy_amount);
+    let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
+    let quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
+    assert_eq!(quote.token_in_fee_amount, 30_000);
+    assert_eq!(quote.token_in_net_amount, 970_000);
+
+    let ix = build_open_swap_buy_ix(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        buy_amount,
+        quote.minimum_out,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
+
+    let prop_amm_buy_fee_ata =
+        get_associated_token_address(&find_prop_amm_buy_fee_vault_pda().0, &ctx.usdc_mint);
+    assert_eq!(get_token_balance(&ctx.svm, &prop_amm_buy_fee_ata), 30_000);
 }
 
 #[test]
@@ -1675,6 +1761,13 @@ fn test_quote_and_open_swap_support_sell_side() {
         500,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    let ix = build_update_redemption_offer_prop_amm_sell_fee_ix(
+        &boss,
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        500,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
