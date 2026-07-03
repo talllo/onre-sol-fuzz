@@ -28,3 +28,19 @@ fuzz:	build	## Build and run fuzz tests
 	cd trident-tests && trident fuzz run fuzz_0
 f: fuzz
 
+surf:	build	## Build and run the surfpool fork (forks from SOL_MAINNET_RPC_URL if set)
+	SURFPOOL_DATASOURCE_RPC_URL="$(SOL_MAINNET_RPC_URL)" docker compose -f docker-compose.surfpool.yml up -d --build && docker compose -f docker-compose.surfpool.yml logs -f
+
+surf-down:	## Bring down surfpool stack
+	docker compose -f docker-compose.surfpool.yml down -v
+
+surf-native:	## Run surfpool locally WITHOUT docker (fork mainnet, upgrade program, local boss)
+	scripts/surfpool-native.sh
+sn: surf-native
+
+surf-native-down:	## Stop the native (no-docker) surfpool instance
+	@if [ -f .surfpool-native/surfpool.pid ] && kill -0 "$$(cat .surfpool-native/surfpool.pid)" 2>/dev/null; then \
+		kill "$$(cat .surfpool-native/surfpool.pid)" && rm -f .surfpool-native/surfpool.pid && echo "surfpool stopped"; \
+	else \
+		echo "no running native surfpool (.surfpool-native/surfpool.pid)"; \
+	fi
