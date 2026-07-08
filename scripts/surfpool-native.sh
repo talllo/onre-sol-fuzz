@@ -52,11 +52,35 @@ fi
 AUTHORITY_PUBKEY="$(solana-keygen pubkey "$WALLET_PATH")"
 echo "Local boss / upgrade authority: $AUTHORITY_PUBKEY"
 
-# 2. Stop any previous native surfpool instance so ports are free.
-if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-    echo "Stopping previous surfpool (pid $(cat "$PID_FILE"))"
-    kill "$(cat "$PID_FILE")" 2>/dev/null || true
-    sleep 2
+# 2. Stop any previous native surfpool and WAIT until the RPC port is actually
+#    released. A lingering orphan holding port 8899 makes the new surfpool exit
+#    ("RPC port already in use") while the setup below then connects to the
+#    half-dead orphan (whose Studio is gone) and hangs on waitForStudio forever.
+port_listener() { lsof -ti "TCP:${RPC_PORT}" -sTCP:LISTEN 2>/dev/null || true; }
+
+# Tracked pid from a previous run.
+if [ -f "$PID_FILE" ]; then
+    OLD_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+    [ -n "$OLD_PID" ] && kill "$OLD_PID" 2>/dev/null || true
+fi
+# Anything owning the RPC listener socket (only the listener, so we never kill
+# unrelated clients that merely hold a connection to it) plus stray surfpools.
+LISTENER="$(port_listener)"
+[ -n "$LISTENER" ] && kill $LISTENER 2>/dev/null || true
+pkill -f "surfpool start" 2>/dev/null || true
+
+if [ -n "${OLD_PID:-}${LISTENER}" ]; then
+    echo "Waiting for previous surfpool to release port ${RPC_PORT}..."
+    for _ in $(seq 1 30); do
+        [ -z "$(port_listener)" ] && break
+        sleep 0.5
+    done
+    REMAINING="$(port_listener)"
+    if [ -n "$REMAINING" ]; then
+        echo "Port ${RPC_PORT} still held; sending SIGKILL to $REMAINING"
+        kill -9 $REMAINING 2>/dev/null || true
+        sleep 1
+    fi
 fi
 
 # 3. Build the current program so the fork gets today's code.
@@ -85,8 +109,37 @@ nohup surfpool start \
     --airdrop-keypair-path "$WALLET_PATH" \
     --airdrop-amount "$AIRDROP_LAMPORTS" \
     "${FORK_ARGS[@]}" >"$LOG_FILE" 2>&1 &
-echo $! >"$PID_FILE"
-echo "surfpool pid $(cat "$PID_FILE")"
+SURFPOOL_PID=$!
+echo "$SURFPOOL_PID" >"$PID_FILE"
+echo "surfpool pid $SURFPOOL_PID"
+
+# 5b. Fail fast: make sure THIS surfpool actually came up and bound the RPC port.
+#     If it died (e.g. port conflict), abort loudly instead of letting the setup
+#     connect to a stale instance and hang on the Studio check.
+echo "Waiting for surfpool RPC on ${LOCAL_RPC}..."
+RPC_UP=""
+for _ in $(seq 1 60); do
+    if ! kill -0 "$SURFPOOL_PID" 2>/dev/null; then
+        echo "ERROR: surfpool exited during startup. Last log lines:" >&2
+        tail -n 20 "$LOG_FILE" >&2
+        rm -f "$PID_FILE"
+        exit 1
+    fi
+    if curl -s -m 2 "$LOCAL_RPC" -X POST -H 'content-type: application/json' \
+        -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' 2>/dev/null | grep -q '"result"'; then
+        RPC_UP=1
+        break
+    fi
+    sleep 1
+done
+if [ -z "$RPC_UP" ]; then
+    echo "ERROR: surfpool RPC did not become ready at ${LOCAL_RPC}. Last log lines:" >&2
+    tail -n 20 "$LOG_FILE" >&2
+    kill "$SURFPOOL_PID" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    exit 1
+fi
+echo "surfpool RPC is up."
 
 # 6. Upgrade the on-fork program bytes and override governance to the local key.
 export SURFPOOL_RPC_URL="$LOCAL_RPC"

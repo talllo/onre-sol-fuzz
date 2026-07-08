@@ -44,3 +44,4 @@ surf-native-down:	## Stop the native (no-docker) surfpool instance
 	else \
 		echo "no running native surfpool (.surfpool-native/surfpool.pid)"; \
 	fi
+snd: surf-native-down
