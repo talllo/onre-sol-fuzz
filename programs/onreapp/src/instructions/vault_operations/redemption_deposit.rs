@@ -25,14 +25,6 @@ pub struct RedemptionVaultDepositEvent {
 /// lacks mint authority and must transfer from pre-funded reserves.
 #[derive(Accounts)]
 pub struct RedemptionVaultDeposit<'info> {
-    /// Program state account containing kill switch status
-    #[account(
-        seeds = [seeds::STATE],
-        bump = state.bump,
-        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
-    )]
-    pub state: Box<Account<'info, State>>,
-
     /// Program-derived authority that controls redemption vault token accounts
     ///
     /// This PDA manages the redemption vault token accounts and enables the program
@@ -71,6 +63,15 @@ pub struct RedemptionVaultDeposit<'info> {
     /// The depositor account paying for account creation and providing tokens
     #[account(mut)]
     pub depositor: Signer<'info>,
+
+    /// Program state account containing kill switch status.
+    /// Kept in the legacy account position for upgrade compatibility.
+    #[account(
+        seeds = [seeds::STATE],
+        bump = state.bump,
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
+    )]
+    pub state: Box<Account<'info, State>>,
 
     /// Token program interface for transfer operations
     pub token_program: Interface<'info, TokenInterface>,

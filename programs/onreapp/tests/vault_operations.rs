@@ -1,6 +1,7 @@
 mod common;
 
 use common::*;
+use solana_sdk::instruction::AccountMeta;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
 
@@ -155,6 +156,33 @@ fn test_offer_vault_withdraw_rejects_when_killed() {
 // ---------------------------------------------------------------------------
 // Redemption Vault Deposit
 // ---------------------------------------------------------------------------
+
+#[test]
+fn test_redemption_vault_deposit_preserves_legacy_account_order() {
+    let depositor = solana_sdk::pubkey::Pubkey::new_unique();
+    let token_mint = solana_sdk::pubkey::Pubkey::new_unique();
+    let (state, _) = find_state_pda();
+    let (vault_authority, _) = find_redemption_vault_authority_pda();
+    let depositor_token_account = get_associated_token_address(&depositor, &token_mint);
+    let vault_token_account = get_associated_token_address(&vault_authority, &token_mint);
+
+    let ix = build_redemption_vault_deposit_ix(&depositor, &token_mint, 1, &TOKEN_PROGRAM_ID);
+
+    assert_eq!(
+        ix.accounts,
+        vec![
+            AccountMeta::new_readonly(vault_authority, false),
+            AccountMeta::new_readonly(token_mint, false),
+            AccountMeta::new(depositor_token_account, false),
+            AccountMeta::new(vault_token_account, false),
+            AccountMeta::new(depositor, true),
+            AccountMeta::new_readonly(state, false),
+            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+            AccountMeta::new_readonly(ATA_PROGRAM_ID, false),
+            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
+        ]
+    );
+}
 
 #[test]
 fn test_redemption_vault_deposit_success() {
