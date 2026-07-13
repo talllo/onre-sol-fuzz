@@ -110,7 +110,7 @@ accrual timestamp as the next baseline.
 This currently applies when the buffer is initialized and the program controls
 the ONyc mint, for:
 
-- `mint_to` when `State.main_offer` is set
+- `mint_to`, which requires `State.main_offer` to be set
 - `take_offer_v2` and `take_offer_permissionless_v2` when token out is ONyc
 - Prop AMM buy when token out is ONyc
 - redemption fulfillment when token in is ONyc and the net amount is burned

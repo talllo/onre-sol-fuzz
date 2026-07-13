@@ -38,7 +38,8 @@ pub struct MintTo<'info> {
         bump = state.bump,
         has_one = boss,
         has_one = onyc_mint,
-        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated,
+        constraint = state.main_offer != Pubkey::default() @ crate::OnreError::InvalidMainOffer
     )]
     pub state: Box<Account<'info, State>>,
 
@@ -91,7 +92,7 @@ pub struct MintTo<'info> {
     /// System program required for account creation and rent payment
     pub system_program: Program<'info, System>,
 
-    /// CHECK: Parsed and validated only when the state points at a main offer.
+    /// CHECK: Parsed and validated against `state.main_offer` in instruction logic.
     pub main_offer: UncheckedAccount<'info>,
 
     pub buffer_accounts: BufferAccrualAccounts<'info>,
@@ -112,6 +113,7 @@ pub struct MintTo<'info> {
 ///
 /// The boss's token account is created automatically if it doesn't exist. The minting
 /// operation increases the total supply of ONyc tokens and emits an event for tracking.
+/// `state.main_offer` must be configured, and the matching offer account must be supplied.
 ///
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
@@ -130,34 +132,27 @@ pub struct MintTo<'info> {
 /// # Events
 /// * `OnycTokensMintedEvent` - Emitted on successful minting with details
 pub fn mint_to(ctx: Context<MintTo>, amount: u64) -> Result<()> {
-    let offer = if ctx.accounts.state.main_offer == Pubkey::default() {
-        None
-    } else {
-        let offer = load_main_offer(
-            ctx.program_id,
-            &ctx.accounts.main_offer.to_account_info(),
-            &ctx.accounts.state,
-        )?;
-        Some(offer)
-    };
+    let offer = load_main_offer(
+        ctx.program_id,
+        &ctx.accounts.main_offer.to_account_info(),
+        &ctx.accounts.state,
+    )?;
     let buffer_is_initialized = ctx
         .accounts
         .buffer_accounts
         .check_is_initialized(ctx.program_id)?;
-    let should_accrue = offer.is_some()
-        && should_accrue_onyc_mint(
-            &ctx.accounts.state,
-            &ctx.accounts.onyc_mint,
-            buffer_is_initialized,
-            &ctx.accounts.mint_authority.to_account_info(),
-        );
+    let should_accrue = should_accrue_onyc_mint(
+        &ctx.accounts.state,
+        &ctx.accounts.onyc_mint,
+        buffer_is_initialized,
+        &ctx.accounts.mint_authority.to_account_info(),
+    );
     let accrual = if should_accrue {
-        let offer = offer.as_ref().expect("offer is checked above");
         Some(accrue_buffer_from_accounts(
             ctx.program_id,
             &ctx.accounts.state,
             &ctx.accounts.buffer_accounts,
-            offer,
+            &offer,
             &ctx.accounts.onyc_mint,
             ctx.accounts.mint_authority.to_account_info(),
             ctx.bumps.mint_authority,
@@ -196,20 +191,18 @@ pub fn mint_to(ctx: Context<MintTo>, amount: u64) -> Result<()> {
         )?;
     }
 
-    if let Some(offer) = offer.as_ref() {
-        ctx.accounts.onyc_mint.reload()?;
-        refresh_market_stats_pda(
-            offer,
-            &ctx.accounts.onyc_mint,
-            &ctx.accounts
-                .circulating_supply_excluded_balance
-                .to_account_info(),
-            &ctx.accounts.market_stats.to_account_info(),
-            &ctx.accounts.boss.to_account_info(),
-            &ctx.accounts.system_program.to_account_info(),
-            ctx.program_id,
-        )?;
-    }
+    ctx.accounts.onyc_mint.reload()?;
+    refresh_market_stats_pda(
+        &offer,
+        &ctx.accounts.onyc_mint,
+        &ctx.accounts
+            .circulating_supply_excluded_balance
+            .to_account_info(),
+        &ctx.accounts.market_stats.to_account_info(),
+        &ctx.accounts.boss.to_account_info(),
+        &ctx.accounts.system_program.to_account_info(),
+        ctx.program_id,
+    )?;
 
     msg!("Minted {} ONyc tokens to boss account", amount);
 
