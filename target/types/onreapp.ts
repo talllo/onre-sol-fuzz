@@ -3206,26 +3206,6 @@ export type Onreapp = {
           ]
         },
         {
-          "name": "state",
-          "docs": [
-            "Program state holding the canonical boss and ONyc mint."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
           "name": "vaultAuthority",
           "pda": {
             "seeds": [
@@ -6799,26 +6779,6 @@ export type Onreapp = {
       ],
       "accounts": [
         {
-          "name": "state",
-          "docs": [
-            "Program state account containing kill switch status"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
           "name": "redemptionVaultAuthority",
           "docs": [
             "Program-derived authority that controls redemption vault token accounts",
@@ -7006,6 +6966,27 @@ export type Onreapp = {
           ],
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "state",
+          "docs": [
+            "Program state account containing kill switch status.",
+            "Kept in the legacy account position for upgrade compatibility."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "tokenProgram",

@@ -204,8 +204,9 @@ const supply = await program.methods
 console.log(`Circulating Supply: ${supply.toString()}`);
 ```
 
-`get_tvl` and `get_circulating_supply` remain legacy ONyc views that subtract
-the offer-vault ATA directly. The V2 views use the cached ONyc
+`get_tvl` retains its pre-V5 account layout and remains a pair-specific legacy
+view that subtracts the offer-vault ATA directly. `get_circulating_supply`
+remains the legacy ONyc supply view. The V2 views use the cached ONyc
 excluded-balance PDA, which is also what `refresh_market_stats` and the Prop AMM
 paths use.
 

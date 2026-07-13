@@ -291,12 +291,12 @@ pub fn build_redemption_vault_deposit_ix(
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![
-            AccountMeta::new_readonly(state_pda, false),
             AccountMeta::new_readonly(vault_authority_pda, false),
             AccountMeta::new_readonly(*token_mint, false),
             AccountMeta::new(depositor_token_ata, false),
             AccountMeta::new(vault_token_ata, false),
             AccountMeta::new(*depositor, true),
+            AccountMeta::new_readonly(state_pda, false),
             AccountMeta::new_readonly(*token_program, false),
             AccountMeta::new_readonly(ATA_PROGRAM_ID, false),
             AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
@@ -525,7 +525,6 @@ pub fn build_get_tvl_ix(
     token_out_mint: &Pubkey,
 ) -> Instruction {
     let (offer_pda, _) = find_offer_pda(token_in_mint, token_out_mint);
-    let (state_pda, _) = find_state_pda();
     let (vault_authority_pda, _) = find_offer_vault_authority_pda();
     let vault_token_out_ata = get_associated_token_address(&vault_authority_pda, token_out_mint);
     Instruction {
@@ -534,7 +533,6 @@ pub fn build_get_tvl_ix(
             AccountMeta::new_readonly(offer_pda, false),
             AccountMeta::new_readonly(*token_in_mint, false),
             AccountMeta::new_readonly(*token_out_mint, false),
-            AccountMeta::new_readonly(state_pda, false),
             AccountMeta::new_readonly(vault_authority_pda, false),
             AccountMeta::new_readonly(vault_token_out_ata, false),
             AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
@@ -567,7 +565,6 @@ pub fn build_get_tvl_ix_with_token_program(
     token_out_program: &Pubkey,
 ) -> Instruction {
     let (offer_pda, _) = find_offer_pda(token_in_mint, token_out_mint);
-    let (state_pda, _) = find_state_pda();
     let (vault_authority_pda, _) = find_offer_vault_authority_pda();
     let vault_token_out_ata = derive_ata(&vault_authority_pda, token_out_mint, token_out_program);
     Instruction {
@@ -576,7 +573,6 @@ pub fn build_get_tvl_ix_with_token_program(
             AccountMeta::new_readonly(offer_pda, false),
             AccountMeta::new_readonly(*token_in_mint, false),
             AccountMeta::new_readonly(*token_out_mint, false),
-            AccountMeta::new_readonly(state_pda, false),
             AccountMeta::new_readonly(vault_authority_pda, false),
             AccountMeta::new_readonly(vault_token_out_ata, false),
             AccountMeta::new_readonly(*token_out_program, false),

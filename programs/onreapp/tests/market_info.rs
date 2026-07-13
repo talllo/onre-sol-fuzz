@@ -499,6 +499,30 @@ fn test_get_nav_adjustment_fails_no_active_vector() {
 // ---------------------------------------------------------------------------
 
 #[test]
+fn test_get_tvl_preserves_legacy_account_layout() {
+    let boss = Pubkey::new_unique();
+    let token_in = Pubkey::new_unique();
+    let token_out = Pubkey::new_unique();
+    let (offer, _) = find_offer_pda(&token_in, &token_out);
+    let (vault_authority, _) = find_offer_vault_authority_pda();
+    let vault_token_out = get_associated_token_address(&vault_authority, &token_out);
+
+    let ix = build_get_tvl_ix(&boss, &token_in, &token_out);
+
+    assert_eq!(
+        ix.accounts,
+        vec![
+            AccountMeta::new_readonly(offer, false),
+            AccountMeta::new_readonly(token_in, false),
+            AccountMeta::new_readonly(token_out, false),
+            AccountMeta::new_readonly(vault_authority, false),
+            AccountMeta::new_readonly(vault_token_out, false),
+            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+        ]
+    );
+}
+
+#[test]
 fn test_get_tvl_success() {
     let (mut svm, payer, token_in, token_out) = setup_offer_with_vector(0, 1_000_000_000, 86400);
 
@@ -1806,7 +1830,7 @@ fn test_get_tvl_wrong_token_out_mint() {
 }
 
 #[test]
-fn test_get_tvl_rejects_non_onyc_token_out_offer() {
+fn test_get_tvl_legacy_accepts_non_onyc_but_v2_rejects_it() {
     let (mut svm, payer, _onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
@@ -1844,8 +1868,8 @@ fn test_get_tvl_rejects_non_onyc_token_out_offer() {
     svm.set_account(token_out, mint_data).unwrap();
 
     let ix = build_get_tvl_ix(&boss, &token_in, &token_out);
-    let result = send_tx(&mut svm, &[ix], &[&payer]);
-    assert!(result.is_err(), "get_tvl should reject non-ONyc token_out");
+    let result = send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    assert_eq!(get_return_u64(&result), 1_000_000_000_000);
 
     let ix = build_get_tvl_v2_ix(&token_in, &token_out);
     let result = send_tx(&mut svm, &[ix], &[&payer]);

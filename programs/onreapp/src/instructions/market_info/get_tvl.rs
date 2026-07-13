@@ -67,15 +67,6 @@ pub struct GetTVL<'info> {
     )]
     pub token_out_mint: InterfaceAccount<'info, Mint>,
 
-    /// Program state holding the canonical boss and ONyc mint.
-    #[account(
-        seeds = [seeds::STATE],
-        bump = state.bump,
-        constraint = token_out_mint.key() == state.onyc_mint
-            @ crate::OnreError::InvalidOnycMint
-    )]
-    pub state: Box<Account<'info, State>>,
-
     /// CHECK: PDA derivation is validated by seeds constraint
     #[account(seeds = [seeds::OFFER_VAULT_AUTHORITY], bump)]
     pub vault_authority: UncheckedAccount<'info>,
@@ -133,11 +124,11 @@ pub struct GetTVLV2<'info> {
     pub circulating_supply_excluded_balance: UncheckedAccount<'info>,
 }
 
-/// Calculates and returns the current TVL (Total Value Locked) for an ONyc offer
+/// Calculates and returns the current TVL (Total Value Locked) for a specific offer
 ///
 /// This read-only instruction calculates the TVL by combining the current NAV price
-/// with the circulating ONyc supply. The calculation excludes offer-vault
-/// ONyc holdings from total ONyc supply to represent tokens in circulation.
+/// with the circulating token supply. The calculation excludes offer-vault
+/// token holdings from total supply to represent tokens in circulation.
 ///
 /// Formula: `TVL = circulating_supply * current_price / 10^9`
 ///
