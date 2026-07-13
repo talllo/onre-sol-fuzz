@@ -89,7 +89,7 @@ The BUFFER module stores two separate inputs for accrual:
 | `gross_apr`     | Set explicitly by `set_buffer_gross_apr`                           |
 | `current_yield` | Read from the active APR on the offer supplied to the accrual path |
 
-`state.main_offer` must be set before `initialize_buffer` because initialization validates its offer account. It can be updated later with `set_main_offer`, and it must always point to an offer whose `token_out_mint` is ONyc. Runtime accrual uses the offer supplied by the executing path; `set_buffer_gross_apr` uses `state.main_offer`.
+`state.main_offer` must be set before `mint_to` or `initialize_buffer`; both instructions validate the supplied offer against the configured address. It can be updated later with `set_main_offer`, and it must always point to an offer whose `token_out_mint` is ONyc. Runtime accrual uses the offer supplied by the executing path; `set_buffer_gross_apr` uses `state.main_offer`.
 
 Typical on-chain BUFFER setup order:
 

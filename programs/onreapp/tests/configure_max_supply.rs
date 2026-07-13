@@ -29,10 +29,6 @@ fn setup_buffered_cap_context(max_supply: u64, allow_permissionless: bool) -> Bu
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 1_000_000_000, &TOKEN_PROGRAM_ID);
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
-    advance_slot(&mut svm);
-
     let ix = build_make_offer_ix(
         &boss,
         &usdc_mint,
@@ -60,6 +56,16 @@ fn setup_buffered_cap_context(max_supply: u64, allow_permissionless: bool) -> Bu
         1_000_000_000,
         0,
         86400,
+    );
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        1_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &offer_pda,
     );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
@@ -183,8 +189,17 @@ fn test_mint_to_cannot_exceed_max_supply() {
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
+    let main_offer =
+        configure_main_offer_for_mint_to(&mut svm, &payer, &onyc_mint, &TOKEN_PROGRAM_ID);
+
     // Try to mint 200 tokens - should fail
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 200_000_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        200_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(result.is_err(), "should not mint beyond max supply");
 }
@@ -202,8 +217,17 @@ fn test_mint_to_can_mint_up_to_cap() {
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
+    let main_offer =
+        configure_main_offer_for_mint_to(&mut svm, &payer, &onyc_mint, &TOKEN_PROGRAM_ID);
+
     // Mint exactly up to cap
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 100_000_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        100_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
     let boss_ata = get_associated_token_address(&boss, &onyc_mint);
@@ -223,18 +247,39 @@ fn test_mint_to_multiple_mints_within_cap() {
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
+    let main_offer =
+        configure_main_offer_for_mint_to(&mut svm, &payer, &onyc_mint, &TOKEN_PROGRAM_ID);
+
     // First mint: 50 tokens
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 50_000_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        50_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
     // Second mint: 50 tokens (total = 100 = cap)
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 50_000_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        50_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
     // Third mint: 1 token (total = 101 > cap) - should fail
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 1_000_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        1_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(result.is_err(), "should not mint beyond cumulative cap");
 }
@@ -252,8 +297,17 @@ fn test_mint_to_no_limit_when_zero() {
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
+    let main_offer =
+        configure_main_offer_for_mint_to(&mut svm, &payer, &onyc_mint, &TOKEN_PROGRAM_ID);
+
     // Mint a large amount - should succeed with no limit
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 1_000_000_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        1_000_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
     let boss_ata = get_associated_token_address(&boss, &onyc_mint);

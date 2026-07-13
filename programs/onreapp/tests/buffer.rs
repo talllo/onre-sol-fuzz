@@ -117,11 +117,17 @@ fn setup_buffer_context(
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 1_000_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_set_main_offer_ix(&boss, &offer_pda);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
-    let ix = build_set_main_offer_ix(&boss, &offer_pda);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        1_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &offer_pda,
+    );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 

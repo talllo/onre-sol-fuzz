@@ -165,18 +165,42 @@ fn test_mint_to_success() {
     let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
+    let main_offer =
+        configure_main_offer_for_mint_to(&mut svm, &payer, &onyc_mint, &TOKEN_PROGRAM_ID);
+
     // Transfer mint authority to program
     let ix = build_transfer_mint_authority_to_program_ix(&boss, &onyc_mint, &TOKEN_PROGRAM_ID);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
     // Mint tokens
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 1_000_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        1_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
     let boss_onyc_ata = get_associated_token_address(&boss, &onyc_mint);
     assert_eq!(get_token_balance(&svm, &boss_onyc_ata), 1_000_000_000);
     assert_eq!(get_mint_supply(&svm, &onyc_mint), 1_000_000_000);
+}
+
+#[test]
+fn test_mint_to_rejects_unset_main_offer() {
+    let (mut svm, payer, onyc_mint) = setup_initialized();
+    let boss = payer.pubkey();
+
+    let ix = build_transfer_mint_authority_to_program_ix(&boss, &onyc_mint, &TOKEN_PROGRAM_ID);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_slot(&mut svm);
+
+    let ix = build_mint_to_ix(&boss, &onyc_mint, 1_000_000_000, &TOKEN_PROGRAM_ID);
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(result.is_err(), "mint_to must require state.main_offer");
+    assert_eq!(get_mint_supply(&svm, &onyc_mint), 0);
 }
 
 #[test]
@@ -237,15 +261,30 @@ fn test_mint_to_multiple_times_accumulates() {
     let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
+    let main_offer =
+        configure_main_offer_for_mint_to(&mut svm, &payer, &onyc_mint, &TOKEN_PROGRAM_ID);
+
     let ix = build_transfer_mint_authority_to_program_ix(&boss, &onyc_mint, &TOKEN_PROGRAM_ID);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 500_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        500_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 300_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        300_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
     let boss_onyc_ata = get_associated_token_address(&boss, &onyc_mint);
@@ -258,6 +297,9 @@ fn test_mint_to_creates_boss_token_account() {
     let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
+    let main_offer =
+        configure_main_offer_for_mint_to(&mut svm, &payer, &onyc_mint, &TOKEN_PROGRAM_ID);
+
     let ix = build_transfer_mint_authority_to_program_ix(&boss, &onyc_mint, &TOKEN_PROGRAM_ID);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
@@ -267,7 +309,13 @@ fn test_mint_to_creates_boss_token_account() {
     assert!(svm.get_account(&boss_onyc_ata).is_none());
 
     // Mint should create the account
-    let ix = build_mint_to_ix(&boss, &onyc_mint, 1_000_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &onyc_mint,
+        1_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
     assert_eq!(get_token_balance(&svm, &boss_onyc_ata), 1_000_000_000);
@@ -289,8 +337,17 @@ fn test_mint_to_works_with_updated_onyc_mint() {
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
+    let main_offer =
+        configure_main_offer_for_mint_to(&mut svm, &payer, &new_onyc_mint, &TOKEN_PROGRAM_ID);
+
     // Mint from new onyc mint
-    let ix = build_mint_to_ix(&boss, &new_onyc_mint, 500_000_000, &TOKEN_PROGRAM_ID);
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &new_onyc_mint,
+        500_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
     let boss_new_ata = get_associated_token_address(&boss, &new_onyc_mint);
@@ -445,7 +502,7 @@ fn test_transfer_mint_authority_round_trip_token2022() {
 }
 
 #[test]
-fn test_mint_to_token2022() {
+fn test_mint_to_rejects_token2022_onyc_market_stats() {
     let (mut svm, payer, _onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
@@ -461,16 +518,25 @@ fn test_mint_to_token2022() {
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
-    // Mint tokens
-    let ix = build_mint_to_ix(
+    let main_offer =
+        configure_main_offer_for_mint_to(&mut svm, &payer, &token2022_mint, &TOKEN_2022_PROGRAM_ID);
+
+    // A configured main offer is mandatory, and minting refreshes market stats.
+    // Market-stat recomputation intentionally supports classic SPL Token ONyc only.
+    let ix = build_mint_to_ix_for_offer(
         &boss,
         &token2022_mint,
         1_000_000_000,
         &TOKEN_2022_PROGRAM_ID,
+        &main_offer,
     );
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let result = send_tx(&mut svm, &[ix], &[&payer]);
+    assert!(
+        result.is_err(),
+        "Token-2022 ONyc must be rejected by market-stat recomputation"
+    );
 
     let boss_ata = get_associated_token_address_2022(&boss, &token2022_mint);
-    assert_eq!(get_token_balance(&svm, &boss_ata), 1_000_000_000);
-    assert_eq!(get_mint_supply(&svm, &token2022_mint), 1_000_000_000);
+    assert!(svm.get_account(&boss_ata).is_none());
+    assert_eq!(get_mint_supply(&svm, &token2022_mint), 0);
 }

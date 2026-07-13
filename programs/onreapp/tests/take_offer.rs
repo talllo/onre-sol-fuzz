@@ -13,6 +13,7 @@ const ONE_YEAR_SECONDS: u64 = 31_536_000;
 ///   - Initialized state
 ///   - USDC (token_in, 6 decimals) and ONyc (token_out, 9 decimals)
 ///   - Offer created with 0% fee
+///   - Main offer intentionally left unset for legacy-path compatibility
 ///   - Vault funded with 10,000 token_out (10_000e9)
 ///   - User funded with 10,000 token_in (10_000e6)
 ///   - Boss token_in account created
@@ -26,6 +27,12 @@ struct TakeOfferCtx {
 
 fn setup_take_offer() -> TakeOfferCtx {
     setup_take_offer_with_fee(0)
+}
+
+fn setup_take_offer_v2() -> TakeOfferCtx {
+    let mut ctx = setup_take_offer();
+    configure_main_offer(&mut ctx);
+    ctx
 }
 
 fn setup_take_offer_with_fee(fee_bps: u16) -> TakeOfferCtx {
@@ -45,9 +52,7 @@ fn setup_take_offer_with_fee(fee_bps: u16) -> TakeOfferCtx {
     );
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
-    let (offer_pda, _) = find_offer_pda(&usdc_mint, &onyc_mint);
-    let ix = build_set_main_offer_ix(&boss, &offer_pda);
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    assert_eq!(read_state(&svm).main_offer, Pubkey::default());
 
     // Create vault accounts (pre-funded)
     let (vault_authority, _) = find_offer_vault_authority_pda();
@@ -69,6 +74,13 @@ fn setup_take_offer_with_fee(fee_bps: u16) -> TakeOfferCtx {
         onyc_mint,
         user,
     }
+}
+
+fn configure_main_offer(ctx: &mut TakeOfferCtx) {
+    let boss = ctx.payer.pubkey();
+    let (offer_pda, _) = find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_set_main_offer_ix(&boss, &offer_pda);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 }
 
 fn add_default_offer_vector(ctx: &mut TakeOfferCtx) {
@@ -109,7 +121,7 @@ fn build_default_take_offer_ix(
 
 #[test]
 fn test_price_first_interval() {
-    let mut ctx = setup_take_offer();
+    let mut ctx = setup_take_offer_v2();
     let boss = ctx.payer.pubkey();
     let current_time = get_clock_time(&ctx.svm);
 
@@ -234,7 +246,7 @@ fn test_take_offer_failure_does_not_create_market_stats() {
 
 #[test]
 fn test_take_offer_v2_accrues_buffer_and_splits_fees() {
-    let mut ctx = setup_take_offer();
+    let mut ctx = setup_take_offer_v2();
     let boss = ctx.payer.pubkey();
     let current_time = get_clock_time(&ctx.svm);
 
@@ -377,7 +389,7 @@ fn test_take_offer_v2_accrues_buffer_and_splits_fees() {
 
 #[test]
 fn test_take_offer_v2_refills_redemption_vault_then_overflows_to_offer_proceeds() {
-    let mut ctx = setup_take_offer();
+    let mut ctx = setup_take_offer_v2();
     let boss = ctx.payer.pubkey();
     add_default_offer_vector(&mut ctx);
 
@@ -456,7 +468,7 @@ fn test_take_offer_v2_refills_redemption_vault_then_overflows_to_offer_proceeds(
 
 #[test]
 fn test_take_offer_v2_rejects_invalid_buffer_vault_account_on_accrual_path() {
-    let mut ctx = setup_take_offer();
+    let mut ctx = setup_take_offer_v2();
     let boss = ctx.payer.pubkey();
     let current_time = get_clock_time(&ctx.svm);
 

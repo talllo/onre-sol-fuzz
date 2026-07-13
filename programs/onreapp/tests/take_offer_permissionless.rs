@@ -11,6 +11,7 @@ const ONE_YEAR_SECONDS: u64 = 31_536_000;
 ///   - Initialized state with boss as upgrade authority
 ///   - USDC (token_in, 6 decimals) and ONyc (token_out, 9 decimals)
 ///   - Offer created with needs_approval + allow_permissionless
+///   - Main offer intentionally left unset for legacy-path compatibility
 ///   - Offer vector added (price = 1.0, no APR, 1-day price_fix_duration)
 ///   - Vault funded with token_out
 ///   - Permissionless authority intermediary accounts created
@@ -35,9 +36,7 @@ fn setup_permissionless_offer() -> PermissionlessOfferCtx {
     );
     send_tx(&mut svm, &[ix], &[&payer]).expect("make_offer failed");
 
-    let (offer_pda, _) = find_offer_pda(&usdc_mint, &onyc_mint);
-    let ix = build_set_main_offer_ix(&boss, &offer_pda);
-    send_tx(&mut svm, &[ix], &[&payer]).expect("set_main_offer failed");
+    assert_eq!(read_state(&svm).main_offer, Pubkey::default());
 
     // Add offer vector: start_time = current clock time, base_price = 1.0 (1_000_000_000),
     // apr = 0, price_fix_duration = 86400 (1 day)
@@ -396,6 +395,16 @@ fn setup_permissionless_no_approval() -> PermissionlessNoApprovalCtx {
     setup_permissionless_no_approval_with_fee(0)
 }
 
+fn setup_permissionless_no_approval_v2() -> PermissionlessNoApprovalCtx {
+    setup_permissionless_no_approval_v2_with_fee(0)
+}
+
+fn setup_permissionless_no_approval_v2_with_fee(fee_bps: u16) -> PermissionlessNoApprovalCtx {
+    let mut ctx = setup_permissionless_no_approval_with_fee(fee_bps);
+    configure_main_offer(&mut ctx);
+    ctx
+}
+
 fn setup_permissionless_no_approval_with_fee(fee_bps: u16) -> PermissionlessNoApprovalCtx {
     let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
@@ -419,9 +428,7 @@ fn setup_permissionless_no_approval_with_fee(fee_bps: u16) -> PermissionlessNoAp
         send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     }
 
-    let (offer_pda, _) = find_offer_pda(&usdc_mint, &onyc_mint);
-    let ix = build_set_main_offer_ix(&boss, &offer_pda);
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    assert_eq!(read_state(&svm).main_offer, Pubkey::default());
 
     let (vault_authority, _) = find_offer_vault_authority_pda();
     create_token_account(&mut svm, &onyc_mint, &vault_authority, 1_000_000_000_000);
@@ -447,13 +454,20 @@ fn setup_permissionless_no_approval_with_fee(fee_bps: u16) -> PermissionlessNoAp
     }
 }
 
+fn configure_main_offer(ctx: &mut PermissionlessNoApprovalCtx) {
+    let boss = ctx.payer.pubkey();
+    let (offer_pda, _) = find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_set_main_offer_ix(&boss, &offer_pda);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+}
+
 // ===========================================================================
 // Basic Flow Tests
 // ===========================================================================
 
 #[test]
 fn test_permissionless_basic_success() {
-    let mut ctx = setup_permissionless_no_approval();
+    let mut ctx = setup_permissionless_no_approval_v2();
     let boss = ctx.payer.pubkey();
     let current_time = get_clock_time(&ctx.svm);
 
@@ -497,7 +511,7 @@ fn test_permissionless_basic_success() {
 
 #[test]
 fn test_regular_and_permissionless_use_different_offer_fees_for_same_amount() {
-    let mut ctx = setup_permissionless_no_approval_with_fee(0);
+    let mut ctx = setup_permissionless_no_approval_v2_with_fee(0);
     let boss = ctx.payer.pubkey();
     let current_time = get_clock_time(&ctx.svm);
 
@@ -575,7 +589,7 @@ fn test_regular_and_permissionless_use_different_offer_fees_for_same_amount() {
 
 #[test]
 fn test_take_offer_permissionless_v2_accrues_buffer_and_refreshes_market_stats() {
-    let mut ctx = setup_permissionless_no_approval();
+    let mut ctx = setup_permissionless_no_approval_v2();
     let boss = ctx.payer.pubkey();
     let current_time = get_clock_time(&ctx.svm);
 
@@ -702,7 +716,7 @@ fn test_take_offer_permissionless_v2_accrues_buffer_and_refreshes_market_stats()
 
 #[test]
 fn test_take_offer_permissionless_v2_refills_redemption_vault_then_overflows_to_offer_proceeds() {
-    let mut ctx = setup_permissionless_no_approval();
+    let mut ctx = setup_permissionless_no_approval_v2();
     let boss = ctx.payer.pubkey();
     let current_time = get_clock_time(&ctx.svm);
 
