@@ -24,6 +24,7 @@ pub struct SetBufferFeeConfig<'info> {
     )]
     pub state: Box<Account<'info, State>>,
 
+    #[account(mut)]
     pub boss: Signer<'info>,
 
     #[account(address = state.main_offer @ crate::OnreError::InvalidMainOffer)]

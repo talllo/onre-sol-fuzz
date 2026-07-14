@@ -99,6 +99,11 @@ Typical on-chain BUFFER setup order:
 4. call `set_buffer_gross_apr`
 5. optionally call `set_buffer_fee_config`
 
+`set_buffer_gross_apr`, `set_buffer_fee_config`, and `burn_for_nav_increase`
+accept a writable boss signer because the boss pays for lazy `MarketStats` PDA
+creation. Integrations may instead initialize that PDA first with the
+permissionless `refresh_market_stats` instruction.
+
 ### Constants
 
 | Constant              | Value      |

@@ -131,7 +131,7 @@ pub fn build_set_buffer_gross_yield_ix(
         program_id: PROGRAM_ID,
         accounts: vec![
             AccountMeta::new_readonly(state_pda, false),
-            AccountMeta::new_readonly(*boss, true),
+            AccountMeta::new(*boss, true),
             AccountMeta::new_readonly(*main_offer, false),
             AccountMeta::new(*onyc_mint, false),
             AccountMeta::new_readonly(offer_vault_authority_pda, false),
@@ -184,7 +184,7 @@ pub fn build_set_buffer_fee_config_ix(
         program_id: PROGRAM_ID,
         accounts: vec![
             AccountMeta::new_readonly(state_pda, false),
-            AccountMeta::new_readonly(*boss, true),
+            AccountMeta::new(*boss, true),
             AccountMeta::new_readonly(*main_offer, false),
             AccountMeta::new(*onyc_mint, false),
             AccountMeta::new_readonly(offer_vault_authority_pda, false),
@@ -317,7 +317,7 @@ pub fn build_burn_for_nav_increase_ix(
         accounts: vec![
             AccountMeta::new_readonly(state_pda, false),
             AccountMeta::new(buffer_state_pda, false),
-            AccountMeta::new_readonly(*boss, true),
+            AccountMeta::new(*boss, true),
             AccountMeta::new_readonly(*main_offer, false),
             AccountMeta::new(*onyc_mint, false),
             AccountMeta::new_readonly(offer_vault_authority_pda, false),
