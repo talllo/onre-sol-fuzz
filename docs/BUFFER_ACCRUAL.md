@@ -81,7 +81,13 @@ Inputs:
 - stored `previous_supply`
 - stored `last_accrual_timestamp`
 - current ONyc mint supply before any accrual mint
-- current NAV from the offer supplied to the accrual path
+- active APR and current NAV from `State.main_offer`
+
+BUFFER state is global rather than per offer, so all BUFFER-aware paths use the
+same canonical `State.main_offer` for accrual. A trade, Prop AMM pair, or
+redemption may use another linked offer to calculate the user's execution
+price; that pair-specific offer does not change the APR or NAV used to settle
+BUFFER.
 
 Steps:
 

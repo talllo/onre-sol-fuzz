@@ -2001,11 +2001,18 @@ fn test_quote_swap_sell_caps_hard_wall_reserve_by_vault_target() {
 fn test_open_swap_sell_accrues_buffer_before_burning_onyc() {
     let mut ctx = setup_prop_amm();
     let boss = ctx.payer.pubkey();
-    let current_time = get_clock_time(&ctx.svm);
 
     let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
+    let (main_asset_mint, main_offer) = configure_main_offer_with_asset_and_apr(
+        &mut ctx.svm,
+        &ctx.payer,
+        &ctx.onyc_mint,
+        &TOKEN_PROGRAM_ID,
+        50_000,
+    );
+    let current_time = get_clock_time(&ctx.svm);
     let ix = build_add_offer_vector_ix(
         &boss,
         &ctx.usdc_mint,
@@ -2026,11 +2033,10 @@ fn test_open_swap_sell_accrues_buffer_before_burning_onyc() {
         2_000_000_000,
     );
 
-    let (offer_pda, _) = find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint);
-    let ix = build_initialize_buffer_ix(&boss, &offer_pda, &ctx.onyc_mint);
+    let ix = build_initialize_buffer_ix(&boss, &main_offer, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
-    let ix = build_set_buffer_gross_yield_ix(&boss, &offer_pda, &ctx.onyc_mint, 100_000);
+    let ix = build_set_buffer_gross_yield_ix(&boss, &main_offer, &ctx.onyc_mint, 150_000);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     let (redemption_vault_authority, _) = find_redemption_vault_authority_pda();
@@ -2040,7 +2046,7 @@ fn test_open_swap_sell_accrues_buffer_before_burning_onyc() {
         &redemption_vault_authority,
         10_000_000_000,
     );
-    let ix = build_refresh_market_stats_ix(&boss, &ctx.usdc_mint, &ctx.onyc_mint);
+    let ix = build_refresh_market_stats_ix(&boss, &main_asset_mint, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     advance_clock_by(&mut ctx.svm, ONE_YEAR_SECONDS);
@@ -2055,7 +2061,7 @@ fn test_open_swap_sell_accrues_buffer_before_burning_onyc() {
     let buffer_vault_before = get_token_balance(&ctx.svm, &buffer_vault);
 
     let sell_amount = 100_000_000;
-    let ix = build_open_swap_sell_ix(
+    let ix = build_open_swap_sell_ix_with_main_offer(
         &ctx.onyc_mint,
         &ctx.user.pubkey(),
         &boss,
@@ -2065,11 +2071,12 @@ fn test_open_swap_sell_accrues_buffer_before_burning_onyc() {
         0,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
+        &main_offer,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
 
     let expected_buffer_accrual =
-        (buffer_state_before.previous_supply as u128 * 100_000 / 1_000_000) as u64;
+        (buffer_state_before.previous_supply as u128 * 100_000 / (1_000_000 + 50_000)) as u64;
     let supply_after = get_mint_supply(&ctx.svm, &ctx.onyc_mint);
     let buffer_state_after = read_buffer_state(&ctx.svm);
 
@@ -2083,6 +2090,82 @@ fn test_open_swap_sell_accrues_buffer_before_burning_onyc() {
         supply_before + expected_buffer_accrual - sell_amount
     );
     assert_eq!(buffer_state_after.previous_supply, supply_after);
+}
+
+#[test]
+fn test_open_swap_buy_prices_buffer_from_main_offer() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+
+    let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let (_main_asset_mint, main_offer) = configure_main_offer_with_asset_and_apr(
+        &mut ctx.svm,
+        &ctx.payer,
+        &ctx.onyc_mint,
+        &TOKEN_PROGRAM_ID,
+        50_000,
+    );
+    add_prop_amm_vector(&mut ctx);
+
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &ctx.onyc_mint,
+        1_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    let ix = build_initialize_buffer_ix(&boss, &main_offer, &ctx.onyc_mint);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    let ix = build_set_buffer_gross_yield_ix(&boss, &main_offer, &ctx.onyc_mint, 150_000);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    advance_clock_by(&mut ctx.svm, ONE_YEAR_SECONDS);
+
+    let buffer_state_before = read_buffer_state(&ctx.svm);
+    let supply_before = get_mint_supply(&ctx.svm, &ctx.onyc_mint);
+    let buffer_vault = derive_ata(
+        &find_reserve_vault_authority_pda().0,
+        &ctx.onyc_mint,
+        &TOKEN_PROGRAM_ID,
+    );
+    let buffer_vault_before = get_token_balance(&ctx.svm, &buffer_vault);
+
+    let ix = build_open_swap_buy_ix_with_main_offer(
+        &ctx.onyc_mint,
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        1_000_000,
+        0,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
+
+    let expected_buffer_accrual =
+        (buffer_state_before.previous_supply as u128 * 100_000 / (1_000_000 + 50_000)) as u64;
+    let user_mint = get_token_balance(
+        &ctx.svm,
+        &get_associated_token_address(&ctx.user.pubkey(), &ctx.onyc_mint),
+    );
+    let supply_after = get_mint_supply(&ctx.svm, &ctx.onyc_mint);
+
+    assert_eq!(buffer_state_before.previous_supply, supply_before);
+    assert_eq!(
+        get_token_balance(&ctx.svm, &buffer_vault) - buffer_vault_before,
+        expected_buffer_accrual
+    );
+    assert_eq!(user_mint, 1_000_000_000);
+    assert_eq!(
+        supply_after,
+        supply_before + expected_buffer_accrual + user_mint
+    );
+    assert_eq!(read_buffer_state(&ctx.svm).previous_supply, supply_after);
 }
 
 #[test]

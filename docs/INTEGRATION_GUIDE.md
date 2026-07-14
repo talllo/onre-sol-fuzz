@@ -8,7 +8,7 @@ Simple guide for integrating NAV and APY queries into your application.
 
 The Onre program provides **read-only view instructions** to query market data. Use the program IDL and standard Anchor client libraries to make these calls.
 
-For BUFFER integrations, keep in mind that BUFFER accrual does not accept a caller-provided current yield. Instead, `current_yield` is derived from the active APR on the offer supplied to the accrual path.
+For BUFFER integrations, keep in mind that BUFFER accrual does not accept a caller-provided current yield. Instead, `current_yield` is derived from the active APR on `state.main_offer`, even when the surrounding trade or redemption is priced by another offer.
 
 **Program ID (Mainnet):** `onreuGhHHgVzMWSkj2oQDLDtvvGvoepBPkqyaubFcwe`
 
@@ -251,9 +251,9 @@ const [vaultAuthority] = PublicKey.findProgramAddressSync(
 If your integration touches BUFFER:
 
 - `initialize_buffer` must be given an offer account, and that offer's `token_out_mint` must be the ONyc mint
-- `set_main_offer` changes the offer used by `initialize_buffer`, `set_buffer_gross_apr`, and ONYC market-stat refresh paths that need the canonical offer
+- `set_main_offer` changes the canonical offer used by every BUFFER accrual and ONYC market-stat refresh path
 - `set_buffer_gross_apr` first settles pending BUFFER accrual and refreshes market stats, then updates `gross_apr`
-- BUFFER accrual reads `current_yield` from the active vector APR on the offer supplied to that accrual path
+- BUFFER accrual reads `current_yield` and current NAV from the active vector on `state.main_offer`; a separate traded offer only determines user execution pricing
 
 ### Recommended BUFFER Rollout
 

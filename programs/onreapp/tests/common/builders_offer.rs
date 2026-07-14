@@ -173,6 +173,32 @@ pub fn build_take_offer_permissionless_v2_ix(
     token_in_program: &Pubkey,
     token_out_program: &Pubkey,
 ) -> Instruction {
+    let (main_offer, _) = find_offer_pda(token_in_mint, token_out_mint);
+    build_take_offer_permissionless_v2_ix_with_main_offer(
+        user,
+        _boss,
+        token_in_mint,
+        token_out_mint,
+        token_in_amount,
+        approval_message,
+        token_in_program,
+        token_out_program,
+        &main_offer,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_take_offer_permissionless_v2_ix_with_main_offer(
+    user: &Pubkey,
+    _boss: &Pubkey,
+    token_in_mint: &Pubkey,
+    token_out_mint: &Pubkey,
+    token_in_amount: u64,
+    approval_message: Option<&[u8]>,
+    token_in_program: &Pubkey,
+    token_out_program: &Pubkey,
+    main_offer: &Pubkey,
+) -> Instruction {
     let (state_pda, _) = find_state_pda();
     let (offer_pda, _) = find_offer_pda(token_in_mint, token_out_mint);
     let (vault_authority_pda, _) = find_offer_vault_authority_pda();
@@ -184,7 +210,6 @@ pub fn build_take_offer_permissionless_v2_ix(
     let (performance_fee_vault_pda, _) = find_performance_fee_vault_pda();
     let (market_stats_pda, _) = find_market_stats_pda();
     let (excluded_balance_pda, _) = find_circulating_supply_excluded_balance_pda();
-    let (main_offer_pda, _) = find_offer_pda(token_in_mint, token_out_mint);
     let vault_token_in_ata = derive_ata(&vault_authority_pda, token_in_mint, token_in_program);
     let vault_token_out_ata = derive_ata(&vault_authority_pda, token_out_mint, token_out_program);
     let permissionless_token_in_ata = derive_ata(
@@ -271,7 +296,7 @@ pub fn build_take_offer_permissionless_v2_ix(
             AccountMeta::new(*user, true),
             AccountMeta::new_readonly(ATA_PROGRAM_ID, false),
             AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
-            AccountMeta::new_readonly(main_offer_pda, false),
+            AccountMeta::new_readonly(*main_offer, false),
         ],
         data,
     }
@@ -430,6 +455,32 @@ pub fn build_take_offer_v2_ix(
     token_in_program: &Pubkey,
     token_out_program: &Pubkey,
 ) -> Instruction {
+    let (main_offer, _) = find_offer_pda(token_in_mint, token_out_mint);
+    build_take_offer_v2_ix_with_main_offer(
+        user,
+        _boss,
+        token_in_mint,
+        token_out_mint,
+        token_in_amount,
+        approval_message,
+        token_in_program,
+        token_out_program,
+        &main_offer,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_take_offer_v2_ix_with_main_offer(
+    user: &Pubkey,
+    _boss: &Pubkey,
+    token_in_mint: &Pubkey,
+    token_out_mint: &Pubkey,
+    token_in_amount: u64,
+    approval_message: Option<&[u8]>,
+    token_in_program: &Pubkey,
+    token_out_program: &Pubkey,
+    main_offer: &Pubkey,
+) -> Instruction {
     let (state_pda, _) = find_state_pda();
     let (offer_pda, _) = find_offer_pda(token_in_mint, token_out_mint);
     let (vault_authority_pda, _) = find_offer_vault_authority_pda();
@@ -440,7 +491,6 @@ pub fn build_take_offer_v2_ix(
     let (performance_fee_vault_pda, _) = find_performance_fee_vault_pda();
     let (market_stats_pda, _) = find_market_stats_pda();
     let (excluded_balance_pda, _) = find_circulating_supply_excluded_balance_pda();
-    let (main_offer_pda, _) = find_offer_pda(token_in_mint, token_out_mint);
     let vault_token_in_ata = derive_ata(&vault_authority_pda, token_in_mint, token_in_program);
     let vault_token_out_ata = derive_ata(&vault_authority_pda, token_out_mint, token_out_program);
     let user_token_in_ata = derive_ata(user, token_in_mint, token_in_program);
@@ -510,7 +560,7 @@ pub fn build_take_offer_v2_ix(
             AccountMeta::new(*user, true),
             AccountMeta::new_readonly(ATA_PROGRAM_ID, false),
             AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
-            AccountMeta::new_readonly(main_offer_pda, false),
+            AccountMeta::new_readonly(*main_offer, false),
         ],
         data,
     }
@@ -594,6 +644,44 @@ pub fn build_open_swap_buy_ix(
     token_in_program: &Pubkey,
     token_out_program: &Pubkey,
 ) -> Instruction {
+    let canonical_token_in = if token_in_mint == onyc_mint {
+        token_out_mint
+    } else {
+        token_in_mint
+    };
+    let canonical_token_out = if token_out_mint == onyc_mint {
+        token_out_mint
+    } else {
+        token_in_mint
+    };
+    let (main_offer, _) = find_offer_pda(canonical_token_in, canonical_token_out);
+    build_open_swap_buy_ix_with_main_offer(
+        onyc_mint,
+        user,
+        _boss,
+        token_in_mint,
+        token_out_mint,
+        token_in_amount,
+        minimum_out,
+        token_in_program,
+        token_out_program,
+        &main_offer,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_open_swap_buy_ix_with_main_offer(
+    onyc_mint: &Pubkey,
+    user: &Pubkey,
+    _boss: &Pubkey,
+    token_in_mint: &Pubkey,
+    token_out_mint: &Pubkey,
+    token_in_amount: u64,
+    minimum_out: u64,
+    token_in_program: &Pubkey,
+    token_out_program: &Pubkey,
+    main_offer: &Pubkey,
+) -> Instruction {
     let (state_pda, _) = find_state_pda();
     let canonical_token_in = if token_in_mint == onyc_mint {
         token_out_mint
@@ -618,7 +706,6 @@ pub fn build_open_swap_buy_ix(
     let (performance_fee_vault_pda, _) = find_performance_fee_vault_pda();
     let (market_stats_pda, _) = find_market_stats_pda();
     let (excluded_balance_pda, _) = find_circulating_supply_excluded_balance_pda();
-    let (main_offer_pda, _) = find_offer_pda(canonical_token_in, canonical_token_out);
     let offer_vault_token_in_ata =
         derive_ata(&offer_vault_authority_pda, token_in_mint, token_in_program);
     let offer_vault_token_out_ata = derive_ata(
@@ -703,7 +790,7 @@ pub fn build_open_swap_buy_ix(
             AccountMeta::new(*user, true),
             AccountMeta::new_readonly(ATA_PROGRAM_ID, false),
             AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
-            AccountMeta::new_readonly(main_offer_pda, false),
+            AccountMeta::new_readonly(*main_offer, false),
         ],
         data,
     }
@@ -719,6 +806,44 @@ pub fn build_open_swap_sell_ix(
     minimum_out: u64,
     token_in_program: &Pubkey,
     token_out_program: &Pubkey,
+) -> Instruction {
+    let canonical_token_in = if token_in_mint == onyc_mint {
+        token_out_mint
+    } else {
+        token_in_mint
+    };
+    let canonical_token_out = if token_out_mint == onyc_mint {
+        token_out_mint
+    } else {
+        token_in_mint
+    };
+    let (main_offer, _) = find_offer_pda(canonical_token_in, canonical_token_out);
+    build_open_swap_sell_ix_with_main_offer(
+        onyc_mint,
+        user,
+        _boss,
+        token_in_mint,
+        token_out_mint,
+        token_in_amount,
+        minimum_out,
+        token_in_program,
+        token_out_program,
+        &main_offer,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_open_swap_sell_ix_with_main_offer(
+    onyc_mint: &Pubkey,
+    user: &Pubkey,
+    _boss: &Pubkey,
+    token_in_mint: &Pubkey,
+    token_out_mint: &Pubkey,
+    token_in_amount: u64,
+    minimum_out: u64,
+    token_in_program: &Pubkey,
+    token_out_program: &Pubkey,
+    main_offer: &Pubkey,
 ) -> Instruction {
     let (state_pda, _) = find_state_pda();
     let canonical_token_in = if token_in_mint == onyc_mint {
@@ -743,7 +868,6 @@ pub fn build_open_swap_sell_ix(
     let (performance_fee_vault_pda, _) = find_performance_fee_vault_pda();
     let (market_stats_pda, _) = find_market_stats_pda();
     let (excluded_balance_pda, _) = find_circulating_supply_excluded_balance_pda();
-    let (main_offer_pda, _) = find_offer_pda(canonical_token_in, canonical_token_out);
     let redemption_vault_token_in_ata = derive_ata(
         &redemption_vault_authority_pda,
         token_in_mint,
@@ -814,7 +938,7 @@ pub fn build_open_swap_sell_ix(
             AccountMeta::new(*user, true),
             AccountMeta::new_readonly(ATA_PROGRAM_ID, false),
             AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
-            AccountMeta::new_readonly(main_offer_pda, false),
+            AccountMeta::new_readonly(*main_offer, false),
             AccountMeta::new_readonly(offer_vault_onyc_ata, false),
         ],
         data,

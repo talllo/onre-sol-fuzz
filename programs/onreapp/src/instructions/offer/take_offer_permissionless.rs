@@ -629,13 +629,30 @@ pub(crate) fn execute_take_offer_permissionless<'info>(
             )
         })
         .unwrap_or(false);
+    let main_offer = if is_onyc_token_out_mint(state, token_out_mint) {
+        market_stats_refresh
+            .as_ref()
+            .map(|refresh| {
+                load_main_offer(
+                    program_id,
+                    &refresh.main_offer_account.to_account_info(),
+                    state,
+                )
+            })
+            .transpose()?
+    } else {
+        None
+    };
     let accrual = if should_accrue {
         let buffer_accounts = buffer_accounts.expect("checked above");
+        let canonical_offer = main_offer
+            .as_ref()
+            .ok_or(crate::OnreError::InvalidMainOffer)?;
         Some(accrue_buffer_from_accounts(
             program_id,
             state,
             buffer_accounts,
-            &offer,
+            canonical_offer,
             token_out_mint,
             mint_authority.to_account_info(),
             ma_bump,
@@ -761,11 +778,9 @@ pub(crate) fn execute_take_offer_permissionless<'info>(
 
     if is_onyc_token_out_mint(state, token_out_mint) {
         if let Some(refresh) = market_stats_refresh.as_ref() {
-            let main_offer = load_main_offer(
-                program_id,
-                &refresh.main_offer_account.to_account_info(),
-                state,
-            )?;
+            let main_offer = main_offer
+                .as_ref()
+                .ok_or(crate::OnreError::InvalidMainOffer)?;
             let (market_stats_pda, _) =
                 Pubkey::find_program_address(&[seeds::MARKET_STATS], program_id);
             require_keys_eq!(
@@ -779,7 +794,7 @@ pub(crate) fn execute_take_offer_permissionless<'info>(
             );
             token_out_mint.reload()?;
             refresh_market_stats_pda(
-                &main_offer,
+                main_offer,
                 token_out_mint,
                 &refresh
                     .circulating_supply_excluded_balance

@@ -591,12 +591,18 @@ fn test_regular_and_permissionless_use_different_offer_fees_for_same_amount() {
 fn test_take_offer_permissionless_v2_accrues_buffer_and_refreshes_market_stats() {
     let mut ctx = setup_permissionless_no_approval_v2();
     let boss = ctx.payer.pubkey();
-    let current_time = get_clock_time(&ctx.svm);
 
     let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
-    let (offer_pda, _) = find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint);
+    let main_offer = configure_main_offer_for_mint_to_with_apr(
+        &mut ctx.svm,
+        &ctx.payer,
+        &ctx.onyc_mint,
+        &TOKEN_PROGRAM_ID,
+        50_000,
+    );
+    let current_time = get_clock_time(&ctx.svm);
     let ix = build_add_offer_vector_ix(
         &boss,
         &ctx.usdc_mint,
@@ -614,12 +620,12 @@ fn test_take_offer_permissionless_v2_accrues_buffer_and_refreshes_market_stats()
         &ctx.onyc_mint,
         1_000_000_000,
         &TOKEN_PROGRAM_ID,
-        &offer_pda,
+        &main_offer,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
     advance_slot(&mut ctx.svm);
 
-    let ix = build_initialize_buffer_ix(&boss, &offer_pda, &ctx.onyc_mint);
+    let ix = build_initialize_buffer_ix(&boss, &main_offer, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     let ix = build_mint_to_ix_for_offer(
@@ -627,14 +633,14 @@ fn test_take_offer_permissionless_v2_accrues_buffer_and_refreshes_market_stats()
         &ctx.onyc_mint,
         1_000_000_000,
         &TOKEN_PROGRAM_ID,
-        &offer_pda,
+        &main_offer,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
-    let ix = build_set_buffer_gross_yield_ix(&boss, &offer_pda, &ctx.onyc_mint, 100_000);
+    let ix = build_set_buffer_gross_yield_ix(&boss, &main_offer, &ctx.onyc_mint, 150_000);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
-    let ix = build_set_buffer_fee_config_ix(&boss, &offer_pda, &ctx.onyc_mint, 100, 1_000);
+    let ix = build_set_buffer_fee_config_ix(&boss, &main_offer, &ctx.onyc_mint, 100, 1_000);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     let supply_before = get_mint_supply(&ctx.svm, &ctx.onyc_mint);
@@ -649,7 +655,7 @@ fn test_take_offer_permissionless_v2_accrues_buffer_and_refreshes_market_stats()
 
     advance_clock_by(&mut ctx.svm, ONE_YEAR_SECONDS);
 
-    let ix = build_take_offer_permissionless_v2_ix(
+    let ix = build_take_offer_permissionless_v2_ix_with_main_offer(
         &ctx.user.pubkey(),
         &boss,
         &ctx.usdc_mint,
@@ -658,6 +664,7 @@ fn test_take_offer_permissionless_v2_accrues_buffer_and_refreshes_market_stats()
         None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
+        &main_offer,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
 
@@ -685,7 +692,7 @@ fn test_take_offer_permissionless_v2_accrues_buffer_and_refreshes_market_stats()
             &TOKEN_PROGRAM_ID,
         ),
     );
-    let gross_accrual = supply_before / 10;
+    let gross_accrual = ((supply_before as u128) * 100_000 / (1_000_000 + 50_000)) as u64;
     let expected_management_fee = gross_accrual / 10;
     let remaining_after_management = gross_accrual - expected_management_fee;
     let expected_performance_fee = remaining_after_management / 10;
@@ -709,9 +716,12 @@ fn test_take_offer_permissionless_v2_accrues_buffer_and_refreshes_market_stats()
     let market_stats = read_market_stats(&ctx.svm);
     let cached_excluded_balance_before_trade = 1_000_000_000_000;
     let expected_circulating_supply = post_trade_supply - cached_excluded_balance_before_trade;
-    assert_eq!(market_stats.nav, 1_000_000_000);
+    assert!(market_stats.nav > 1_000_000_000);
     assert_eq!(market_stats.circulating_supply, expected_circulating_supply);
-    assert_eq!(market_stats.tvl, expected_circulating_supply);
+    assert_eq!(
+        market_stats.tvl,
+        ((expected_circulating_supply as u128) * (market_stats.nav as u128) / 1_000_000_000) as u64
+    );
 }
 
 #[test]
