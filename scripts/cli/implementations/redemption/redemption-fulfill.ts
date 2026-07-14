@@ -21,12 +21,9 @@ export async function executeRedemptionFulfill(opts: GlobalOptions & Record<stri
                 const redemptionOfferPda = helper.getRedemptionOfferPda(params.tokenIn, params.tokenOut);
                 const redemptionRequestPda = helper.getRedemptionRequestPda(redemptionOfferPda, params.requestId);
 
-                // Validate that redemption_admin is set
-                if (!state.redemptionAdmin || state.redemptionAdmin.equals(PublicKey.default)) {
-                    throw new Error(
-                        "Redemption admin is not set in program state. " +
-                            "Please set a redemption admin first using: pnpm cli state set-redemption-admin",
-                    );
+                // Validate that the worker is set.
+                if (!state.worker || state.worker.equals(PublicKey.default)) {
+                    throw new Error("Worker is not set in program state. " + "Please set a worker first using: pnpm cli state set-worker");
                 }
 
                 // Determine the amount to fulfill
@@ -45,7 +42,7 @@ export async function executeRedemptionFulfill(opts: GlobalOptions & Record<stri
                 return helper.buildFulfillRedemptionRequestIx({
                     redemptionOfferPda,
                     redemptionRequestPda,
-                    redemptionAdmin: state.redemptionAdmin,
+                    worker: state.worker,
                     tokenInMint: params.tokenIn,
                     tokenOutMint: params.tokenOut,
                     tokenInProgram: getTokenProgramId(params.tokenIn),

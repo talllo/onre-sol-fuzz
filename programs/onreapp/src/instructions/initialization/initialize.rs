@@ -163,8 +163,8 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
     // Initialize proposed_boss as unset
     state.proposed_boss = Pubkey::default();
 
-    // Initialize redemption_admin as unset
-    state.redemption_admin = Pubkey::default();
+    // Initialize worker as unset
+    state.worker = Pubkey::default();
 
     msg!(
         "Program state initialized: boss={}, onyc_mint={}, bump={}",

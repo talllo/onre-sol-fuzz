@@ -29,10 +29,10 @@ pub struct RedemptionRequestCancelledEvent {
 /// Account structure for cancelling a redemption request
 ///
 /// This struct defines the accounts required to cancel a redemption request.
-/// The signer can be either the redeemer, redemption_admin, or boss.
+/// The signer can be either the redeemer, worker, or boss.
 #[derive(Accounts)]
 pub struct CancelRedemptionRequest<'info> {
-    /// Program state account containing redemption_admin and boss for authorization
+    /// Program state account containing worker and boss authorization.
     #[account(
         seeds = [seeds::STATE],
         bump = state.bump,
@@ -53,7 +53,7 @@ pub struct CancelRedemptionRequest<'info> {
     pub redemption_offer: Account<'info, RedemptionOffer>,
 
     /// The redemption request account to cancel
-    /// Account is closed after cancellation and rent is returned to redemption_admin
+    /// Account is closed after cancellation and rent is returned to the worker.
     #[account(
         mut,
         seeds = [
@@ -62,17 +62,17 @@ pub struct CancelRedemptionRequest<'info> {
             redemption_request.request_id.to_le_bytes().as_ref()
         ],
         bump = redemption_request.bump,
-        close = redemption_admin,
+        close = worker,
         constraint = redemption_request.offer == redemption_offer.key()
             @ crate::OnreError::OfferMismatch
     )]
     pub redemption_request: Account<'info, RedemptionRequest>,
 
     /// The signer who is cancelling the request
-    /// Can be either the redeemer, redemption_admin, or boss
+    /// Can be either the redeemer, worker, or boss.
     #[account(mut,
         constraint = signer.key() == state.boss ||
-            signer.key() == state.redemption_admin ||
+            signer.key() == state.worker ||
             signer.key() == redemption_request.redeemer
         @ crate::OnreError::Unauthorized
     )]
@@ -86,14 +86,14 @@ pub struct CancelRedemptionRequest<'info> {
     )]
     pub redeemer: UncheckedAccount<'info>,
 
-    /// Redemption admin receives the rent from closing the redemption request
-    /// CHECK: Validated against state.redemption_admin
+    /// Worker receives the rent from closing the redemption request.
+    /// CHECK: Validated against state.worker.
     #[account(
         mut,
-        constraint = redemption_admin.key() == state.redemption_admin
-            @ crate::OnreError::InvalidRedemptionAdmin
+        constraint = worker.key() == state.worker
+            @ crate::OnreError::InvalidWorker
     )]
-    pub redemption_admin: UncheckedAccount<'info>,
+    pub worker: UncheckedAccount<'info>,
 
     /// Program-derived authority that controls redemption vault token accounts
     ///
@@ -142,9 +142,9 @@ pub struct CancelRedemptionRequest<'info> {
 /// Cancels a redemption request
 ///
 /// This instruction cancels an unfulfilled or partially fulfilled redemption request.
-/// The request can be cancelled by the redeemer, redemption_admin, or boss.
+/// The request can be cancelled by the redeemer, worker, or boss.
 /// Upon cancellation, the redemption request account is closed and rent is returned
-/// to the redemption_admin.
+/// to the worker.
 ///
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
@@ -154,10 +154,10 @@ pub struct CancelRedemptionRequest<'info> {
 /// * `Err(crate::OnreError::Unauthorized)` - If signer is not authorized
 ///
 /// # Access Control
-/// - Signer must be one of: redeemer, redemption_admin, or boss
+/// - Signer must be one of: redeemer, worker, or boss
 ///
 /// # Effects
-/// - Closes redemption request account and returns rent to redemption_admin
+/// - Closes redemption request account and returns rent to the worker
 /// - Returns the unfulfilled token_in tokens (original_amount - fulfilled_amount) from vault to redeemer
 /// - Subtracts the returned amount from RedemptionOffer::requested_redemptions
 ///

@@ -274,7 +274,7 @@ function render(): void {
 
 function renderCheatcodeBand(): string {
     const boss = state.stateInfo?.boss.toBase58() ?? "";
-    const redemptionAdmin = state.stateInfo?.redemptionAdmin.toBase58() ?? "";
+    const worker = state.stateInfo?.worker.toBase58() ?? "";
     const fundTarget = state.walletPublicKey?.toBase58() ?? boss;
     const disclaimer = surfpoolEnvironment?.disclaimer ?? "Surfpool cheatcodes only work against a local Surfpool RPC. They are not available on the production mainnet program.";
     return `
@@ -290,8 +290,8 @@ function renderCheatcodeBand(): string {
                     <input id="cheat-boss" class="monospace" value="${escapeHtml(boss)}" placeholder="Boss address" />
                 </label>
                 <label>
-                    <span>Redemption admin</span>
-                    <input id="cheat-redemption-admin" class="monospace" value="${escapeHtml(redemptionAdmin)}" placeholder="Redemption admin address" />
+                    <span>Worker</span>
+                    <input id="cheat-worker" class="monospace" value="${escapeHtml(worker)}" placeholder="Worker address" />
                 </label>
                 <button id="apply-state-cheatcodes" class="primary">Set State</button>
                 <label>
@@ -920,23 +920,21 @@ async function refreshAccountsFromChain(): Promise<void> {
 async function applySurfpoolStateCheatcodes(): Promise<void> {
     try {
         const bossValue = document.querySelector<HTMLInputElement>("#cheat-boss")?.value.trim();
-        const redemptionAdminValue = document.querySelector<HTMLInputElement>("#cheat-redemption-admin")?.value.trim();
+        const workerValue = document.querySelector<HTMLInputElement>("#cheat-worker")?.value.trim();
         const boss = bossValue ? new PublicKey(bossValue) : undefined;
-        const redemptionAdmin = redemptionAdminValue ? new PublicKey(redemptionAdminValue) : undefined;
-        if (!boss && !redemptionAdmin) {
-            throw new Error("Enter a boss or redemption admin address.");
+        const worker = workerValue ? new PublicKey(workerValue) : undefined;
+        if (!boss && !worker) {
+            throw new Error("Enter a boss or worker address.");
         }
 
-        await patchStateAccountAuthorities({ boss, redemptionAdmin });
+        await patchStateAccountAuthorities({ boss, worker });
         state.stateInfo = undefined;
         state.decodedAccounts = {};
         state.accountExistence = {};
         accountFetchesInFlight.clear();
         await refreshStateDerivedAccounts();
         appendOutput(
-            ["Surfpool state cheatcode applied.", boss ? `Boss: ${boss.toBase58()}` : undefined, redemptionAdmin ? `Redemption admin: ${redemptionAdmin.toBase58()}` : undefined]
-                .filter(Boolean)
-                .join("\n"),
+            ["Surfpool state cheatcode applied.", boss ? `Boss: ${boss.toBase58()}` : undefined, worker ? `Worker: ${worker.toBase58()}` : undefined].filter(Boolean).join("\n"),
         );
     } catch (error) {
         appendOutput(`Surfpool cheatcode error: ${errorMessage(error)}`);
@@ -944,7 +942,7 @@ async function applySurfpoolStateCheatcodes(): Promise<void> {
     render();
 }
 
-async function patchStateAccountAuthorities(params: { boss?: PublicKey; redemptionAdmin?: PublicKey }): Promise<void> {
+async function patchStateAccountAuthorities(params: { boss?: PublicKey; worker?: PublicKey }): Promise<void> {
     const statePda = findPda(["state"]);
     const account = await state.connection.getAccountInfo(statePda, "confirmed");
     if (!account) {
@@ -956,7 +954,7 @@ async function patchStateAccountAuthorities(params: { boss?: PublicKey; redempti
         throw new Error(`State account is too short to patch (${data.length} bytes).`);
     }
     if (params.boss) data.set(params.boss.toBuffer(), STATE_ACCOUNT_OFFSETS.boss);
-    if (params.redemptionAdmin) data.set(params.redemptionAdmin.toBuffer(), STATE_ACCOUNT_OFFSETS.redemptionAdmin);
+    if (params.worker) data.set(params.worker.toBuffer(), STATE_ACCOUNT_OFFSETS.worker);
 
     await surfnetRpc("surfnet_setAccount", [
         statePda.toBase58(),
@@ -1213,7 +1211,7 @@ function deriveAccountValue(account: IdlAccount, fullName: string): string {
     if (lowerName === "boss" && state.stateInfo) return state.stateInfo.boss.toBase58();
     if (lowerName === "boss" && state.accountValues[fullName]) return state.accountValues[fullName];
     if (lowerName === "new_boss" && state.stateInfo && !isDefaultPublicKey(state.stateInfo.proposedBoss)) return state.stateInfo.proposedBoss.toBase58();
-    if (lowerName === "redemption_admin" && state.stateInfo) return state.stateInfo.redemptionAdmin.toBase58();
+    if (lowerName === "worker" && state.stateInfo) return state.stateInfo.worker.toBase58();
     if (lowerName === "main_offer" && state.stateInfo) return state.stateInfo.mainOffer.toBase58();
     if (lowerName === "redeemer") {
         const redemptionRequest = decodedAccountByName("redemption_request", "redemption_request");
@@ -1303,7 +1301,7 @@ function shouldAutoDeriveByDefault(account: IdlAccount): boolean {
         lowerName === "offer" ||
         lowerName === "boss" ||
         lowerName === "new_boss" ||
-        lowerName === "redemption_admin" ||
+        lowerName === "worker" ||
         lowerName === "main_offer" ||
         lowerName === "redeemer" ||
         lowerName === "destination" ||
@@ -1324,7 +1322,7 @@ function isManagedAccount(flat: FlatAccount, value: string): boolean {
     if (deriveFixedPda(lowerName) || isTokenAccountName(lowerName)) return true;
     return (
         lowerName === "boss" ||
-        lowerName === "redemption_admin" ||
+        lowerName === "worker" ||
         lowerName === "main_offer" ||
         lowerName.startsWith("boss_") ||
         ["system_program", "token_program", "token_in_program", "token_out_program", "associated_token_program", "instructions_sysvar", "program"].includes(lowerName)
@@ -1588,7 +1586,7 @@ function resolveAccountFieldSeed(path: string): Uint8Array | undefined {
                 boss: state.stateInfo.boss,
                 proposed_boss: state.stateInfo.proposedBoss,
                 onyc_mint: state.stateInfo.onycMint,
-                redemption_admin: state.stateInfo.redemptionAdmin,
+                worker: state.stateInfo.worker,
                 main_offer: state.stateInfo.mainOffer,
             },
             fieldName,

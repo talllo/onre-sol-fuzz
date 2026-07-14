@@ -42,7 +42,7 @@ instead of reusing ordinary offer vaults.
 | Asset offers | Supported asset markets where users exchange an asset for ONYC. |
 | Redemption markets | ONYC-to-asset redemption configuration, requests and fulfillment. |
 | Prop AMM liquidity | Automated buy/sell pricing for configured asset markets. |
-| Accounting vaults | Separate fee and proceeds buckets for offer, permissionless, redemption admin, and Prop AMM flows. |
+| Accounting vaults | Separate fee and proceeds buckets for offer, permissionless, redemption, and Prop AMM flows. |
 | Market reporting | NAV, TVL, APY and circulating supply snapshots. |
 | Buffer reserve | Separate reserve management and buffer accrual. |
 
@@ -52,7 +52,7 @@ instead of reusing ordinary offer vaults.
 flowchart LR
     User[User] --> Protocol[ONRE program]
     Boss[Boss] --> Protocol
-    RedemptionAdmin[Redemption admin] --> Protocol
+    Worker[Worker] --> Protocol
     Approvers[Off-chain approvers] --> Protocol
     TokenPrograms[SPL token programs] <--> Protocol
 
@@ -108,7 +108,7 @@ flowchart TD
 | --- | --- |
 | Boss | Primary governance signer. Creates core configuration, manages admins and can disable emergency mode. |
 | Admin | Can activate the kill switch for emergency response. |
-| Redemption admin | Can create and manage redemption markets. |
+| Worker | Can fulfill or cancel redemption requests and settle BUFFER accrual. |
 | Approvers | Off-chain signers used by approval-gated offer execution. |
 | Mint authority PDA | Program authority used when the program controls a mint. |
 | Offer vault authority PDA | Program authority for regular offer vault token accounts. |
@@ -330,12 +330,12 @@ The market snapshot is the shared reporting surface for TVL, NAV, NAV adjustment
 | Offer setup | Governance opens an asset offer and configures pricing vectors. |
 | Offer execution | User buys ONYC through an offer; fees and net inflow are routed separately. |
 | Permissionless offer execution | Same economic result as offer execution, routed through the permissionless authority. |
-| Redemption setup | Redemption admin or boss opens the ONYC-to-asset redemption market. |
+| Redemption setup | Boss opens the ONYC-to-asset redemption market. |
 | Redemption request | User locks ONYC into the redemption vault and receives a request claim. |
-| Redemption fulfillment | Admin fulfills the request, charges fees, burns or routes ONYC, and pays the output asset. |
+| Redemption fulfillment | Worker fulfills the request, charges fees, burns or routes ONYC, and pays the output asset. |
 | Prop AMM buy | User buys ONYC through automated pricing; net asset inflow can refill redemption liquidity. |
 | Prop AMM sell | User sells ONYC through automated pricing; output is bounded by actual redemption vault liquidity. |
-| Buffer accrual | Buffer state mints reserve growth and splits management and performance fees. |
+| Buffer accrual | Worker settlement or value-moving flows mint reserve growth and split management and performance fees. |
 | Market refresh | Market statistics recompute TVL, NAV, NAV adjustment, APY and circulating supply. |
 
 ## Token Movement Rules
@@ -417,6 +417,6 @@ flowchart TD
 
 - Offer markets, redemption markets, Prop AMM settings, and accounting vaults are separate concepts.
 - A redemption offer is the redemption market linked to an offer.
-- Offer, permissionless, redemption admin, and Prop AMM accounting are separated into different fee and proceeds vaults.
+- Offer, permissionless, redemption, and Prop AMM accounting are separated into different fee and proceeds vaults.
 - The redemption vault target controls capped refill routing and can cap Prop AMM sell-side effective liquidity.
 - Prop AMM sell quotes cannot price against more than actual redemption vault liquidity; configured targets only reduce available curve liquidity.

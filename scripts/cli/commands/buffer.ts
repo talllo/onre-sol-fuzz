@@ -8,6 +8,7 @@ import {
     executeBufferReserveWithdraw,
     executeBufferSetFees,
     executeBufferSetYields,
+    executeBufferSettle,
 } from "../implementations";
 
 export function registerBufferCommands(program: Command): void {
@@ -44,8 +45,17 @@ export function registerBufferCommands(program: Command): void {
         .option("--management-fee-bps <bps>", "Management fee in basis points")
         .option("--performance-fee-bps <bps>", "Performance fee in basis points")
         .action(async (options, cmd) => {
-            const opts = { ...options, managementFeeBps: options.managementFeeBps, performanceFeeBps: options.performanceFeeBps, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            const opts = { ...options, managementFeeBps: options.managementFeeBps, performanceFeeBps: options.performanceFeeBps, ...cmd.optsWithGlobals() } as GlobalOptions &
+                Record<string, any>;
             await executeBufferSetFees(opts);
+        });
+
+    program
+        .command("settle")
+        .description("Settle BUFFER accrual (worker only)")
+        .action(async (_, cmd) => {
+            const opts = cmd.optsWithGlobals() as GlobalOptions;
+            await executeBufferSettle(opts);
         });
 
     program

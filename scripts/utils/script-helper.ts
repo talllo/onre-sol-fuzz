@@ -597,19 +597,14 @@ export class ScriptHelper {
             .instruction();
     }
 
-    async buildOfferVaultDepositIx(params: {
-        amount: number,
-        tokenMint: PublicKey,
-        tokenProgram?: PublicKey,
-        depositor: PublicKey;
-    }) {
+    async buildOfferVaultDepositIx(params: { amount: number; tokenMint: PublicKey; tokenProgram?: PublicKey; depositor: PublicKey }) {
         return await this.program.methods
             .offerVaultDeposit(new BN(params.amount))
             .accountsPartial({
                 state: this.statePda,
                 tokenMint: params.tokenMint,
                 tokenProgram: params.tokenProgram ?? TOKEN_PROGRAM_ID,
-                depositor: params.depositor
+                depositor: params.depositor,
             })
             .instruction();
     }
@@ -632,7 +627,7 @@ export class ScriptHelper {
                 state: this.statePda,
                 tokenMint: params.tokenMint,
                 tokenProgram: params.tokenProgram ?? TOKEN_PROGRAM_ID,
-                depositor: params.depositor
+                depositor: params.depositor,
             })
             .instruction();
     }
@@ -684,32 +679,56 @@ export class ScriptHelper {
             .instruction();
     }
 
-    async buildSetRedemptionAdminIx(params: { redemptionAdmin: PublicKey; boss: PublicKey }) {
+    async buildSetWorkerIx(params: { worker: PublicKey; boss: PublicKey }) {
         return await this.program.methods
-            .setRedemptionAdmin(params.redemptionAdmin)
+            .setWorker(params.worker)
             .accountsPartial({
                 boss: params.boss,
             })
             .instruction();
     }
 
-    async buildInitializeBufferIx(params: { offer: PublicKey; onycMint: PublicKey; boss: PublicKey }) {
-        const builder = this.program.methods
-            .initializeBuffer()
+    async buildSettleBufferIx(params: { worker: PublicKey }) {
+        const state = await this.getState();
+        const onycMint = state.onycMint as PublicKey;
+
+        return await this.program.methods
+            .settleBuffer()
             .accountsPartial({
-                boss: params.boss,
-                offer: params.offer,
-                onycMint: params.onycMint,
-                bufferState: this.pdas.bufferStatePda,
-                reserveVaultAuthority: this.pdas.reserveVaultAuthorityPda,
-                reserveVaultOnycAccount: this.getBufferVaultAta(params.onycMint),
-                managementFeeVault: this.pdas.managementFeeVaultPda,
-                managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(params.onycMint),
-                performanceFeeVault: this.pdas.performanceFeeVaultPda,
-                performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(params.onycMint),
+                state: this.statePda,
+                worker: params.worker,
+                onycMint,
+                mintAuthority: this.pdas.mintAuthorityPda,
                 tokenProgram: TOKEN_PROGRAM_ID,
-                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-            });
+                systemProgram: anchor.web3.SystemProgram.programId,
+                mainOffer: state.mainOffer as PublicKey,
+                bufferAccounts: {
+                    bufferState: this.pdas.bufferStatePda,
+                    reserveVaultOnycAccount: this.getBufferVaultAta(onycMint),
+                    managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(onycMint),
+                    performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(onycMint),
+                },
+                marketStats: this.pdas.marketStatsPda,
+                circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
+            })
+            .instruction();
+    }
+
+    async buildInitializeBufferIx(params: { offer: PublicKey; onycMint: PublicKey; boss: PublicKey }) {
+        const builder = this.program.methods.initializeBuffer().accountsPartial({
+            boss: params.boss,
+            offer: params.offer,
+            onycMint: params.onycMint,
+            bufferState: this.pdas.bufferStatePda,
+            reserveVaultAuthority: this.pdas.reserveVaultAuthorityPda,
+            reserveVaultOnycAccount: this.getBufferVaultAta(params.onycMint),
+            managementFeeVault: this.pdas.managementFeeVaultPda,
+            managementFeeVaultOnycAccount: this.getManagementFeeVaultAta(params.onycMint),
+            performanceFeeVault: this.pdas.performanceFeeVaultPda,
+            performanceFeeVaultOnycAccount: this.getPerformanceFeeVaultAta(params.onycMint),
+            tokenProgram: TOKEN_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        });
         return await builder.instruction();
     }
 
@@ -939,12 +958,30 @@ export class ScriptHelper {
         }
 
         return await this.program.methods
-            .setCirculatingSupplyExcludedAccounts(owners as [
-                PublicKey, PublicKey, PublicKey, PublicKey, PublicKey,
-                PublicKey, PublicKey, PublicKey, PublicKey, PublicKey,
-                PublicKey, PublicKey, PublicKey, PublicKey, PublicKey,
-                PublicKey, PublicKey, PublicKey, PublicKey, PublicKey,
-            ])
+            .setCirculatingSupplyExcludedAccounts(
+                owners as [
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                    PublicKey,
+                ],
+            )
             .accountsPartial({
                 boss: params.boss,
                 excludedAccounts: this.pdas.circulatingSupplyExcludedAccountsPda,
@@ -954,15 +991,13 @@ export class ScriptHelper {
     }
 
     async buildUpdateCirculatingSupplyExcludedBalanceIx(params: { onycMint: PublicKey; signer: PublicKey; tokenProgram?: PublicKey }) {
-        const excludedAccounts = await this.program.account.circulatingSupplyExcludedAccounts
-            .fetch(this.pdas.circulatingSupplyExcludedAccountsPda)
-            .catch((error: any) => {
-                const message = error?.message || String(error);
-                if (message.includes("Account does not exist") || message.includes("AccountNotFound")) {
-                    throw new Error("Circulating supply excluded owners are not configured. Run `state set-excluded-owners` first.");
-                }
-                throw error;
-            });
+        const excludedAccounts = await this.program.account.circulatingSupplyExcludedAccounts.fetch(this.pdas.circulatingSupplyExcludedAccountsPda).catch((error: any) => {
+            const message = error?.message || String(error);
+            if (message.includes("Account does not exist") || message.includes("AccountNotFound")) {
+                throw new Error("Circulating supply excluded owners are not configured. Run `state set-excluded-owners` first.");
+            }
+            throw error;
+        });
         const tokenProgram = params.tokenProgram ?? TOKEN_PROGRAM_ID;
         const remainingAccounts = excludedAccounts.owners
             .filter((owner: PublicKey) => !owner.equals(PublicKey.default))
@@ -1278,9 +1313,7 @@ export class ScriptHelper {
     async buildMintToIx(params: { amount: number }) {
         const state = await this.program.account.state.fetch(this.statePda);
         const onycMint = state.onycMint as PublicKey;
-        const offer = (state.mainOffer as PublicKey).equals(PublicKey.default)
-            ? PublicKey.default
-            : (state.mainOffer as PublicKey);
+        const offer = (state.mainOffer as PublicKey).equals(PublicKey.default) ? PublicKey.default : (state.mainOffer as PublicKey);
 
         return await this.program.methods
             .mintTo(new BN(params.amount))
@@ -1315,7 +1348,7 @@ export class ScriptHelper {
                 tokenInProgram: params.tokenInProgram,
                 tokenOutMint: params.tokenOutMint,
                 tokenOutProgram: params.tokenOutProgram,
-                signer: params.boss,
+                boss: params.boss,
             })
             .instruction();
     }
@@ -1358,7 +1391,7 @@ export class ScriptHelper {
     async buildFulfillRedemptionRequestIx(params: {
         redemptionOfferPda: PublicKey;
         redemptionRequestPda: PublicKey;
-        redemptionAdmin: PublicKey;
+        worker: PublicKey;
         tokenInMint: PublicKey;
         tokenOutMint: PublicKey;
         tokenInProgram?: PublicKey;
@@ -1394,7 +1427,7 @@ export class ScriptHelper {
                 redemptionFeeTokenInAccount: this.getConfigurableVaultAta("redemption-fee", params.tokenInMint, tokenInProgram),
                 mintAuthority: this.pdas.mintAuthorityPda,
                 redeemer,
-                redemptionAdmin: params.redemptionAdmin,
+                worker: params.worker,
                 bufferAccounts: {
                     bufferState: this.pdas.bufferStatePda,
                     reserveVaultOnycAccount: this.getBufferVaultAta(onycMint),
@@ -1432,7 +1465,7 @@ export class ScriptHelper {
                 redemptionRequest: params.redemptionRequestPda,
                 signer: params.signer,
                 redeemer,
-                redemptionAdmin: state.redemptionAdmin as PublicKey,
+                worker: state.worker as PublicKey,
                 redemptionVaultAuthority: this.pdas.redemptionVaultAuthorityPda,
                 tokenInMint: params.tokenInMint,
                 vaultTokenAccount: getAssociatedTokenAddressSync(params.tokenInMint, this.pdas.redemptionVaultAuthorityPda, true, tokenProgram),

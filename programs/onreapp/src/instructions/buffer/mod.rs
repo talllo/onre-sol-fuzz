@@ -7,6 +7,7 @@ pub mod events;
 pub mod initialize_buffer;
 pub mod set_buffer_fee_config;
 pub mod set_buffer_gross_apr;
+pub mod settle_buffer;
 pub mod state;
 pub mod withdraw_reserve_vault;
 
@@ -18,5 +19,6 @@ pub use events::*;
 pub use initialize_buffer::*;
 pub use set_buffer_fee_config::*;
 pub use set_buffer_gross_apr::*;
+pub use settle_buffer::*;
 pub use state::*;
 pub use withdraw_reserve_vault::*;

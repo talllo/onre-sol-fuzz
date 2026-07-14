@@ -60,6 +60,50 @@ pub fn build_set_main_offer_ix(boss: &Pubkey, offer: &Pubkey) -> Instruction {
     }
 }
 
+pub fn build_settle_buffer_ix(
+    worker: &Pubkey,
+    main_offer: &Pubkey,
+    onyc_mint: &Pubkey,
+) -> Instruction {
+    let (state_pda, _) = find_state_pda();
+    let (mint_authority_pda, _) = find_mint_authority_pda();
+    let (buffer_state_pda, _) = find_buffer_state_pda();
+    let (reserve_vault_authority_pda, _) = find_reserve_vault_authority_pda();
+    let (management_fee_vault_pda, _) = find_management_fee_vault_pda();
+    let (performance_fee_vault_pda, _) = find_performance_fee_vault_pda();
+    let (market_stats_pda, _) = find_market_stats_pda();
+    let (excluded_balance_pda, _) = find_circulating_supply_excluded_balance_pda();
+
+    Instruction {
+        program_id: PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new_readonly(state_pda, false),
+            AccountMeta::new(*worker, true),
+            AccountMeta::new(*onyc_mint, false),
+            AccountMeta::new_readonly(mint_authority_pda, false),
+            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
+            AccountMeta::new_readonly(*main_offer, false),
+            AccountMeta::new(buffer_state_pda, false),
+            AccountMeta::new(
+                derive_ata(&reserve_vault_authority_pda, onyc_mint, &TOKEN_PROGRAM_ID),
+                false,
+            ),
+            AccountMeta::new(
+                derive_ata(&management_fee_vault_pda, onyc_mint, &TOKEN_PROGRAM_ID),
+                false,
+            ),
+            AccountMeta::new(
+                derive_ata(&performance_fee_vault_pda, onyc_mint, &TOKEN_PROGRAM_ID),
+                false,
+            ),
+            AccountMeta::new(market_stats_pda, false),
+            AccountMeta::new_readonly(excluded_balance_pda, false),
+        ],
+        data: ix_discriminator("settle_buffer").to_vec(),
+    }
+}
+
 pub fn build_set_buffer_gross_yield_ix(
     boss: &Pubkey,
     main_offer: &Pubkey,

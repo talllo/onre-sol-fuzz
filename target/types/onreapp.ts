@@ -823,7 +823,7 @@ export type Onreapp = {
         "",
         "Delegates to `redemption::cancel_redemption_request`.",
         "This instruction cancels an unfulfilled or partially fulfilled redemption request.",
-        "The request can be cancelled by the redeemer, redemption_admin, or boss. Upon",
+        "The request can be cancelled by the redeemer, worker, or boss. Upon",
         "cancellation, the unfulfilled token_in amount is returned to the redeemer, that",
         "returned amount is subtracted from the redemption offer's requested_redemptions,",
         "and the redemption request account is closed.",
@@ -833,7 +833,7 @@ export type Onreapp = {
         "- `ctx`: Context for `CancelRedemptionRequest`.",
         "",
         "# Access Control",
-        "- Signer must be one of: redeemer, redemption_admin, or boss",
+        "- Signer must be one of: redeemer, worker, or boss",
         "- Request must have an unfulfilled amount remaining."
       ],
       "discriminator": [
@@ -850,7 +850,7 @@ export type Onreapp = {
         {
           "name": "state",
           "docs": [
-            "Program state account containing redemption_admin and boss for authorization"
+            "Program state account containing worker and boss authorization."
           ],
           "pda": {
             "seeds": [
@@ -913,7 +913,7 @@ export type Onreapp = {
           "name": "redemptionRequest",
           "docs": [
             "The redemption request account to cancel",
-            "Account is closed after cancellation and rent is returned to redemption_admin"
+            "Account is closed after cancellation and rent is returned to the worker."
           ],
           "writable": true,
           "pda": {
@@ -958,7 +958,7 @@ export type Onreapp = {
           "name": "signer",
           "docs": [
             "The signer who is cancelling the request",
-            "Can be either the redeemer, redemption_admin, or boss"
+            "Can be either the redeemer, worker, or boss."
           ],
           "writable": true,
           "signer": true
@@ -970,9 +970,9 @@ export type Onreapp = {
           ]
         },
         {
-          "name": "redemptionAdmin",
+          "name": "worker",
           "docs": [
-            "Redemption admin receives the rent from closing the redemption request"
+            "Worker receives the rent from closing the redemption request."
           ],
           "writable": true
         },
@@ -2561,7 +2561,7 @@ export type Onreapp = {
           "name": "redeemer"
         },
         {
-          "name": "redemptionAdmin",
+          "name": "worker",
           "writable": true,
           "signer": true
         },
@@ -4274,7 +4274,7 @@ export type Onreapp = {
         "- `fee_basis_points_prop_amm_sell`: Prop AMM sell fee in basis points, capped at 1000 bps (10%).",
         "",
         "# Access Control",
-        "- Only the boss or redemption_admin can call this instruction"
+        "- Only the boss can call this instruction"
       ],
       "discriminator": [
         6,
@@ -4290,7 +4290,7 @@ export type Onreapp = {
         {
           "name": "state",
           "docs": [
-            "Program state account containing boss and redemption_admin authorization"
+            "Program state account containing boss authorization."
           ],
           "pda": {
             "seeds": [
@@ -4584,12 +4584,15 @@ export type Onreapp = {
           }
         },
         {
-          "name": "signer",
+          "name": "boss",
           "docs": [
-            "The account creating the redemption offer (must be boss or redemption_admin)"
+            "Boss creating and funding the redemption offer."
           ],
           "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "state"
+          ]
         },
         {
           "name": "associatedTokenProgram",
@@ -8432,72 +8435,6 @@ export type Onreapp = {
       "args": []
     },
     {
-      "name": "setRedemptionAdmin",
-      "docs": [
-        "Sets the redemption admin in the state.",
-        "",
-        "Delegates to `state_operations::set_redemption_admin` to change the redemption admin.",
-        "Only the boss can call this instruction to set the redemption admin.",
-        "Emits a `RedemptionAdminUpdatedEvent` upon success.",
-        "",
-        "# Arguments",
-        "- `ctx`: Context for `SetRedemptionAdmin`.",
-        "- `new_redemption_admin`: Public key of the new redemption admin."
-      ],
-      "discriminator": [
-        122,
-        95,
-        205,
-        126,
-        218,
-        93,
-        18,
-        173
-      ],
-      "accounts": [
-        {
-          "name": "state",
-          "docs": [
-            "Program state account containing the redemption admin configuration",
-            "",
-            "Must be mutable to allow redemption admin updates and have the boss account",
-            "as the authorized signer for redemption admin configuration management."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "boss",
-          "docs": [
-            "The boss account authorized to configure the redemption admin"
-          ],
-          "signer": true,
-          "relations": [
-            "state"
-          ]
-        }
-      ],
-      "args": [
-        {
-          "name": "newRedemptionAdmin",
-          "type": "pubkey"
-        }
-      ]
-    },
-    {
       "name": "setRedemptionOfferDisabled",
       "discriminator": [
         44,
@@ -8577,6 +8514,217 @@ export type Onreapp = {
           "type": "bool"
         }
       ]
+    },
+    {
+      "name": "setWorker",
+      "docs": [
+        "Sets the worker authorized for redemption processing and BUFFER settlement.",
+        "",
+        "# Arguments",
+        "- `ctx`: Context for `SetWorker`.",
+        "- `new_worker`: Public key of the new worker."
+      ],
+      "discriminator": [
+        36,
+        210,
+        154,
+        242,
+        201,
+        126,
+        112,
+        33
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "docs": [
+            "Global state containing the worker configuration."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "docs": [
+            "Boss authorized to configure the worker."
+          ],
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "newWorker",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "settleBuffer",
+      "docs": [
+        "Settles BUFFER accrual and refreshes market stats without a trade.",
+        "Only the configured worker may call this instruction."
+      ],
+      "discriminator": [
+        196,
+        144,
+        145,
+        221,
+        54,
+        210,
+        224,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "docs": [
+            "Global state containing worker, ONyc mint, and main-offer configuration."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "worker",
+          "docs": [
+            "Worker authorized to settle BUFFER and payer for market-stats initialization."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "onycMint",
+          "docs": [
+            "ONyc mint whose supply is increased by BUFFER accrual."
+          ],
+          "writable": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "mintAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "docs": [
+            "Token program controlling the ONyc mint and BUFFER vault accounts."
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "docs": [
+            "System program used if market stats must be initialized."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "mainOffer"
+        },
+        {
+          "name": "bufferAccounts",
+          "accounts": [
+            {
+              "name": "bufferState",
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "reserveVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "managementFeeVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "performanceFeeVaultOnycAccount",
+              "writable": true
+            }
+          ]
+        },
+        {
+          "name": "marketStats",
+          "writable": true
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance"
+        }
+      ],
+      "args": []
     },
     {
       "name": "takeOffer",
@@ -12439,19 +12587,6 @@ export type Onreapp = {
       ]
     },
     {
-      "name": "redemptionAdminUpdatedEvent",
-      "discriminator": [
-        110,
-        117,
-        47,
-        219,
-        133,
-        230,
-        199,
-        178
-      ]
-    },
-    {
       "name": "redemptionOfferCreatedEvent",
       "discriminator": [
         171,
@@ -12618,6 +12753,19 @@ export type Onreapp = {
         119,
         155,
         198
+      ]
+    },
+    {
+      "name": "workerUpdatedEvent",
+      "discriminator": [
+        190,
+        3,
+        208,
+        81,
+        65,
+        111,
+        249,
+        100
       ]
     }
   ],
@@ -13129,8 +13277,8 @@ export type Onreapp = {
     },
     {
       "code": 6101,
-      "name": "invalidRedemptionAdmin",
-      "msg": "Invalid Redemption Admin"
+      "name": "invalidWorker",
+      "msg": "Invalid Worker"
     },
     {
       "code": 6102,
@@ -15418,33 +15566,6 @@ export type Onreapp = {
       }
     },
     {
-      "name": "redemptionAdminUpdatedEvent",
-      "docs": [
-        "Event emitted when the redemption admin is successfully updated",
-        "",
-        "Provides transparency for tracking redemption admin configuration changes."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "oldRedemptionAdmin",
-            "docs": [
-              "The previous redemption admin public key before the update"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "newRedemptionAdmin",
-            "docs": [
-              "The new redemption admin public key after the update"
-            ],
-            "type": "pubkey"
-          }
-        ]
-      }
-    },
-    {
       "name": "redemptionOffer",
       "docs": [
         "Redemption offer for converting ONyc tokens back to a paired output asset.",
@@ -15502,7 +15623,7 @@ export type Onreapp = {
           {
             "name": "feeBasisPoints",
             "docs": [
-              "Fee in basis points (1000 = 10%) charged when the redemption admin fulfills requests"
+              "Fee in basis points (1000 = 10%) charged when the worker fulfills requests"
             ],
             "type": "u16"
           },
@@ -16172,9 +16293,9 @@ export type Onreapp = {
             "type": "u64"
           },
           {
-            "name": "redemptionAdmin",
+            "name": "worker",
             "docs": [
-              "Admin account authorized to manage redemption offers and fulfillment"
+              "Worker authorized to fulfill or cancel redemptions and settle BUFFER"
             ],
             "type": "pubkey"
           },
@@ -16229,6 +16350,31 @@ export type Onreapp = {
             "name": "boss",
             "docs": [
               "The boss account that initiated the closure and received the rent"
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "workerUpdatedEvent",
+      "docs": [
+        "Event emitted when the protocol worker is updated."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oldWorker",
+            "docs": [
+              "Previous worker public key."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "newWorker",
+            "docs": [
+              "New worker public key."
             ],
             "type": "pubkey"
           }

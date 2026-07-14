@@ -15,6 +15,7 @@ struct LegacyState {
     approver2: Pubkey,
     bump: u8,
     max_supply: u64,
+    // Legacy field name; V5 renames this same serialized Pubkey slot to `worker`.
     redemption_admin: Pubkey,
     reserved: [u8; 96],
 }
@@ -91,7 +92,7 @@ fn state_deserializes_legacy_master_layout() {
     assert_eq!(state.approver2, approver2);
     assert_eq!(state.bump, 254);
     assert_eq!(state.max_supply, 1_000_000_000);
-    assert_eq!(state.redemption_admin, redemption_admin);
+    assert_eq!(state.worker, redemption_admin);
     assert_eq!(state.max_mint_amount, 0);
     assert_eq!(state.main_offer, Pubkey::default());
 }

@@ -25,7 +25,7 @@ fn setup_partial(
     redemption_amount: u64,
 ) -> (
     LiteSVM,
-    Keypair, // payer (== boss == redemption_admin)
+    Keypair, // payer (== boss == worker)
     Pubkey,  // onyc_mint
     Pubkey,  // usdc_mint
     Pubkey,  // redemption_offer_pda
@@ -36,8 +36,8 @@ fn setup_partial(
     let boss = payer.pubkey();
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    // Set boss as redemption_admin
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    // Set boss as worker.
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 

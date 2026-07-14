@@ -94,11 +94,12 @@ export const excludedOwnersParams: ParamDefinition[] = [
         description: "Comma-separated owner public keys to exclude from circulating supply",
         required: true,
         flag: "--owners",
-        transform: (value: string) => value
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean)
-            .map((item) => new PublicKey(item)),
+        transform: (value: string) =>
+            value
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean)
+                .map((item) => new PublicKey(item)),
     },
 ];
 
@@ -113,12 +114,12 @@ export const updateExcludedBalanceParams: ParamDefinition[] = [
     },
 ];
 
-export const redemptionAdminParams: ParamDefinition[] = [
+export const workerParams: ParamDefinition[] = [
     {
-        name: "redemptionAdmin",
+        name: "worker",
         type: "publicKey",
-        description: "Redemption admin public key",
+        description: "Worker public key",
         required: true,
-        flag: "--redemption-admin",
+        flag: "--worker",
     },
 ];

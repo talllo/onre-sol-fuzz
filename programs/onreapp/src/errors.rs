@@ -204,8 +204,8 @@ pub enum OnreError {
     ArithmeticUnderflow,
     #[msg("Invalid Redeemer")]
     InvalidRedeemer,
-    #[msg("Invalid Redemption Admin")]
-    InvalidRedemptionAdmin,
+    #[msg("Invalid Worker")]
+    InvalidWorker,
     #[msg("Invalid Redeemer Token Account")]
     InvalidRedeemerTokenAccount,
     #[msg("Offer Mismatch")]

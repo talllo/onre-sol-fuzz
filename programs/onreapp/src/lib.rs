@@ -490,20 +490,13 @@ pub mod onreapp {
         state_operations::set_onyc_mint(ctx)
     }
 
-    /// Sets the redemption admin in the state.
-    ///
-    /// Delegates to `state_operations::set_redemption_admin` to change the redemption admin.
-    /// Only the boss can call this instruction to set the redemption admin.
-    /// Emits a `RedemptionAdminUpdatedEvent` upon success.
+    /// Sets the worker authorized for redemption processing and BUFFER settlement.
     ///
     /// # Arguments
-    /// - `ctx`: Context for `SetRedemptionAdmin`.
-    /// - `new_redemption_admin`: Public key of the new redemption admin.
-    pub fn set_redemption_admin(
-        ctx: Context<SetRedemptionAdmin>,
-        new_redemption_admin: Pubkey,
-    ) -> Result<()> {
-        state_operations::set_redemption_admin(ctx, new_redemption_admin)
+    /// - `ctx`: Context for `SetWorker`.
+    /// - `new_worker`: Public key of the new worker.
+    pub fn set_worker(ctx: Context<SetWorker>, new_worker: Pubkey) -> Result<()> {
+        state_operations::set_worker(ctx, new_worker)
     }
 
     /// Initializes the standalone BUFFER pool state and vault accounts.
@@ -512,6 +505,12 @@ pub mod onreapp {
     /// remains unchanged. Only the boss can initialize BUFFER.
     pub fn initialize_buffer(ctx: Context<InitializeBuffer>) -> Result<()> {
         buffer::initialize_buffer(ctx)
+    }
+
+    /// Settles BUFFER accrual and refreshes market stats without a trade.
+    /// Only the configured worker may call this instruction.
+    pub fn settle_buffer(ctx: Context<SettleBuffer>) -> Result<()> {
+        buffer::settle_buffer(ctx)
     }
 
     /// Sets the main offer stored in program state.
@@ -815,7 +814,7 @@ pub mod onreapp {
     /// - `fee_basis_points_prop_amm_sell`: Prop AMM sell fee in basis points, capped at 1000 bps (10%).
     ///
     /// # Access Control
-    /// - Only the boss or redemption_admin can call this instruction
+    /// - Only the boss can call this instruction
     pub fn make_redemption_offer(
         ctx: Context<MakeRedemptionOffer>,
         fee_basis_points: u16,
@@ -863,7 +862,7 @@ pub mod onreapp {
     ///
     /// Delegates to `redemption::cancel_redemption_request`.
     /// This instruction cancels an unfulfilled or partially fulfilled redemption request.
-    /// The request can be cancelled by the redeemer, redemption_admin, or boss. Upon
+    /// The request can be cancelled by the redeemer, worker, or boss. Upon
     /// cancellation, the unfulfilled token_in amount is returned to the redeemer, that
     /// returned amount is subtracted from the redemption offer's requested_redemptions,
     /// and the redemption request account is closed.
@@ -873,7 +872,7 @@ pub mod onreapp {
     /// - `ctx`: Context for `CancelRedemptionRequest`.
     ///
     /// # Access Control
-    /// - Signer must be one of: redeemer, redemption_admin, or boss
+    /// - Signer must be one of: redeemer, worker, or boss
     /// - Request must have an unfulfilled amount remaining.
     pub fn cancel_redemption_request<'info>(
         ctx: Context<'info, CancelRedemptionRequest<'info>>,

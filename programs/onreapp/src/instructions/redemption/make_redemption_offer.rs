@@ -34,8 +34,8 @@ pub struct RedemptionOfferCreatedEvent {
 /// The redemption offer is the inverse of the standard Offer.
 #[derive(Accounts)]
 pub struct MakeRedemptionOffer<'info> {
-    /// Program state account containing boss and redemption_admin authorization
-    #[account(seeds = [seeds::STATE], bump = state.bump)]
+    /// Program state account containing boss authorization.
+    #[account(seeds = [seeds::STATE], bump = state.bump, has_one = boss)]
     pub state: Box<Account<'info, State>>,
 
     /// The original offer that this redemption offer is associated with
@@ -83,7 +83,7 @@ pub struct MakeRedemptionOffer<'info> {
     /// Created automatically if needed. Used for holding ONyc tokens before burning.
     #[account(
         init_if_needed,
-        payer = signer,
+        payer = boss,
         associated_token::mint = token_in_mint,
         associated_token::authority = redemption_vault_authority,
         associated_token::token_program = token_in_program
@@ -103,7 +103,7 @@ pub struct MakeRedemptionOffer<'info> {
     /// Created automatically if needed. Used for distributing output tokens to redeemers.
     #[account(
         init_if_needed,
-        payer = signer,
+        payer = boss,
         associated_token::mint = token_out_mint,
         associated_token::authority = redemption_vault_authority,
         associated_token::token_program = token_out_program
@@ -116,7 +116,7 @@ pub struct MakeRedemptionOffer<'info> {
     /// but with the tokens reversed (token_in from Offer becomes token_out here).
     #[account(
         init,
-        payer = signer,
+        payer = boss,
         space = 8 + RedemptionOffer::INIT_SPACE,
         seeds = [
             seeds::REDEMPTION_OFFER,
@@ -127,13 +127,9 @@ pub struct MakeRedemptionOffer<'info> {
     )]
     pub redemption_offer: Account<'info, RedemptionOffer>,
 
-    /// The account creating the redemption offer (must be boss or redemption_admin)
-    #[account(
-        mut,
-        constraint = signer.key() == state.boss || signer.key() == state.redemption_admin
-            @ crate::OnreError::Unauthorized
-    )]
-    pub signer: Signer<'info>,
+    /// Boss creating and funding the redemption offer.
+    #[account(mut)]
+    pub boss: Signer<'info>,
 
     /// Associated Token Program for automatic token account creation
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -156,11 +152,11 @@ pub struct MakeRedemptionOffer<'info> {
 ///
 /// # Returns
 /// * `Ok(())` - If the redemption offer is successfully created
-/// * `Err(crate::OnreError::Unauthorized)` - If caller is neither boss nor redemption_admin (validated in accounts)
+/// * `Err(crate::OnreError::Unauthorized)` - If caller is not the boss (validated in accounts)
 /// * `Err(crate::OnreError::InvalidFee)` - If either fee exceeds 1000 basis points (10%)
 ///
 /// # Access Control
-/// - Only the boss or redemption_admin can call this instruction
+/// - Only the boss can call this instruction
 ///
 /// # Effects
 /// - Creates new redemption offer account with reference to the original offer and fee configuration

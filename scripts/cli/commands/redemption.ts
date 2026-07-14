@@ -56,7 +56,7 @@ export function registerRedemptionCommands(program: Command): void {
     // redemption update-fee
     program
         .command("update-fee")
-        .description("Update redemption admin fulfillment fee")
+        .description("Update worker fulfillment fee")
         .option("-i, --token-in <mint>", "Token in mint (ONyc)")
         .option("-o, --token-out <mint>", "Token out mint (USDC)")
         .option("-f, --fee <bps>", "New fee in basis points")
@@ -128,7 +128,7 @@ export function registerRedemptionCommands(program: Command): void {
     // redemption fulfill
     program
         .command("fulfill")
-        .description("Fulfill a pending redemption request (redemption admin only)")
+        .description("Fulfill a pending redemption request (worker only)")
         .option("-i, --token-in <mint>", "Token in mint (ONyc)")
         .option("-o, --token-out <mint>", "Token out mint (USDC)")
         .option("--request-id <number>", "Request ID")

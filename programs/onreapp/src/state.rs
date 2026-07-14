@@ -26,8 +26,8 @@ pub struct State {
     pub bump: u8,
     /// Optional supply cap for program-controlled minting paths (0 = no cap)
     pub max_supply: u64,
-    /// Admin account authorized to manage redemption offers and fulfillment
-    pub redemption_admin: Pubkey,
+    /// Worker authorized to fulfill or cancel redemptions and settle BUFFER
+    pub worker: Pubkey,
     /// Optional maximum amount allowed in one logical program mint operation (0 = no cap).
     /// BUFFER accrual applies this to the total gross accrual before fee splitting.
     pub max_mint_amount: u64,
