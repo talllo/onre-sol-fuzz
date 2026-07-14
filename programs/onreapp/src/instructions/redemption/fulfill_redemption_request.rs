@@ -446,6 +446,15 @@ fn execute_fulfill_redemption_request(
             params.token_in_mint,
             &params.mint_authority.to_account_info(),
         );
+    let main_offer = if should_refresh_market_stats {
+        Some(load_main_offer(
+            params.program_id,
+            &params.main_offer.to_account_info(),
+            params.state,
+        )?)
+    } else {
+        None
+    };
     let buffer_is_initialized = if let Some(accounts) = params.buffer_accounts {
         accounts.check_is_initialized(params.program_id)?
     } else {
@@ -455,11 +464,14 @@ fn execute_fulfill_redemption_request(
         .buffer_accounts
         .filter(|_| should_refresh_market_stats && buffer_is_initialized)
     {
+        let canonical_offer = main_offer
+            .as_ref()
+            .ok_or(crate::OnreError::InvalidMainOffer)?;
         Some(accrue_buffer_from_accounts(
             params.program_id,
             params.state,
             buffer_accounts,
-            &offer,
+            canonical_offer,
             params.token_in_mint,
             params.mint_authority.to_account_info(),
             params.mint_authority_bump,
@@ -502,14 +514,12 @@ fn execute_fulfill_redemption_request(
     }
 
     if should_refresh_market_stats {
-        let main_offer = load_main_offer(
-            params.program_id,
-            &params.main_offer.to_account_info(),
-            params.state,
-        )?;
+        let main_offer = main_offer
+            .as_ref()
+            .ok_or(crate::OnreError::InvalidMainOffer)?;
         params.token_in_mint.reload()?;
         refresh_market_stats_pda(
-            &main_offer,
+            main_offer,
             params.token_in_mint,
             &params.circulating_supply_excluded_balance.to_account_info(),
             &params.market_stats.to_account_info(),

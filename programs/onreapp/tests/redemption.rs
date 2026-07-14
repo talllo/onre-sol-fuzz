@@ -1636,6 +1636,84 @@ fn test_fulfill_redemption_request_updates_statistics() {
 }
 
 #[test]
+fn test_fulfill_redemption_request_prices_buffer_from_main_offer() {
+    let mut ctx = setup_fulfillable_request(0, 1_000_000_000);
+    let boss = ctx.payer.pubkey();
+    let redemption_pricing_offer = ctx.main_offer;
+
+    let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    let (_main_asset_mint, main_offer) = configure_main_offer_with_asset_and_apr(
+        &mut ctx.svm,
+        &ctx.payer,
+        &ctx.onyc_mint,
+        &TOKEN_PROGRAM_ID,
+        50_000,
+    );
+
+    let ix = build_mint_to_ix_for_offer(
+        &boss,
+        &ctx.onyc_mint,
+        1_000_000_000,
+        &TOKEN_PROGRAM_ID,
+        &main_offer,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    let ix = build_initialize_buffer_ix(&boss, &main_offer, &ctx.onyc_mint);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+    let ix = build_set_buffer_gross_yield_ix(&boss, &main_offer, &ctx.onyc_mint, 150_000);
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    advance_clock_by(&mut ctx.svm, 31_536_000);
+
+    let buffer_state_before = read_buffer_state(&ctx.svm);
+    let supply_before = get_mint_supply(&ctx.svm, &ctx.onyc_mint);
+    let buffer_vault = derive_ata(
+        &find_reserve_vault_authority_pda().0,
+        &ctx.onyc_mint,
+        &TOKEN_PROGRAM_ID,
+    );
+    let buffer_vault_before = get_token_balance(&ctx.svm, &buffer_vault);
+
+    let ix = build_fulfill_redemption_request_ix_with_main_offer(
+        &boss,
+        &boss,
+        &redemption_pricing_offer,
+        &main_offer,
+        &ctx.user.pubkey(),
+        &ctx.redemption_tin,
+        &ctx.redemption_tout,
+        0,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+        1_000_000_000,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let expected_buffer_accrual =
+        (buffer_state_before.previous_supply as u128 * 100_000 / (1_000_000 + 50_000)) as u64;
+    let supply_after = get_mint_supply(&ctx.svm, &ctx.onyc_mint);
+
+    assert_eq!(buffer_state_before.previous_supply, supply_before);
+    assert_eq!(
+        get_token_balance(&ctx.svm, &buffer_vault) - buffer_vault_before,
+        expected_buffer_accrual
+    );
+    assert_eq!(
+        get_token_balance(
+            &ctx.svm,
+            &get_associated_token_address(&ctx.user.pubkey(), &ctx.usdc_mint),
+        ),
+        1_000_000
+    );
+    assert_eq!(
+        supply_after,
+        supply_before + expected_buffer_accrual - 1_000_000_000
+    );
+    assert_eq!(read_buffer_state(&ctx.svm).previous_supply, supply_after);
+}
+
+#[test]
 fn test_fulfill_redemption_request_accumulates_executed() {
     let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();

@@ -439,6 +439,26 @@ pub fn configure_main_offer_for_mint_to(
     onyc_mint: &Pubkey,
     token_program: &Pubkey,
 ) -> Pubkey {
+    configure_main_offer_for_mint_to_with_apr(svm, payer, onyc_mint, token_program, 0)
+}
+
+pub fn configure_main_offer_for_mint_to_with_apr(
+    svm: &mut LiteSVM,
+    payer: &Keypair,
+    onyc_mint: &Pubkey,
+    token_program: &Pubkey,
+    apr: u64,
+) -> Pubkey {
+    configure_main_offer_with_asset_and_apr(svm, payer, onyc_mint, token_program, apr).1
+}
+
+pub fn configure_main_offer_with_asset_and_apr(
+    svm: &mut LiteSVM,
+    payer: &Keypair,
+    onyc_mint: &Pubkey,
+    token_program: &Pubkey,
+    apr: u64,
+) -> (Pubkey, Pubkey) {
     let boss = payer.pubkey();
     let token_in_mint = if *token_program == TOKEN_2022_PROGRAM_ID {
         create_mint_2022(svm, payer, 6, &boss)
@@ -466,7 +486,7 @@ pub fn configure_main_offer_for_mint_to(
         Some(now),
         now,
         1_000_000_000,
-        0,
+        apr,
         86_400,
     );
     send_tx(svm, &[ix], &[payer]).expect("add main offer vector failed");
@@ -477,7 +497,7 @@ pub fn configure_main_offer_for_mint_to(
     send_tx(svm, &[ix], &[payer]).expect("set main offer failed");
     advance_slot(svm);
 
-    main_offer
+    (token_in_mint, main_offer)
 }
 
 pub fn build_get_nav_ix(token_in_mint: &Pubkey, token_out_mint: &Pubkey) -> Instruction {

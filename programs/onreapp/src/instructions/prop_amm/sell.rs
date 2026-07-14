@@ -304,7 +304,7 @@ fn execute_open_swap_sell<'info>(
             ctx.program_id,
             &ctx.accounts.state,
             &ctx.accounts.buffer_accounts,
-            &offer,
+            &main_offer,
             &ctx.accounts.token_in_mint,
             ctx.accounts.mint_authority.to_account_info(),
             mint_authority_bump,

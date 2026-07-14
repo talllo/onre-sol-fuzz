@@ -471,6 +471,15 @@ pub fn execute_take_offer_v2<'info>(
         buffer_is_initialized,
         &ctx.accounts.mint_authority.to_account_info(),
     );
+    let main_offer = if is_onyc_token_out_mint(&ctx.accounts.state, &ctx.accounts.token_out_mint) {
+        Some(load_main_offer(
+            ctx.program_id,
+            &ctx.accounts.main_offer.to_account_info(),
+            &ctx.accounts.state,
+        )?)
+    } else {
+        None
+    };
 
     verify_offer_approval(
         &offer,
@@ -564,11 +573,14 @@ pub fn execute_take_offer_v2<'info>(
     })?;
     let user_token_out_account = InterfaceAccount::try_from(&ctx.accounts.user_token_out_account)?;
     let accrual = if should_accrue_onyc_mint {
+        let canonical_offer = main_offer
+            .as_ref()
+            .ok_or(crate::OnreError::InvalidMainOffer)?;
         Some(accrue_buffer_from_accounts(
             ctx.program_id,
             &ctx.accounts.state,
             &ctx.accounts.buffer_accounts,
-            &offer,
+            canonical_offer,
             &ctx.accounts.token_out_mint,
             ctx.accounts.mint_authority.to_account_info(),
             mint_authority_bump,
@@ -625,11 +637,9 @@ pub fn execute_take_offer_v2<'info>(
     }
 
     if is_onyc_token_out_mint(&ctx.accounts.state, &ctx.accounts.token_out_mint) {
-        let main_offer = load_main_offer(
-            ctx.program_id,
-            &ctx.accounts.main_offer.to_account_info(),
-            &ctx.accounts.state,
-        )?;
+        let main_offer = main_offer
+            .as_ref()
+            .ok_or(crate::OnreError::InvalidMainOffer)?;
         ctx.accounts.token_out_mint.reload()?;
         let (market_stats_pda, _) =
             Pubkey::find_program_address(&[seeds::MARKET_STATS], ctx.program_id);
@@ -643,7 +653,7 @@ pub fn execute_take_offer_v2<'info>(
             crate::OnreError::MarketStatsNotWritable
         );
         refresh_market_stats_pda(
-            &main_offer,
+            main_offer,
             &ctx.accounts.token_out_mint,
             &ctx.accounts
                 .circulating_supply_excluded_balance

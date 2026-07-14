@@ -158,6 +158,35 @@ pub fn build_fulfill_redemption_request_ix(
     token_out_program: &Pubkey,
     amount: u64,
 ) -> Instruction {
+    build_fulfill_redemption_request_ix_with_main_offer(
+        worker,
+        _boss,
+        main_offer,
+        main_offer,
+        redeemer,
+        token_in_mint,
+        token_out_mint,
+        request_id,
+        token_in_program,
+        token_out_program,
+        amount,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_fulfill_redemption_request_ix_with_main_offer(
+    worker: &Pubkey,
+    _boss: &Pubkey,
+    offer: &Pubkey,
+    main_offer: &Pubkey,
+    redeemer: &Pubkey,
+    token_in_mint: &Pubkey,
+    token_out_mint: &Pubkey,
+    request_id: u64,
+    token_in_program: &Pubkey,
+    token_out_program: &Pubkey,
+    amount: u64,
+) -> Instruction {
     let (state_pda, _) = find_state_pda();
     let (redemption_offer_pda, _) = find_redemption_offer_pda(token_in_mint, token_out_mint);
     let (redemption_request_pda, _) =
@@ -206,7 +235,7 @@ pub fn build_fulfill_redemption_request_ix(
         program_id: PROGRAM_ID,
         accounts: vec![
             AccountMeta::new_readonly(state_pda, false),
-            AccountMeta::new_readonly(*main_offer, false),
+            AccountMeta::new_readonly(*offer, false),
             AccountMeta::new(redemption_offer_pda, false),
             AccountMeta::new(redemption_request_pda, false),
             AccountMeta::new_readonly(redemption_vault_authority_pda, false),

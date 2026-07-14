@@ -248,15 +248,21 @@ fn test_take_offer_failure_does_not_create_market_stats() {
 fn test_take_offer_v2_accrues_buffer_and_splits_fees() {
     let mut ctx = setup_take_offer_v2();
     let boss = ctx.payer.pubkey();
-    let current_time = get_clock_time(&ctx.svm);
 
     let ix = build_transfer_mint_authority_to_program_ix(&boss, &ctx.onyc_mint, &TOKEN_PROGRAM_ID);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
-    let (offer_pda, _) = find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint);
-    let ix = build_initialize_buffer_ix(&boss, &offer_pda, &ctx.onyc_mint);
+    let main_offer = configure_main_offer_for_mint_to_with_apr(
+        &mut ctx.svm,
+        &ctx.payer,
+        &ctx.onyc_mint,
+        &TOKEN_PROGRAM_ID,
+        50_000,
+    );
+    let ix = build_initialize_buffer_ix(&boss, &main_offer, &ctx.onyc_mint);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
+    let current_time = get_clock_time(&ctx.svm);
     let ix = build_add_offer_vector_ix(
         &boss,
         &ctx.usdc_mint,
@@ -264,7 +270,7 @@ fn test_take_offer_v2_accrues_buffer_and_splits_fees() {
         Some(current_time),
         current_time,
         1_000_000_000,
-        50_000,
+        0,
         86_400,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
@@ -274,14 +280,14 @@ fn test_take_offer_v2_accrues_buffer_and_splits_fees() {
         &ctx.onyc_mint,
         1_000_000_000,
         &TOKEN_PROGRAM_ID,
-        &offer_pda,
+        &main_offer,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
-    let ix = build_set_buffer_gross_yield_ix(&boss, &offer_pda, &ctx.onyc_mint, 150_000);
+    let ix = build_set_buffer_gross_yield_ix(&boss, &main_offer, &ctx.onyc_mint, 150_000);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
-    let ix = build_set_buffer_fee_config_ix(&boss, &offer_pda, &ctx.onyc_mint, 100, 1_000);
+    let ix = build_set_buffer_fee_config_ix(&boss, &main_offer, &ctx.onyc_mint, 100, 1_000);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     advance_slot(&mut ctx.svm);
@@ -315,7 +321,7 @@ fn test_take_offer_v2_accrues_buffer_and_splits_fees() {
     let mint_supply_before = get_mint_supply(&ctx.svm, &ctx.onyc_mint);
     create_token_account(&mut ctx.svm, &ctx.onyc_mint, &ctx.user.pubkey(), 0);
 
-    let ix = build_take_offer_v2_ix(
+    let ix = build_take_offer_v2_ix_with_main_offer(
         &ctx.user.pubkey(),
         &boss,
         &ctx.usdc_mint,
@@ -324,6 +330,7 @@ fn test_take_offer_v2_accrues_buffer_and_splits_fees() {
         None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
+        &main_offer,
     );
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
 
@@ -380,6 +387,7 @@ fn test_take_offer_v2_accrues_buffer_and_splits_fees() {
         expected_performance_fee
     );
     assert_eq!(user_token_out_after, user_minted_amount);
+    assert_eq!(user_minted_amount, 1_000_000_000);
     assert_eq!(
         mint_supply_after - mint_supply_before,
         expected_gross_accrual + user_minted_amount
