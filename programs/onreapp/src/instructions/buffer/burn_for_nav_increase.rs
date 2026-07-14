@@ -34,11 +34,9 @@ pub struct BurnForNavIncrease<'info> {
     )]
     pub buffer_state: Box<Account<'info, BufferState>>,
 
+    #[account(mut)]
     pub boss: Signer<'info>,
 
-    #[account(
-        address = state.main_offer @ crate::OnreError::InvalidMainOffer
-    )]
     pub main_offer: AccountLoader<'info, Offer>,
 
     #[account(mut)]
@@ -113,6 +111,11 @@ pub fn burn_for_nav_increase(
     asset_adjustment_amount: u64,
 ) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
+    require_keys_eq!(
+        ctx.accounts.main_offer.key(),
+        ctx.accounts.state.main_offer,
+        crate::OnreError::InvalidMainOffer
+    );
     let main_offer = ctx.accounts.main_offer.load()?;
     require_keys_eq!(
         ctx.accounts.onyc_mint.key(),

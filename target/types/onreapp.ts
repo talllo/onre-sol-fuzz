@@ -414,6 +414,7 @@ export type Onreapp = {
         },
         {
           "name": "boss",
+          "writable": true,
           "signer": true,
           "relations": [
             "state"
@@ -7587,6 +7588,7 @@ export type Onreapp = {
         },
         {
           "name": "boss",
+          "writable": true,
           "signer": true,
           "relations": [
             "state"
@@ -7820,6 +7822,7 @@ export type Onreapp = {
         },
         {
           "name": "boss",
+          "writable": true,
           "signer": true,
           "relations": [
             "state"

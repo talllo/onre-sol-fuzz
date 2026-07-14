@@ -408,6 +408,7 @@
         },
         {
           "name": "boss",
+          "writable": true,
           "signer": true,
           "relations": [
             "state"
@@ -7581,6 +7582,7 @@
         },
         {
           "name": "boss",
+          "writable": true,
           "signer": true,
           "relations": [
             "state"
@@ -7814,6 +7816,7 @@
         },
         {
           "name": "boss",
+          "writable": true,
           "signer": true,
           "relations": [
             "state"
