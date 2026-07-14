@@ -112,7 +112,7 @@ pub fn build_create_redemption_request_ix(
 pub fn build_cancel_redemption_request_ix(
     signer: &Pubkey,
     redeemer: &Pubkey,
-    redemption_admin: &Pubkey,
+    worker: &Pubkey,
     token_in_mint: &Pubkey,
     token_out_mint: &Pubkey,
     request_id: u64,
@@ -133,7 +133,7 @@ pub fn build_cancel_redemption_request_ix(
             AccountMeta::new(redemption_request_pda, false),
             AccountMeta::new(*signer, true),
             AccountMeta::new_readonly(*redeemer, false),
-            AccountMeta::new(*redemption_admin, false),
+            AccountMeta::new(*worker, false),
             AccountMeta::new_readonly(redemption_vault_authority_pda, false),
             AccountMeta::new_readonly(*token_in_mint, false),
             AccountMeta::new(vault_token_ata, false),
@@ -147,7 +147,7 @@ pub fn build_cancel_redemption_request_ix(
 }
 
 pub fn build_fulfill_redemption_request_ix(
-    redemption_admin: &Pubkey,
+    worker: &Pubkey,
     _boss: &Pubkey,
     main_offer: &Pubkey,
     redeemer: &Pubkey,
@@ -223,7 +223,7 @@ pub fn build_fulfill_redemption_request_ix(
             AccountMeta::new(redemption_fee_token_in_ata, false),
             AccountMeta::new_readonly(mint_authority_pda, false),
             AccountMeta::new_readonly(*redeemer, false),
-            AccountMeta::new(*redemption_admin, true),
+            AccountMeta::new(*worker, true),
             AccountMeta::new(buffer_state_pda, false),
             AccountMeta::new(buffer_vault_onyc_ata, false),
             AccountMeta::new(management_fee_vault_onyc_ata, false),

@@ -69,6 +69,13 @@ In the shared accrual helper, this is written as:
 
 Any BUFFER-aware instruction performs one full accrual cycle before applying its own supply change.
 
+The worker-only `settle_buffer` instruction performs the same accrual cycle
+without a trade or an additional user/admin mint, then refreshes canonical
+market stats. It is the operational fallback for a daily settlement job when no
+other BUFFER-aware transaction has settled the interval. The instruction is
+blocked by the kill switch and requires configured worker, ONyc mint, main
+offer, initialized BUFFER state, and program mint authority.
+
 Inputs:
 
 - stored `previous_supply`

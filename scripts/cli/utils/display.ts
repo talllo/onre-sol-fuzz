@@ -28,7 +28,7 @@ export function printState(state: any, json: boolean = false): void {
                     maxSupply: state.maxSupply?.toString() || "0",
                     approver1: state.approver1.toBase58(),
                     approver2: state.approver2.toBase58(),
-                    redemptionAdmin: state.redemptionAdmin?.toBase58(),
+                    worker: state.worker?.toBase58(),
                     admins: state.admins?.map((a: any) => a.toBase58()) || [],
                 },
                 null,
@@ -55,8 +55,8 @@ export function printState(state: any, json: boolean = false): void {
         ["Approver 2", state.approver2.toBase58()],
     );
 
-    if (state.redemptionAdmin) {
-        table.push(["Redemption Admin", state.redemptionAdmin.toBase58()]);
+    if (state.worker) {
+        table.push(["Worker", state.worker.toBase58()]);
     }
 
     console.log(table.toString());
@@ -224,7 +224,15 @@ export function printOfferList(
         console.log(chalk.bold.blue(`\n=== Offers (${offers.length} found) ===\n`));
 
         const table = new Table({
-            head: [chalk.white("Address"), chalk.white("Token In"), chalk.white("Token Out"), chalk.white("Fee"), chalk.white("Approval"), chalk.white("Permissionless"), chalk.white("Vectors")],
+            head: [
+                chalk.white("Address"),
+                chalk.white("Token In"),
+                chalk.white("Token Out"),
+                chalk.white("Fee"),
+                chalk.white("Approval"),
+                chalk.white("Permissionless"),
+                chalk.white("Vectors"),
+            ],
             colWidths: [46, 46, 46, 10, 12, 16, 10],
         });
 
@@ -478,7 +486,15 @@ export function printRedemptionOfferList(
         console.log(chalk.bold.blue(`\n=== Redemption Offers (${offers.length} found) ===\n`));
 
         const table = new Table({
-            head: [chalk.white("Address"), chalk.white("Token In"), chalk.white("Token Out"), chalk.white("Fee"), chalk.white("Total Requests"), chalk.white("Executed"), chalk.white("Pending")],
+            head: [
+                chalk.white("Address"),
+                chalk.white("Token In"),
+                chalk.white("Token Out"),
+                chalk.white("Fee"),
+                chalk.white("Total Requests"),
+                chalk.white("Executed"),
+                chalk.white("Pending"),
+            ],
             colWidths: [46, 46, 46, 10, 16, 22, 22],
         });
 
@@ -566,10 +582,13 @@ type VaultGroup = { name: string; authority: string; vaults: VaultEntry[] };
  */
 export function printVaultList(groups: VaultGroup[], json: boolean = false): void {
     if (json) {
-        console.log(JSON.stringify(
-            groups.map(({ name, authority, vaults }) => ({ name, authority, vaults })),
-            null, 2,
-        ));
+        console.log(
+            JSON.stringify(
+                groups.map(({ name, authority, vaults }) => ({ name, authority, vaults })),
+                null,
+                2,
+            ),
+        );
         return;
     }
 
@@ -585,12 +604,7 @@ export function printVaultList(groups: VaultGroup[], json: boolean = false): voi
         });
 
         for (const v of vaults) {
-            table.push([
-                v.token,
-                v.ata,
-                v.initialized ? v.balance ?? "0" : chalk.gray("—"),
-                v.initialized && v.decimals !== null ? v.decimals.toString() : chalk.gray("—"),
-            ]);
+            table.push([v.token, v.ata, v.initialized ? (v.balance ?? "0") : chalk.gray("—"), v.initialized && v.decimals !== null ? v.decimals.toString() : chalk.gray("—")]);
         }
 
         console.log(table.toString());
@@ -620,12 +634,7 @@ export function printRedemptionVaults(
     });
 
     for (const v of vaults) {
-        table.push([
-            v.token,
-            v.ata,
-            v.initialized ? v.balance ?? "0" : chalk.gray("—"),
-            v.initialized && v.decimals !== null ? v.decimals.toString() : chalk.gray("—"),
-        ]);
+        table.push([v.token, v.ata, v.initialized ? (v.balance ?? "0") : chalk.gray("—"), v.initialized && v.decimals !== null ? v.decimals.toString() : chalk.gray("—")]);
     }
 
     console.log(table.toString());

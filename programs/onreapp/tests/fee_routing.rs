@@ -28,8 +28,8 @@ fn setup_fee_routing() -> FeeRoutingCtx {
 
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    // Set redemption_admin = boss
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    // Set worker = boss.
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 

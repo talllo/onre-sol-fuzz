@@ -29,7 +29,7 @@ export async function overrideForkGovernance(runtime: SmokeRuntime): Promise<voi
     const patchedState = {
         ...state,
         boss: runtime.authority.publicKey,
-        redemptionAdmin: runtime.authority.publicKey,
+        worker: runtime.authority.publicKey,
         onycMint: MINTS.onyc,
         mainOffer,
     };
@@ -46,10 +46,10 @@ export async function overrideForkGovernance(runtime: SmokeRuntime): Promise<voi
     ]);
     const updated = await runtime.program.account.state.fetch(PDAS.state);
     assertPublicKeyEq(updated.boss, runtime.authority.publicKey, "State.boss after fork governance override");
-    assertPublicKeyEq(updated.redemptionAdmin, runtime.authority.publicKey, "State.redemptionAdmin after fork governance override");
+    assertPublicKeyEq(updated.worker, runtime.authority.publicKey, "State.worker after fork governance override");
     assertPublicKeyEq(updated.onycMint, MINTS.onyc, "State.onycMint after fork governance override");
     assertPublicKeyEq(updated.mainOffer, mainOffer, "State.mainOffer after fork governance override");
-    console.log(`  ok fork State.boss/redemption_admin/main_offer -> ${runtime.authority.publicKey.toBase58()}`);
+    console.log(`  ok fork State.boss/worker/main_offer -> ${runtime.authority.publicKey.toBase58()}`);
 }
 
 export async function ensureMainOffer(runtime: SmokeRuntime): Promise<PublicKey> {

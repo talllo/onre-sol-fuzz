@@ -28,7 +28,7 @@ pub struct RedemptionOffer {
     /// This tracks ONyc tokens that are locked in pending redemption requests.
     /// Uses u128 for aggregate accounting across requests.
     pub requested_redemptions: u128,
-    /// Fee in basis points (1000 = 10%) charged when the redemption admin fulfills requests
+    /// Fee in basis points (1000 = 10%) charged when the worker fulfills requests
     pub fee_basis_points: u16,
     /// Counter for sequential redemption request numbering
     /// Increments with each new redemption request created

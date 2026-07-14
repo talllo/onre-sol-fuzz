@@ -156,7 +156,7 @@ pub struct StateData {
     pub bump: u8,
     pub max_supply: u64,
     pub max_mint_amount: u64,
-    pub redemption_admin: Pubkey,
+    pub worker: Pubkey,
     pub main_offer: Pubkey,
 }
 
@@ -190,7 +190,7 @@ pub fn read_state(svm: &LiteSVM) -> StateData {
         bump: state.bump,
         max_supply: state.max_supply,
         max_mint_amount: state.max_mint_amount,
-        redemption_admin: state.redemption_admin,
+        worker: state.worker,
         main_offer: state.main_offer,
     }
 }

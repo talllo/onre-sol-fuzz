@@ -140,7 +140,7 @@ pub struct FulfillRedemptionRequest<'info> {
     pub redeemer: UncheckedAccount<'info>,
 
     #[account(mut)]
-    pub redemption_admin: Signer<'info>,
+    pub worker: Signer<'info>,
 
     pub buffer_accounts: BufferAccrualAccounts<'info>,
 
@@ -184,7 +184,7 @@ pub struct FulfillRedemptionRequest<'info> {
 /// * `Err(_)` - If validation fails or token operations fail
 ///
 /// # Access Control
-/// - Only redemption_admin can fulfill redemptions
+/// - Only the configured worker can fulfill redemptions
 /// - Kill switch prevents fulfillment when activated
 ///
 /// # Effects
@@ -230,8 +230,8 @@ pub fn fulfill_redemption_request<'info>(
         crate::OnreError::InvalidRedeemer
     );
     require_keys_eq!(
-        ctx.accounts.redemption_admin.key(),
-        ctx.accounts.state.redemption_admin,
+        ctx.accounts.worker.key(),
+        ctx.accounts.state.worker,
         crate::OnreError::Unauthorized
     );
     validate_associated_token_address(
@@ -257,7 +257,7 @@ pub fn fulfill_redemption_request<'info>(
     )?;
     let user_token_out_account = get_or_create_associated_token_account(EnsureAtaParams {
         ata_account: &ctx.accounts.user_token_out_account,
-        payer: ctx.accounts.redemption_admin.to_account_info(),
+        payer: ctx.accounts.worker.to_account_info(),
         authority_account: ctx.accounts.redeemer.to_account_info(),
         mint_account: ctx.accounts.token_out_mint.to_account_info(),
         token_program: ctx.accounts.token_out_program.to_account_info(),
@@ -273,7 +273,7 @@ pub fn fulfill_redemption_request<'info>(
     >(ConfigurableVaultTokenAccountParams {
         vault: &ctx.accounts.offer_proceeds_vault,
         token_account: &ctx.accounts.offer_proceeds_token_in_account,
-        payer: ctx.accounts.redemption_admin.to_account_info(),
+        payer: ctx.accounts.worker.to_account_info(),
         mint_account: ctx.accounts.token_in_mint.to_account_info(),
         token_program: ctx.accounts.token_in_program.to_account_info(),
         associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
@@ -292,7 +292,7 @@ pub fn fulfill_redemption_request<'info>(
     >(ConfigurableVaultTokenAccountParams {
         vault: &ctx.accounts.redemption_fee_vault,
         token_account: &ctx.accounts.redemption_fee_token_in_account,
-        payer: ctx.accounts.redemption_admin.to_account_info(),
+        payer: ctx.accounts.worker.to_account_info(),
         mint_account: ctx.accounts.token_in_mint.to_account_info(),
         token_program: ctx.accounts.token_in_program.to_account_info(),
         associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
@@ -324,7 +324,7 @@ pub fn fulfill_redemption_request<'info>(
             circulating_supply_excluded_balance: &ctx.accounts.circulating_supply_excluded_balance,
             main_offer: &ctx.accounts.main_offer,
             redeemer: &ctx.accounts.redeemer,
-            redemption_admin: &ctx.accounts.redemption_admin,
+            worker: &ctx.accounts.worker,
             system_program: &ctx.accounts.system_program,
             buffer_accounts: Some(&ctx.accounts.buffer_accounts),
         },
@@ -356,7 +356,7 @@ struct ExecuteFulfillRedemptionRequestParams<'a, 'info> {
     circulating_supply_excluded_balance: &'a UncheckedAccount<'info>,
     main_offer: &'a UncheckedAccount<'info>,
     redeemer: &'a UncheckedAccount<'info>,
-    redemption_admin: &'a Signer<'info>,
+    worker: &'a Signer<'info>,
     system_program: &'a Program<'info, System>,
     buffer_accounts: Option<&'a BufferAccrualAccounts<'info>>,
 }
@@ -513,7 +513,7 @@ fn execute_fulfill_redemption_request(
             params.token_in_mint,
             &params.circulating_supply_excluded_balance.to_account_info(),
             &params.market_stats.to_account_info(),
-            &params.redemption_admin.to_account_info(),
+            &params.worker.to_account_info(),
             &params.system_program.to_account_info(),
             params.program_id,
         )?;
@@ -572,11 +572,11 @@ fn execute_fulfill_redemption_request(
         &params.redemption_offer_account.to_account_info(),
         params.redemption_offer,
     )?;
-    // Close the request account only when fully settled; rent goes to redemption_admin
+    // Close the request account only when fully settled; rent goes to the worker.
     if is_fully_fulfilled {
         params
             .redemption_request
-            .close(params.redemption_admin.to_account_info())?;
+            .close(params.worker.to_account_info())?;
     } else {
         params.redemption_request.exit(params.program_id)?;
     }

@@ -16,7 +16,7 @@ import {
     executeStateSetExcludedOwners,
     executeStateSetMainOffer,
     executeStateSetOnycMint,
-    executeStateSetRedemptionAdmin,
+    executeStateSetWorker,
     executeStateUpdateExcludedBalance,
 } from "../implementations";
 
@@ -164,14 +164,14 @@ export function registerStateCommands(program: Command): void {
             await executeStateUpdateExcludedBalance(opts);
         });
 
-    // state set-redemption-admin
+    // state set-worker
     program
-        .command("set-redemption-admin")
-        .description("Set the redemption admin who can fulfill redemption requests")
-        .option("--redemption-admin <address>", "Redemption admin public key")
+        .command("set-worker")
+        .description("Set the worker who can fulfill/cancel redemptions and settle BUFFER")
+        .option("--worker <address>", "Worker public key")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
-            await executeStateSetRedemptionAdmin(opts);
+            await executeStateSetWorker(opts);
         });
 
     // state clear-admins

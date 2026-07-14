@@ -49,7 +49,7 @@ Offers use up to 10 `OfferVector` entries with APR-based compound interest. Pric
 | ------------------ | -------------------------------------------------------------------------- |
 | `boss`             | Primary authority with full control (two-step transfer via propose/accept) |
 | `admins[20]`       | Can enable the kill switch                                                 |
-| `redemption_admin` | Manages redemption operations                                              |
+| `worker`           | Fulfills/cancels redemptions and settles BUFFER                             |
 | `approvers`        | Trusted keys for cryptographic approval verification (ed25519)             |
 
 ### Kill Switch Semantics
@@ -62,7 +62,7 @@ When `state.is_killed == true`, the program rejects:
 - Prop AMM quotes and execution: `quote_swap_buy`, `quote_swap_sell`, `open_swap_buy`, `open_swap_sell`
 - redemption request movement: `create_redemption_request`, `fulfill_redemption_request`, `cancel_redemption_request`
 - vault funding and recovery: `offer_vault_deposit`, `offer_vault_withdraw`, `redemption_vault_deposit`, `redemption_vault_withdraw`
-- reserve/configurable vault movement: `deposit_reserve_vault`, `withdraw_reserve_vault`, `withdraw_configurable_vault`
+- BUFFER/configurable vault movement: `settle_buffer`, `deposit_reserve_vault`, `withdraw_reserve_vault`, `withdraw_configurable_vault`
 - direct supply-changing and accrual-settling paths: `mint_to`, `burn_for_nav_increase`, `set_buffer_gross_apr`, `set_buffer_fee_config`
 
 The kill switch does not pause every instruction. Governance and configuration-only instructions such as authority changes, admin/approver management, offer configuration, targeted disable, supply-cap configuration, and mint-authority transfer remain callable according to their normal access control.
@@ -112,7 +112,7 @@ Typical on-chain BUFFER setup order:
 
 **Initialization**: `initialize`, `initialize_permissionless_authority`
 
-**BUFFER**: `initialize_buffer`, `set_buffer_gross_apr`, `set_buffer_fee_config`, `burn_for_nav_increase`, `deposit_reserve_vault`, `withdraw_reserve_vault`
+**BUFFER**: `initialize_buffer`, `settle_buffer`, `set_buffer_gross_apr`, `set_buffer_fee_config`, `burn_for_nav_increase`, `deposit_reserve_vault`, `withdraw_reserve_vault`
 
 **Prop AMM**: `configure_prop_amm`, `quote_swap_buy`, `quote_swap_sell`, `open_swap_buy`, `open_swap_sell`
 
@@ -120,7 +120,7 @@ Typical on-chain BUFFER setup order:
 
 **Redemption**: `make_redemption_offer`, `set_redemption_offer_disabled`, `create_redemption_request`, `fulfill_redemption_request`, `cancel_redemption_request`, `update_redemption_offer_fee`, `update_redemption_offer_prop_amm_sell_fee`, `update_redemption_offer_vault_target`
 
-**State Operations**: `propose_boss`, `accept_boss`, `add_admin`, `remove_admin`, `clear_admins`, `set_kill_switch`, `set_onyc_mint`, `set_redemption_admin`, `set_main_offer`, `add_approver`, `remove_approver`, `configure_max_supply`, `configure_max_mint_amount`, `close_state`
+**State Operations**: `propose_boss`, `accept_boss`, `add_admin`, `remove_admin`, `clear_admins`, `set_kill_switch`, `set_onyc_mint`, `set_worker`, `set_main_offer`, `add_approver`, `remove_approver`, `configure_max_supply`, `configure_max_mint_amount`, `close_state`
 
 **Vault Operations**: `offer_vault_deposit`, `offer_vault_withdraw`, `redemption_vault_deposit`, `redemption_vault_withdraw`, `set_configurable_vault_destination`, `withdraw_configurable_vault`
 
@@ -167,7 +167,7 @@ SURFPOOL_RPC_URL=http://127.0.0.1:8899 pnpm ui
 VITE_ONRE_PROGRAM_ID=<surfpool-program-id> SURFPOOL_RPC_URL=http://127.0.0.1:8899 pnpm ui
 ```
 
-The UI includes Surfpool cheatcode controls for setting `state.boss`, setting `state.redemption_admin`, and funding SOL on a fork. These controls only work against a running Surfpool RPC in the background. They call Surfpool-only RPC methods and do not work against the production mainnet program or a normal Solana RPC endpoint.
+The UI includes Surfpool cheatcode controls for setting `state.boss`, setting `state.worker`, and funding SOL on a fork. These controls only work against a running Surfpool RPC in the background. They call Surfpool-only RPC methods and do not work against the production mainnet program or a normal Solana RPC endpoint.
 
 ### Docker Surfpool UI
 

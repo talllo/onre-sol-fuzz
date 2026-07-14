@@ -207,10 +207,10 @@ pub fn build_configure_prop_amm_ix(
     }
 }
 
-pub fn build_set_redemption_admin_ix(boss: &Pubkey, redemption_admin: &Pubkey) -> Instruction {
+pub fn build_set_worker_ix(boss: &Pubkey, worker: &Pubkey) -> Instruction {
     let (state_pda, _) = find_state_pda();
-    let mut data = ix_discriminator("set_redemption_admin").to_vec();
-    data.extend_from_slice(redemption_admin.as_ref());
+    let mut data = ix_discriminator("set_worker").to_vec();
+    data.extend_from_slice(worker.as_ref());
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![

@@ -1022,32 +1022,29 @@ fn test_removing_approver2_allows_adding_to_slot2() {
 }
 
 // ===========================================================================
-// Set Redemption Admin
+// Set Worker
 // ===========================================================================
 
 #[test]
-fn test_boss_can_set_redemption_admin() {
+fn test_boss_can_set_worker() {
     let (mut svm, payer, _) = setup_initialized();
     let boss = payer.pubkey();
 
-    let redemption_admin = Keypair::new();
-    let ix = build_set_redemption_admin_ix(&boss, &redemption_admin.pubkey());
+    let worker = Keypair::new();
+    let ix = build_set_worker_ix(&boss, &worker.pubkey());
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
-    assert_eq!(read_state(&svm).redemption_admin, redemption_admin.pubkey());
+    assert_eq!(read_state(&svm).worker, worker.pubkey());
 }
 
 #[test]
-fn test_non_boss_cannot_set_redemption_admin() {
+fn test_non_boss_cannot_set_worker() {
     let (mut svm, _payer, _) = setup_initialized();
 
     let non_boss = Keypair::new();
     svm.airdrop(&non_boss.pubkey(), INITIAL_LAMPORTS).unwrap();
 
-    let ix = build_set_redemption_admin_ix(&non_boss.pubkey(), &Keypair::new().pubkey());
+    let ix = build_set_worker_ix(&non_boss.pubkey(), &Keypair::new().pubkey());
     let result = send_tx(&mut svm, &[ix], &[&non_boss]);
-    assert!(
-        result.is_err(),
-        "non-boss should not be able to set redemption admin"
-    );
+    assert!(result.is_err(), "non-boss should not be able to set worker");
 }

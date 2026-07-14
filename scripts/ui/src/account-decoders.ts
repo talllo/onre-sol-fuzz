@@ -7,7 +7,7 @@ export const STATE_ACCOUNT_OFFSETS = {
     boss: 8,
     proposedBoss: 40,
     onycMint: 73,
-    redemptionAdmin: 818,
+    worker: 818,
     mainOffer: 858,
 } as const;
 
@@ -36,7 +36,7 @@ export function decodeStateAccount(data: Buffer | Uint8Array): StateAccountInfo 
         boss: publicKeyAt(bytes, STATE_ACCOUNT_OFFSETS.boss),
         proposedBoss: publicKeyAt(bytes, STATE_ACCOUNT_OFFSETS.proposedBoss),
         onycMint: publicKeyAt(bytes, STATE_ACCOUNT_OFFSETS.onycMint),
-        redemptionAdmin: publicKeyAt(bytes, STATE_ACCOUNT_OFFSETS.redemptionAdmin),
+        worker: publicKeyAt(bytes, STATE_ACCOUNT_OFFSETS.worker),
         mainOffer: publicKeyAt(bytes, STATE_ACCOUNT_OFFSETS.mainOffer),
     };
 }
@@ -82,7 +82,7 @@ export function sameStateInfo(left: StateAccountInfo | undefined, right: StateAc
         left.boss.equals(right.boss) &&
         left.proposedBoss.equals(right.proposedBoss) &&
         left.onycMint.equals(right.onycMint) &&
-        left.redemptionAdmin.equals(right.redemptionAdmin) &&
+        left.worker.equals(right.worker) &&
         left.mainOffer.equals(right.mainOffer),
     );
 }

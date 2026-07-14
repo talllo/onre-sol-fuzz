@@ -47,7 +47,7 @@ This is a Solana smart contract built with Anchor that manages tokenized (re)ins
 **Authority Structure**:
 - `boss`: Primary authority with full control
 - `admins[]`: Can enable kill switch
-- `redemption_admin`: Manages redemption operations
+- `worker`: Fulfills/cancels redemptions and settles BUFFER
 - `approvers`: Trusted keys for cryptographic approval verification
 
 **PDAs**: Seeds defined in `constants::seeds` - STATE, OFFER, OFFER_VAULT_AUTHORITY, PERMISSIONLESS_AUTHORITY, MINT_AUTHORITY, REDEMPTION_OFFER, etc.

@@ -35,8 +35,8 @@ fn setup_redemption_with_fees(
 
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    // Set redemption_admin = boss for simplicity
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    // Set worker = boss for simplicity.
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -208,8 +208,8 @@ fn test_make_redemption_offer_rejects_non_authorized() {
 
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    // Set redemption_admin to someone specific (not the random user)
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    // Set worker to someone specific (not the random user).
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -251,7 +251,7 @@ fn test_make_redemption_offer_rejects_fee_over_max() {
 
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -286,7 +286,7 @@ fn test_make_redemption_offer_rejects_prop_amm_sell_fee_over_max() {
 
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -319,16 +319,16 @@ fn test_make_redemption_offer_rejects_prop_amm_sell_fee_over_max() {
 }
 
 #[test]
-fn test_make_redemption_offer_redemption_admin_can_create() {
+fn test_worker_cannot_create_redemption_offer() {
     let (mut svm, payer, _onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
-    let redemption_admin = Keypair::new();
-    svm.airdrop(&redemption_admin.pubkey(), 10 * INITIAL_LAMPORTS)
+    let worker = Keypair::new();
+    svm.airdrop(&worker.pubkey(), 10 * INITIAL_LAMPORTS)
         .unwrap();
 
-    let ix = build_set_redemption_admin_ix(&boss, &redemption_admin.pubkey());
+    let ix = build_set_worker_ix(&boss, &worker.pubkey());
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -344,16 +344,20 @@ fn test_make_redemption_offer_redemption_admin_can_create() {
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
-    // Redemption admin should be able to create
+    // The worker is limited to fulfillment, cancellation, and BUFFER settlement.
     let ix = build_make_redemption_offer_ix(
-        &redemption_admin.pubkey(),
+        &worker.pubkey(),
         &_onyc_mint,
         &usdc_mint,
         500,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
-    send_tx(&mut svm, &[ix], &[&redemption_admin]).unwrap();
+    let result = send_tx(&mut svm, &[ix], &[&worker]);
+    assert!(
+        result.is_err(),
+        "worker should not be able to create a redemption offer"
+    );
 }
 
 // ===========================================================================
@@ -580,7 +584,7 @@ fn test_cancel_redemption_request_by_redeemer() {
     send_tx(&mut svm, &[ix], &[&user]).unwrap();
     advance_slot(&mut svm);
 
-    // Cancel by redeemer (boss is redemption_admin in setup)
+    // Cancel by redeemer (boss is worker in setup).
     let ix = build_cancel_redemption_request_ix(
         &user.pubkey(),
         &user.pubkey(),
@@ -623,7 +627,7 @@ fn test_cancel_redemption_request_by_boss() {
     send_tx(&mut svm, &[ix], &[&user]).unwrap();
     advance_slot(&mut svm);
 
-    // Boss cancels (boss is also redemption_admin in this setup)
+    // Boss cancels (boss is also worker in this setup).
     let ix = build_cancel_redemption_request_ix(
         &boss,
         &user.pubkey(),
@@ -759,7 +763,7 @@ fn test_fulfill_redemption_request_transfer_mode() {
     send_tx(&mut svm, &[ix], &[&user]).unwrap();
     advance_slot(&mut svm);
 
-    // Fulfill the request (boss is redemption_admin)
+    // Fulfill the request (boss is worker).
     let ix = build_fulfill_redemption_request_ix(
         &boss,
         &boss,
@@ -1295,16 +1299,16 @@ fn test_create_redemption_request_same_redeemer_multiple() {
 // ===========================================================================
 
 #[test]
-fn test_cancel_redemption_request_by_redemption_admin() {
+fn test_cancel_redemption_request_by_worker() {
     let (mut svm, payer, _usdc, onyc_mint, redemption_tin, redemption_tout) = setup_redemption();
     let boss = payer.pubkey();
 
-    // Set a separate redemption_admin (distinct from boss)
-    let redemption_admin = Keypair::new();
-    svm.airdrop(&redemption_admin.pubkey(), 10 * INITIAL_LAMPORTS)
+    // Set a separate worker (distinct from boss).
+    let worker = Keypair::new();
+    svm.airdrop(&worker.pubkey(), 10 * INITIAL_LAMPORTS)
         .unwrap();
 
-    let ix = build_set_redemption_admin_ix(&boss, &redemption_admin.pubkey());
+    let ix = build_set_worker_ix(&boss, &worker.pubkey());
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -1326,16 +1330,16 @@ fn test_cancel_redemption_request_by_redemption_admin() {
     send_tx(&mut svm, &[ix], &[&user]).unwrap();
     advance_slot(&mut svm);
 
-    // Redemption admin cancels
+    // Worker cancels.
     let ix = build_cancel_redemption_request_ix(
-        &redemption_admin.pubkey(),
+        &worker.pubkey(),
         &user.pubkey(),
-        &redemption_admin.pubkey(),
+        &worker.pubkey(),
         &redemption_tin,
         &redemption_tout,
         0,
     );
-    send_tx(&mut svm, &[ix], &[&redemption_admin]).unwrap();
+    send_tx(&mut svm, &[ix], &[&worker]).unwrap();
 
     let user_ata = get_associated_token_address(&user.pubkey(), &onyc_mint);
     assert_eq!(get_token_balance(&svm, &user_ata), 1_000_000_000);
@@ -1514,8 +1518,8 @@ fn setup_fulfillable_request(fee_bps: u16, amount: u64) -> FulfillCtx {
     let boss = payer.pubkey();
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    // Set redemption_admin = boss
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    // Set worker = boss.
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -1637,7 +1641,7 @@ fn test_fulfill_redemption_request_accumulates_executed() {
     let boss = payer.pubkey();
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -1790,7 +1794,7 @@ fn test_fulfill_redemption_request_with_apr_growth() {
     let boss = payer.pubkey();
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -1893,7 +1897,7 @@ fn test_fulfill_redemption_request_burn_and_transfer() {
     let boss = payer.pubkey();
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -2013,7 +2017,7 @@ fn test_fulfill_redemption_request_rejects_token_out_transfer_fee() {
 
     let usdc_mint = create_mint_2022_with_transfer_fee(&mut svm, &payer, 6, &boss, 500, 1_000_000);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -2183,7 +2187,7 @@ fn test_fulfill_redemption_request_different_price() {
     let boss = payer.pubkey();
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -2279,7 +2283,7 @@ fn test_fulfill_redemption_request_fee_with_apr() {
     let boss = payer.pubkey();
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -2422,8 +2426,8 @@ fn setup_redemption_token2022() -> (
 
     let usdc_mint = create_mint_2022(&mut svm, &payer, 6, &boss);
 
-    // Set redemption_admin = boss
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    // Set worker = boss.
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -2600,7 +2604,7 @@ fn test_fulfill_redemption_token2022_with_fee() {
 
     let usdc_mint = create_mint_2022(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -2703,7 +2707,7 @@ fn test_make_redemption_offer_multiple_pairs() {
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
     let other_mint = create_mint(&mut svm, &payer, 9, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -2769,7 +2773,7 @@ fn test_make_redemption_offer_token2022() {
 
     let usdc_mint = create_mint_2022(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -2824,7 +2828,7 @@ fn test_make_redemption_offer_rejects_token2022_onyc() {
     let usdc_mint = create_mint_2022(&mut svm, &payer, 6, &boss);
     let token2022_onyc_mint = create_mint_2022(&mut svm, &payer, 9, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -2902,7 +2906,7 @@ fn test_fulfill_redemption_request_fails_no_active_vector() {
     let boss = payer.pubkey();
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -2999,7 +3003,7 @@ fn fulfill_redemption_request_with_price(price: u64) -> u64 {
     let boss = payer.pubkey();
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -3150,7 +3154,7 @@ fn fulfill_token2022_with_params(
 
     let usdc_mint = create_mint_2022(&mut svm, &payer, 6, &boss);
 
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 
@@ -3716,8 +3720,8 @@ fn test_fulfill_redemption_request_different_decimals() {
     // Create usdc with 6 decimals (onyc already has 9 from setup_initialized)
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    // Set redemption_admin = boss
-    let ix = build_set_redemption_admin_ix(&boss, &boss);
+    // Set worker = boss.
+    let ix = build_set_worker_ix(&boss, &boss);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     advance_slot(&mut svm);
 

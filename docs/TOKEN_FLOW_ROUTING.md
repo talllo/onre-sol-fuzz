@@ -103,7 +103,7 @@ Notes:
 
 ```mermaid
 flowchart TD
-    Signer[Boss or redemption admin] --> Validate[Validate linked offer]
+    Signer[Boss] --> Validate[Validate linked offer]
     Validate --> VaultIn[Create redemption token in ATA]
     Validate --> VaultOut[Create redemption token out ATA]
     VaultIn --> Create[Create RedemptionOffer PDA]
@@ -121,7 +121,7 @@ Notes:
 - The redemption market is the ONYC-to-asset side linked to the offer.
 - Initial `vault_target_bps` is zero, so new redemption markets do not automatically receive refill inflow until configured.
 - Redemption offer creation rejects fee values above the program fee cap.
-- `fee_basis_points` is the redemption admin fulfillment fee. `fee_basis_points_prop_amm_sell` is the Prop AMM sell redemption fee set at redemption offer creation and later adjustable by the boss through `update_redemption_offer_prop_amm_sell_fee`.
+- `fee_basis_points` is the worker fulfillment fee. `fee_basis_points_prop_amm_sell` is the Prop AMM sell redemption fee set at redemption offer creation and later adjustable by the boss through `update_redemption_offer_prop_amm_sell_fee`.
 
 ## Redemption Request Creation
 
@@ -180,7 +180,7 @@ flowchart TD
 
 Notes:
 
-- The redeemer, redemption admin, or boss can cancel.
+- The redeemer, worker, or boss can cancel.
 - Only the unfulfilled remainder is returned.
 
 ## Prop AMM Buy

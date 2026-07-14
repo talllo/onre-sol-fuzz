@@ -64,7 +64,7 @@ export interface StateAccountInfo {
     boss: PublicKey;
     proposedBoss: PublicKey;
     onycMint: PublicKey;
-    redemptionAdmin: PublicKey;
+    worker: PublicKey;
     mainOffer: PublicKey;
 }
 

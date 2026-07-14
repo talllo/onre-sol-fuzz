@@ -245,6 +245,46 @@ fn trigger_buffer_accrual(svm: &mut litesvm::LiteSVM, payer: &Keypair, onyc_mint
 }
 
 #[test]
+fn test_worker_can_settle_buffer_without_a_trade() {
+    let (mut svm, payer, _token_in_mint, onyc_mint, worker) =
+        setup_buffer_context(100_000, 50_000, 0, 0);
+    let boss = payer.pubkey();
+    let main_offer = read_state(&svm).main_offer;
+
+    let ix = build_set_worker_ix(&boss, &worker.pubkey());
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_clock_by(&mut svm, ONE_YEAR_SECONDS);
+
+    let supply_before = get_mint_supply(&svm, &onyc_mint);
+    let ix = build_settle_buffer_ix(&worker.pubkey(), &main_offer, &onyc_mint);
+    send_tx(&mut svm, &[ix], &[&worker]).unwrap();
+
+    let buffer_state = read_buffer_state(&svm);
+    let supply_after = get_mint_supply(&svm, &onyc_mint);
+    assert!(supply_after > supply_before);
+    assert_eq!(buffer_state.previous_supply, supply_after);
+}
+
+#[test]
+fn test_non_worker_cannot_settle_buffer() {
+    let (mut svm, payer, _token_in_mint, onyc_mint, worker) =
+        setup_buffer_context(100_000, 50_000, 0, 0);
+    let boss = payer.pubkey();
+    let main_offer = read_state(&svm).main_offer;
+    let unauthorized = Keypair::new();
+    svm.airdrop(&unauthorized.pubkey(), INITIAL_LAMPORTS)
+        .unwrap();
+
+    let ix = build_set_worker_ix(&boss, &worker.pubkey());
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    advance_clock_by(&mut svm, ONE_YEAR_SECONDS);
+
+    let ix = build_settle_buffer_ix(&unauthorized.pubkey(), &main_offer, &onyc_mint);
+    let result = send_tx(&mut svm, &[ix], &[&unauthorized]);
+    assert!(result.is_err(), "non-worker should not settle BUFFER");
+}
+
+#[test]
 fn test_initialize_buffer_success() {
     let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
