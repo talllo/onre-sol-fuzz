@@ -99,9 +99,12 @@ out = raw * max(0, 1 - haircut(u))
 
 Commit `5e86ebe` then removed `min_liquidation_haircut`, leaving only the
 curve peg haircut. Commit `2f91c58` added cadence pricing by reducing the
-curve exponent as current-epoch sell count rises. Later commits moved the
-Prop AMM state to per-pair PDAs and changed the fixed reserve target source
-from Prop AMM config to `redemption_offer.vault_target_bps`.
+curve exponent as current-epoch sell count rises. The current cadence-wave
+model replaces that exponent reduction: the base exponent stays fixed, while
+sell cadence raises a separate target haircut and the greater haircut wins.
+Later commits moved the Prop AMM state to per-pair PDAs and changed the fixed
+reserve target source from Prop AMM config to
+`redemption_offer.vault_target_bps`.
 
 The current implemented formula is therefore not the original blended
 `linear + nonlinear` penalty. It is the dynamic-wall, cadence-adjusted
@@ -121,7 +124,8 @@ haircut described in the rest of this document.
 | `out` | final `result.token_out_amount` | Actual pair-asset output transferred to the seller. |
 | `h_peg` | `curve_peg_haircut_bps / 10_000` | Additional haircut when utilization is exactly 1. Default is `700`, or 7%. |
 | `e_base` | `curve_exponent_scaled / 10_000` | Base haircut curve exponent. Default is `25_000`, or 2.5. |
-| `e_effective` | `effective_curve_exponent_scaled(...) / 10_000` | Cadence-adjusted exponent used by the sell curve. It can be reduced during high sell cadence, down to `min_cadence_exponent_scaled`. |
+| `y_max` | `cadence_wave_scaled / 10_000` | Configured maximum cadence-wave height. Default is `10_000`, or 1.0. |
+| `y_quote` | `cadence_wave_y_for_quote_scaled(...) / 10_000` | Wave height ramped linearly from zero to `y_max` as the prior sell count reaches `cadence_threshold`. |
 | `min_sell_fee` | `minimum_sell_haircut_onyc` | Minimum token-in fee for Prop AMM sells, denominated in ONYC base units. Default is `5_000_000_000`, or 5 ONYC. |
 | `S` | `HARD_WALL_SCALE` | Fixed-point scale, currently `1_000_000_000_000`. |
 
@@ -338,7 +342,9 @@ This is the core hard-wall logic:
 ```text
 effective_liquidity = min(W, hard_wall_reserve)
 u = raw / effective_liquidity
-haircut = h_peg * u^e_effective
+base_haircut = h_peg * u^e_base
+cadence_target = cadence_wave_target(u, prior_sell_count)
+haircut = max(base_haircut, cadence_target)
 liquidity_factor = max(0, 1 - haircut)
 out = raw * liquidity_factor
 ```
@@ -401,10 +407,12 @@ large u means the order can be dampened to zero output
 
 ## Haircut Function
 
-The sell-side haircut is:
+The sell-side haircut is the greater of the fixed base curve and a
+cadence-wave target:
 
 ```text
-haircut(u) = h_peg * u^e_effective
+base_haircut(u) = h_peg * u^e_base
+haircut(u) = max(base_haircut(u), cadence_target(u))
 ```
 
 Where:
@@ -413,33 +421,33 @@ Where:
 h_peg = curve_peg_haircut_bps / 10_000
 e_base = curve_exponent_scaled / 10_000
 quote_trade_count = current sell trade count if current epoch is active, else 0
-reduction_scaled =
-  floor(cadence_sensitivity_scaled * quote_trade_count / cadence_threshold / 1,000)
-  * 1,000
-effective_curve_exponent_scaled =
-  max(min_cadence_exponent_scaled, curve_exponent_scaled - reduction_scaled)
-e_effective = effective_curve_exponent_scaled / 10_000
+y_quote = y_max * min(quote_trade_count, cadence_threshold) / cadence_threshold
+x = min(u, 1)
+eased_rise = 8x / (8x + 1 - x)
+cadence_target(u) = min(1, eased_rise * y_quote / 3)
 ```
 
-The cadence adjustment is based on already-recorded current-epoch sell trades.
-The current sell's raw value is included in pressure immediately, but its
-sell-trade-count cadence effect starts with later sells.
+The on-chain implementation evaluates this with integer fixed-point math at
+`HARD_WALL_SCALE`. The constants `8` and `3` exactly match the Prop AMM curve
+tool's cadence-wave easing and cap divisor. The cadence adjustment is based on
+already-recorded current-epoch sell trades. The current sell's raw value is
+included in pressure immediately, but its sell-trade-count cadence effect
+starts with later sells.
 
-With no cadence adjustment, current defaults are:
+Current defaults are:
 
 ```text
 vault_target_bps = redemption_offer.vault_target_bps
 h_peg = 700 / 10,000 = 0.07
-e_effective = 25,000 / 10,000 = 2.5
-min_cadence_exponent_scaled = 1,000
+e_base = 25,000 / 10,000 = 2.5
 cadence_threshold = 20
-cadence_sensitivity_scaled = 10,000
+cadence_wave_scaled = 10,000
 epoch_duration_seconds = 86,400
 wall_sensitivity_scaled = 20,000
 minimum_sell_haircut_onyc = 5,000,000,000
 ```
 
-So:
+With no prior sells in the active epoch, `y_quote = 0`, so:
 
 ```text
 haircut(u) = 0.07u^2.5
@@ -447,7 +455,7 @@ haircut(u) = 0.07u^2.5
 
 ### Power Approximation
 
-The program computes fractional powers without a table:
+The program computes the base curve's fractional powers without a table:
 
 ```text
 u^e = 2^(e * log2(u))
@@ -492,7 +500,9 @@ haircut = 0.07
         = 7.0%
 ```
 
-The haircut grows slowly at first, then faster as the order consumes more of the wall. The final liquidity factor is:
+The base haircut grows slowly at first, then faster as the order consumes more
+of the wall. Sell cadence can lift it to the cadence target described above.
+The final liquidity factor is:
 
 ```text
 liquidity_factor = max(0, 1 - haircut(u))
@@ -509,6 +519,7 @@ target_bps = 1,500
 R = 10,000 USDC
 L = 10,000 USDC
 fee_basis_points_prop_amm_sell = 500
+prior current-epoch sell count = 0
 user sells enough ONYC that the normal redemption output before fee would be 5,000 USDC
 ```
 
@@ -597,10 +608,17 @@ PropAmmPairState.enabled == true for swaps and quotes
 redemption_offer.vault_target_bps <= 10,000
 curve_peg_haircut_bps <= 10,000
 curve_exponent_scaled in [1,000, 100,000], in 1,000 increments
-min_cadence_exponent_scaled in [1,000, 10,000], in 1,000 increments
 cadence_threshold > 0
-cadence_sensitivity_scaled <= 100,000
+cadence_wave_scaled in [0, 50,000], in 1,000 increments
 epoch_duration_seconds > 0
 wall_sensitivity_scaled > 0
 minimum_sell_haircut_onyc is denominated in ONYC base units
 ```
+
+Because Prop AMM has not been deployed, `PropAmmPairState` and the
+`configure_prop_amm` instruction contain only the active cadence fields:
+`cadence_threshold` and `cadence_wave_scaled`. `cadence_wave_scaled = 0`
+intentionally disables cadence and uses only the base curve. Pricing also
+validates the stored wave domain so corrupted or manually constructed state
+outside `[0, 50,000]` in `1,000` increments is rejected instead of silently
+using a curve the explorer cannot represent.

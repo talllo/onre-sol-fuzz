@@ -1481,15 +1481,11 @@ export type Onreapp = {
           "type": "u32"
         },
         {
-          "name": "minCadenceExponentScaled",
-          "type": "u32"
-        },
-        {
           "name": "cadenceThreshold",
           "type": "u32"
         },
         {
-          "name": "cadenceSensitivityScaled",
+          "name": "cadenceWaveScaled",
           "type": "u32"
         },
         {
@@ -15429,14 +15425,6 @@ export type Onreapp = {
             "type": "u32"
           },
           {
-            "name": "oldMinCadenceExponentScaled",
-            "type": "u32"
-          },
-          {
-            "name": "newMinCadenceExponentScaled",
-            "type": "u32"
-          },
-          {
             "name": "oldCadenceThreshold",
             "type": "u32"
           },
@@ -15445,11 +15433,11 @@ export type Onreapp = {
             "type": "u32"
           },
           {
-            "name": "oldCadenceSensitivityScaled",
+            "name": "oldCadenceWaveScaled",
             "type": "u32"
           },
           {
-            "name": "newCadenceSensitivityScaled",
+            "name": "newCadenceWaveScaled",
             "type": "u32"
           },
           {
@@ -15509,15 +15497,14 @@ export type Onreapp = {
             "type": "u32"
           },
           {
-            "name": "minCadenceExponentScaled",
-            "type": "u32"
-          },
-          {
             "name": "cadenceThreshold",
             "type": "u32"
           },
           {
-            "name": "cadenceSensitivityScaled",
+            "name": "cadenceWaveScaled",
+            "docs": [
+              "Maximum cadence-wave `y`, scaled by [`CADENCE_WAVE_SCALE`]."
+            ],
             "type": "u32"
           },
           {

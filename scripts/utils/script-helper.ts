@@ -1043,9 +1043,8 @@ export class ScriptHelper {
         enabled: boolean;
         curvePegHaircutBps: number;
         curveExponentScaled: number;
-        minCadenceExponentScaled: number;
         cadenceThreshold: number;
-        cadenceSensitivityScaled: number;
+        cadenceWaveScaled: number;
         epochDurationSeconds: string;
         wallSensitivityScaled: number;
         minimumSellHaircutOnyc: string;
@@ -1059,9 +1058,8 @@ export class ScriptHelper {
                 params.enabled,
                 params.curvePegHaircutBps,
                 params.curveExponentScaled,
-                params.minCadenceExponentScaled,
                 params.cadenceThreshold,
-                params.cadenceSensitivityScaled,
+                params.cadenceWaveScaled,
                 new BN(params.epochDurationSeconds),
                 params.wallSensitivityScaled,
                 new BN(params.minimumSellHaircutOnyc),

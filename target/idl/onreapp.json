@@ -1475,15 +1475,11 @@
           "type": "u32"
         },
         {
-          "name": "min_cadence_exponent_scaled",
-          "type": "u32"
-        },
-        {
           "name": "cadence_threshold",
           "type": "u32"
         },
         {
-          "name": "cadence_sensitivity_scaled",
+          "name": "cadence_wave_scaled",
           "type": "u32"
         },
         {
@@ -15423,14 +15419,6 @@
             "type": "u32"
           },
           {
-            "name": "old_min_cadence_exponent_scaled",
-            "type": "u32"
-          },
-          {
-            "name": "new_min_cadence_exponent_scaled",
-            "type": "u32"
-          },
-          {
             "name": "old_cadence_threshold",
             "type": "u32"
           },
@@ -15439,11 +15427,11 @@
             "type": "u32"
           },
           {
-            "name": "old_cadence_sensitivity_scaled",
+            "name": "old_cadence_wave_scaled",
             "type": "u32"
           },
           {
-            "name": "new_cadence_sensitivity_scaled",
+            "name": "new_cadence_wave_scaled",
             "type": "u32"
           },
           {
@@ -15503,15 +15491,14 @@
             "type": "u32"
           },
           {
-            "name": "min_cadence_exponent_scaled",
-            "type": "u32"
-          },
-          {
             "name": "cadence_threshold",
             "type": "u32"
           },
           {
-            "name": "cadence_sensitivity_scaled",
+            "name": "cadence_wave_scaled",
+            "docs": [
+              "Maximum cadence-wave `y`, scaled by [`CADENCE_WAVE_SCALE`]."
+            ],
             "type": "u32"
           },
           {
