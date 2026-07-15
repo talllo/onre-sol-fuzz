@@ -4,8 +4,8 @@ use crate::instructions::redemption::load_optional_checked_redemption_offer;
 use anchor_lang::prelude::*;
 
 use super::config::{
-    PropAmmPairState, CURVE_EXPONENT_STEP, DEFAULT_CADENCE_THRESHOLD,
-    DEFAULT_MIN_CADENCE_EXPONENT_SCALED, WALL_SENSITIVITY_SCALE,
+    PropAmmPairState, CADENCE_WAVE_CAP_DIVISOR, CADENCE_WAVE_EASE, CADENCE_WAVE_SCALE,
+    CADENCE_WAVE_STEP, DEFAULT_CADENCE_THRESHOLD, MAX_CADENCE_WAVE_SCALED, WALL_SENSITIVITY_SCALE,
 };
 use super::hard_wall_math::{
     bps_to_hard_wall_scale, utilization_power_scaled, validate_curve_exponent_scaled,
@@ -153,13 +153,15 @@ pub fn apply_hard_wall_liquidity_factor_at_time(
     // Final sell output is:
     //   effective_liquidity = min(dynamic_wall(actual, sell_pressure), hard_wall_reserve)
     //   utilization = token_out_amount / effective_liquidity
-    //   haircut = peg_haircut * utilization^effective_exponent
+    //   base_haircut = peg_haircut * utilization^curve_exponent
+    //   cadence_target = cadence_wave(utilization, prior_sell_count)
+    //   haircut = max(base_haircut, cadence_target)
     //   output = token_out_amount * max(0, 1 - haircut)
     //
     // `actual_liquidity` is the solvency bound. `hard_wall_reserve` is either the
     // same actual balance or min(actual balance, TVL target), depending on
-    // redemption-offer configuration. The exponent power is approximated in
-    // hard_wall_math.rs.
+    // redemption-offer configuration. The base exponent power is approximated
+    // in hard_wall_math.rs; the cadence target uses integer-only rational math.
     let effective_liquidity = dynamic_wall_liquidity_at_time(
         token_out_amount,
         actual_liquidity,
@@ -179,11 +181,15 @@ pub fn apply_hard_wall_liquidity_factor_at_time(
             .checked_div(effective_liquidity as u128)
             .ok_or(crate::OnreError::DivByZero)?
     };
-    let haircut = redemption_haircut_scaled(
+    let base_haircut = redemption_haircut_scaled(
         utilization_scaled,
         prop_amm_pair_state.curve_peg_haircut_bps,
-        effective_curve_exponent_scaled(prop_amm_pair_state, now)?,
+        prop_amm_pair_state.curve_exponent_scaled,
     )?;
+    let cadence_wave_y_scaled = cadence_wave_y_for_quote_scaled(prop_amm_pair_state, now)?;
+    let cadence_target_haircut =
+        cadence_wave_target_haircut_scaled(utilization_scaled, cadence_wave_y_scaled)?;
+    let haircut = base_haircut.max(cadence_target_haircut);
     let liquidity_factor = HARD_WALL_SCALE.saturating_sub(haircut);
     let dampened_amount = (token_out_amount as u128)
         .checked_mul(liquidity_factor)
@@ -400,9 +406,8 @@ pub fn apply_hard_wall_reserve_curve_with_params(
     let prop_amm_pair_state = PropAmmPairState {
         curve_peg_haircut_bps,
         curve_exponent_scaled,
-        min_cadence_exponent_scaled: DEFAULT_MIN_CADENCE_EXPONENT_SCALED,
         cadence_threshold: DEFAULT_CADENCE_THRESHOLD,
-        cadence_sensitivity_scaled: 0,
+        cadence_wave_scaled: 0,
         epoch_duration_seconds: super::config::DEFAULT_EPOCH_DURATION_SECONDS,
         wall_sensitivity_scaled: 0,
         curr_sell_value_stable: 0,
@@ -468,44 +473,77 @@ fn redemption_haircut_scaled(
     Ok(curve_haircut)
 }
 
-pub fn effective_curve_exponent_scaled(
+pub fn cadence_wave_y_for_quote_scaled(
     prop_amm_pair_state: &PropAmmPairState,
     now: i64,
-) -> Result<u32> {
+) -> Result<u128> {
     let threshold = prop_amm_pair_state.cadence_threshold;
     require!(threshold > 0, crate::OnreError::InvalidAmount);
+    require!(
+        prop_amm_pair_state.cadence_wave_scaled <= MAX_CADENCE_WAVE_SCALED,
+        crate::OnreError::InvalidAmount
+    );
+    require!(
+        prop_amm_pair_state
+            .cadence_wave_scaled
+            .is_multiple_of(CADENCE_WAVE_STEP),
+        crate::OnreError::InvalidAmount
+    );
 
-    let base_exponent = prop_amm_pair_state
-        .curve_exponent_scaled
-        .max(prop_amm_pair_state.min_cadence_exponent_scaled);
-    if prop_amm_pair_state.cadence_sensitivity_scaled == 0 {
-        require!(
-            prop_amm_pair_state.epoch_duration_seconds > 0,
-            crate::OnreError::InvalidAmount
-        );
-        return Ok(base_exponent);
+    let max_wave_y = prop_amm_pair_state.cadence_wave_scaled as u128;
+    if max_wave_y == 0 {
+        return Ok(0);
     }
 
     let quote_trade_count = preview_current_sell_trade_count(prop_amm_pair_state, now)?;
     if quote_trade_count == 0 {
-        return Ok(base_exponent);
+        return Ok(0);
     }
 
-    let raw_reduction = (prop_amm_pair_state.cadence_sensitivity_scaled as u128)
-        .checked_mul(quote_trade_count as u128)
+    let ramp = if quote_trade_count >= threshold {
+        CADENCE_WAVE_SCALE
+    } else {
+        (quote_trade_count as u128)
+            .checked_mul(CADENCE_WAVE_SCALE)
+            .ok_or(crate::OnreError::MathOverflow)?
+            .checked_div(threshold as u128)
+            .ok_or(crate::OnreError::DivByZero)?
+    };
+    let wave_y = max_wave_y
+        .checked_mul(ramp)
         .ok_or(crate::OnreError::MathOverflow)?
-        .checked_div(threshold as u128)
+        .checked_div(CADENCE_WAVE_SCALE)
         .ok_or(crate::OnreError::DivByZero)?;
-    let reduction =
-        raw_reduction.saturating_div(CURVE_EXPONENT_STEP as u128) * CURVE_EXPONENT_STEP as u128;
-    require!(
-        reduction <= u32::MAX as u128,
-        crate::OnreError::MathOverflow
-    );
-    Ok(prop_amm_pair_state
-        .curve_exponent_scaled
-        .saturating_sub(reduction as u32)
-        .max(prop_amm_pair_state.min_cadence_exponent_scaled))
+    Ok(wave_y)
+}
+
+pub fn cadence_wave_target_haircut_scaled(u: u128, wave_y_scaled: u128) -> Result<u128> {
+    if wave_y_scaled == 0 {
+        return Ok(0);
+    }
+    let normalized = u.min(HARD_WALL_SCALE);
+    if normalized == 0 {
+        return Ok(0);
+    }
+
+    let remaining = HARD_WALL_SCALE.saturating_sub(normalized);
+    let eased_numerator = normalized.saturating_mul(CADENCE_WAVE_EASE);
+    let eased_denominator = eased_numerator
+        .checked_add(remaining)
+        .ok_or(crate::OnreError::MathOverflow)?;
+    let eased_rise = eased_numerator
+        .saturating_mul(HARD_WALL_SCALE)
+        .checked_div(eased_denominator)
+        .ok_or(crate::OnreError::DivByZero)?;
+    let target_haircut = eased_rise
+        .saturating_mul(wave_y_scaled)
+        .checked_div(
+            CADENCE_WAVE_SCALE
+                .checked_mul(CADENCE_WAVE_CAP_DIVISOR)
+                .ok_or(crate::OnreError::MathOverflow)?,
+        )
+        .ok_or(crate::OnreError::DivByZero)?;
+    Ok(target_haircut.min(HARD_WALL_SCALE))
 }
 
 fn preview_current_sell_trade_count(

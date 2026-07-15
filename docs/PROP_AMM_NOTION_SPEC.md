@@ -163,7 +163,8 @@ $$
 e_{\mathrm{base}} = \frac{\mathrm{curve\_exponent\_scaled}}{10,000}
 $$
 
-Cadence can reduce the effective exponent during an active sell-heavy epoch:
+The base exponent remains fixed. Cadence instead raises a separate target
+haircut during an active sell-heavy epoch:
 
 $$
 \mathrm{quote\_trade\_count} =
@@ -174,32 +175,43 @@ $$
 $$
 
 $$
-\mathrm{reduction\_scaled}
-= 1,000 \times \left\lfloor
-\frac{\mathrm{cadence\_sensitivity\_scaled} \times \mathrm{quote\_trade\_count}}
-{\mathrm{cadence\_threshold} \times 1,000}
-\right\rfloor
-$$
-
-$$
-\mathrm{effective\_curve\_exponent\_scaled}
-= \max\left(
-  \mathrm{min\_cadence\_exponent\_scaled},
-  \mathrm{curve\_exponent\_scaled} - \mathrm{reduction\_scaled}
+\mathrm{ramp} = \min\left(1,
+\frac{\mathrm{quote\_trade\_count}}{\mathrm{cadence\_threshold}}
 \right)
 $$
 
 $$
-e_{\mathrm{effective}} = \frac{\mathrm{effective\_curve\_exponent\_scaled}}{10,000}
+ y_{\mathrm{quote}} =
+ \frac{\mathrm{cadence\_wave\_scaled}}{10,000} \times \mathrm{ramp}
 $$
 
 $$
-\mathrm{haircut}(u) = h_{\mathrm{peg}} \times u^{e_{\mathrm{effective}}}
+x = \min(u, 1)
+$$
+
+$$
+\mathrm{eased\_rise}(x) = \frac{8x}{8x + 1 - x}
+$$
+
+$$
+\mathrm{cadence\_target}(u) =
+\min\left(1, \frac{\mathrm{eased\_rise}(x) \times y_{\mathrm{quote}}}{3}\right)
+$$
+
+$$
+\mathrm{base\_haircut}(u) = h_{\mathrm{peg}} \times u^{e_{\mathrm{base}}}
+$$
+
+$$
+\mathrm{haircut}(u) =
+\max\left(\mathrm{base\_haircut}(u), \mathrm{cadence\_target}(u)\right)
 $$
 
 The current sell's raw value is included in pressure immediately. Its
 sell-trade-count cadence effect starts with later sells because the trade count
-is recorded after the curve and `minimum_out` check.
+is recorded after the curve and `minimum_out` check. The program evaluates the
+cadence target with integer fixed-point arithmetic; `8` and `3` match the Prop
+AMM curve tool exactly.
 
 Curve parameters:
 
@@ -216,15 +228,11 @@ $$
 $$
 
 $$
-\mathrm{min\_cadence\_exponent\_scaled} = 1,000
-$$
-
-$$
 \mathrm{cadence\_threshold} = 20
 $$
 
 $$
-\mathrm{cadence\_sensitivity\_scaled} = 10,000
+\mathrm{cadence\_wave\_scaled} = 10,000
 $$
 
 $$
@@ -239,7 +247,7 @@ $$
 \mathrm{minimum\_sell\_haircut\_onyc} = 5,000,000,000
 $$
 
-With no cadence adjustment, the default haircut curve is:
+With no prior sells in the active epoch, the default haircut curve is:
 
 $$
 \mathrm{haircut}(u) = 0.07u^{2.5}
@@ -280,7 +288,9 @@ effective_liquidity = min(actual_liquidity, hard_wall_reserve)
 if dynamic wall sensitivity is enabled:
   effective_liquidity = min(dynamic_wall_position, hard_wall_reserve)
 u = raw_sell_value_stable / effective_liquidity
-haircut = curve_peg_haircut * u^effective_curve_exponent
+base_haircut = curve_peg_haircut * u^curve_exponent
+cadence_target = cadence_wave_target(u, prior_sell_count)
+haircut = max(base_haircut, cadence_target)
 final_output = raw_sell_value_stable * max(0, 1 - haircut)
 ```
 
@@ -296,7 +306,16 @@ The dynamic wall is a pricing input, not a rejection threshold. If pressure push
 
 The code also contains a fallback where `wall_sensitivity_scaled = 0` uses `min(actual_liquidity, hard_wall_reserve)`, but normal Prop AMM configuration rejects zero wall sensitivity.
 
-Normal Prop AMM configuration also requires `curve_exponent_scaled` to be between `1,000` and `100,000` in `1,000` increments, `min_cadence_exponent_scaled` to be between `1,000` and `10,000` in `1,000` increments, `cadence_threshold > 0`, `cadence_sensitivity_scaled <= 100,000`, `epoch_duration_seconds > 0`, and `minimum_sell_haircut_onyc` denominated in ONYC base units.
+Normal Prop AMM configuration also requires `curve_exponent_scaled` to be
+between `1,000` and `100,000` in `1,000` increments,
+`cadence_threshold > 0`, `cadence_wave_scaled` to be between `0` and `50,000`
+in `1,000` increments, `epoch_duration_seconds > 0`, and
+`minimum_sell_haircut_onyc` denominated in ONYC base units.
+
+Because Prop AMM has not been deployed, its state and configuration instruction
+contain only the active cadence fields: `cadence_threshold` and
+`cadence_wave_scaled`. A configured `cadence_wave_scaled = 0` intentionally
+disables cadence and leaves the base curve unchanged.
 
 This is intentionally simple and cheap to compute.
 

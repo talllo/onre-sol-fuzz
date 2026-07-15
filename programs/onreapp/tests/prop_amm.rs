@@ -4,9 +4,10 @@ use anchor_lang::{AccountDeserialize, AnchorDeserialize};
 use common::*;
 use onreapp::instructions::prop_amm::{
     apply_hard_wall_liquidity_factor_at_time, apply_hard_wall_reserve_curve_with_params,
-    dynamic_wall_liquidity_at_time, dynamic_wall_position, effective_curve_exponent_scaled,
-    hard_wall_reserve_from_tvl, preview_effective_sell_volume, roll_prop_amm_volume_tracker,
-    PropAmmPairState, SwapQuote, HARD_WALL_SCALE,
+    cadence_wave_target_haircut_scaled, cadence_wave_y_for_quote_scaled,
+    dynamic_wall_liquidity_at_time, dynamic_wall_position, hard_wall_reserve_from_tvl,
+    preview_effective_sell_volume, roll_prop_amm_volume_tracker, PropAmmPairState, SwapQuote,
+    HARD_WALL_SCALE,
 };
 use onreapp::state::ConfigurableVaultKind;
 use solana_sdk::account::Account;
@@ -77,9 +78,8 @@ fn build_configure_prop_amm_with_params_ix(
     enabled: bool,
     curve_peg_haircut_bps: u16,
     curve_exponent_scaled: u32,
-    min_cadence_exponent_scaled: u32,
     cadence_threshold: u32,
-    cadence_sensitivity_scaled: u32,
+    cadence_wave_scaled: u32,
     epoch_duration_seconds: i64,
     wall_sensitivity_scaled: u32,
     minimum_sell_haircut_onyc: u64,
@@ -91,9 +91,8 @@ fn build_configure_prop_amm_with_params_ix(
     data.push(if enabled { 1 } else { 0 });
     data.extend_from_slice(&curve_peg_haircut_bps.to_le_bytes());
     data.extend_from_slice(&curve_exponent_scaled.to_le_bytes());
-    data.extend_from_slice(&min_cadence_exponent_scaled.to_le_bytes());
     data.extend_from_slice(&cadence_threshold.to_le_bytes());
-    data.extend_from_slice(&cadence_sensitivity_scaled.to_le_bytes());
+    data.extend_from_slice(&cadence_wave_scaled.to_le_bytes());
     data.extend_from_slice(&epoch_duration_seconds.to_le_bytes());
     data.extend_from_slice(&wall_sensitivity_scaled.to_le_bytes());
     data.extend_from_slice(&minimum_sell_haircut_onyc.to_le_bytes());
@@ -162,7 +161,6 @@ fn configure_minimum_sell_haircut(ctx: &mut PropAmmCtx, minimum_sell_haircut_ony
         true,
         700,
         25_000,
-        1_000,
         20,
         10_000,
         86_400,
@@ -405,9 +403,8 @@ fn test_hard_wall_curve_allows_zero_output_at_actual_vault_limit() {
     let state = PropAmmPairState {
         curve_peg_haircut_bps: 700,
         curve_exponent_scaled: 25_000,
-        min_cadence_exponent_scaled: 1_000,
         cadence_threshold: 20,
-        cadence_sensitivity_scaled: 10_000,
+        cadence_wave_scaled: 10_000,
         epoch_duration_seconds: 86_400,
         wall_sensitivity_scaled: 20_000,
         curr_sell_value_stable: 0,
@@ -452,9 +449,8 @@ fn test_hard_wall_liquidity_rejects_output_above_actual_liquidity() {
     let state = PropAmmPairState {
         curve_peg_haircut_bps: 700,
         curve_exponent_scaled: 25_000,
-        min_cadence_exponent_scaled: 1_000,
         cadence_threshold: 20,
-        cadence_sensitivity_scaled: 10_000,
+        cadence_wave_scaled: 10_000,
         epoch_duration_seconds: 86_400,
         wall_sensitivity_scaled: 20_000,
         epoch_start: 1,
@@ -482,9 +478,8 @@ fn test_dynamic_wall_preview_includes_current_sell_and_buy_relief() {
     let state = PropAmmPairState {
         curve_peg_haircut_bps: 700,
         curve_exponent_scaled: 25_000,
-        min_cadence_exponent_scaled: 1_000,
         cadence_threshold: 20,
-        cadence_sensitivity_scaled: 10_000,
+        cadence_wave_scaled: 10_000,
         epoch_duration_seconds: 86_400,
         wall_sensitivity_scaled: 20_000,
         curr_sell_value_stable: 500,
@@ -567,13 +562,12 @@ fn test_prop_amm_volume_tracker_rolls_and_resets_epochs() {
 }
 
 #[test]
-fn test_cadence_lowers_effective_curve_exponent() {
+fn test_cadence_wave_y_ramps_to_configured_maximum() {
     let state = PropAmmPairState {
         curve_peg_haircut_bps: 7_000,
         curve_exponent_scaled: 25_000,
-        min_cadence_exponent_scaled: 1_000,
         cadence_threshold: 20,
-        cadence_sensitivity_scaled: 10_000,
+        cadence_wave_scaled: 10_000,
         epoch_duration_seconds: 86_400,
         wall_sensitivity_scaled: 20_000,
         curr_sell_value_stable: 0,
@@ -584,19 +578,55 @@ fn test_cadence_lowers_effective_curve_exponent() {
         bump: 0,
         ..Default::default()
     };
+    let mut half_cadence = state.clone();
+    half_cadence.curr_sell_trade_count = 10;
     let mut high_cadence = state.clone();
     high_cadence.curr_sell_trade_count = 49;
     let mut threshold_cadence = state.clone();
     threshold_cadence.curr_sell_trade_count = 20;
 
-    assert_eq!(effective_curve_exponent_scaled(&state, 1).unwrap(), 25_000);
+    assert_eq!(cadence_wave_y_for_quote_scaled(&state, 1).unwrap(), 0);
     assert_eq!(
-        effective_curve_exponent_scaled(&threshold_cadence, 1).unwrap(),
-        15_000
+        cadence_wave_y_for_quote_scaled(&half_cadence, 1).unwrap(),
+        5_000
     );
     assert_eq!(
-        effective_curve_exponent_scaled(&high_cadence, 1).unwrap(),
-        1_000
+        cadence_wave_y_for_quote_scaled(&threshold_cadence, 1).unwrap(),
+        10_000
+    );
+    assert_eq!(
+        cadence_wave_y_for_quote_scaled(&high_cadence, 1).unwrap(),
+        10_000
+    );
+
+    let mut invalid_legacy_state = state;
+    invalid_legacy_state.cadence_wave_scaled = 100_000;
+    assert!(cadence_wave_y_for_quote_scaled(&invalid_legacy_state, 1).is_err());
+}
+
+#[test]
+fn test_cadence_wave_target_matches_explorer_integer_vectors() {
+    let vectors = [
+        (0, 0),
+        (10_000_000_000, 24_922_118_380),
+        (100_000_000_000, 156_862_745_098),
+        (250_000_000_000, 242_424_242_424),
+        (500_000_000_000, 296_296_296_296),
+        (750_000_000_000, 320_000_000_000),
+        (1_000_000_000_000, 333_333_333_333),
+        (2_000_000_000_000, 333_333_333_333),
+    ];
+
+    for (utilization, expected_haircut) in vectors {
+        assert_eq!(
+            cadence_wave_target_haircut_scaled(utilization, 10_000).unwrap(),
+            expected_haircut,
+            "explorer mismatch at utilization={utilization}"
+        );
+    }
+    assert_eq!(
+        cadence_wave_target_haircut_scaled(250_000_000_000, 50_000).unwrap(),
+        HARD_WALL_SCALE
     );
 }
 
@@ -605,9 +635,8 @@ fn test_cadence_penalizes_small_split_sells() {
     let state = PropAmmPairState {
         curve_peg_haircut_bps: 7_000,
         curve_exponent_scaled: 25_000,
-        min_cadence_exponent_scaled: 1_000,
         cadence_threshold: 20,
-        cadence_sensitivity_scaled: 10_000,
+        cadence_wave_scaled: 10_000,
         epoch_duration_seconds: 86_400,
         wall_sensitivity_scaled: 0,
         curr_sell_value_stable: 0,
@@ -629,7 +658,7 @@ fn test_cadence_penalizes_small_split_sells() {
             .unwrap();
 
     assert_eq!(low_cadence_output, 99_999);
-    assert_eq!(high_cadence_output, 55_832);
+    assert_eq!(high_cadence_output, 97_507);
 }
 
 #[test]
@@ -748,7 +777,7 @@ fn test_dynamic_wall_accumulates_sell_pressure_and_buys_relieve_it() {
     let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
     let pressured_quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
     assert_eq!(first_quote.token_out_amount, 1_994_192_046);
-    assert_eq!(pressured_quote.token_out_amount, 1_975_320_820);
+    assert_eq!(pressured_quote.token_out_amount, 1_970_377_785);
 
     let buy_quote_ix = build_quote_swap_ix(
         &ctx.onyc_mint,
@@ -775,7 +804,7 @@ fn test_dynamic_wall_accumulates_sell_pressure_and_buys_relieve_it() {
     let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.onyc_mint, &ctx.usdc_mint, sell_amount);
     let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
     let relieved_quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
-    assert_eq!(relieved_quote.token_out_amount, 1_982_322_822);
+    assert_eq!(relieved_quote.token_out_amount, 1_971_289_607);
 }
 
 #[test]
@@ -823,25 +852,22 @@ fn test_configure_prop_amm_rejects_invalid_parameters() {
     let boss = ctx.payer.pubkey();
 
     let invalid_cases = [
-        (10_001, 25_000, 1_000, 20, 10_000, 86_400, 20_000),
-        (700, 999, 1_000, 20, 10_000, 86_400, 20_000),
-        (700, 100_001, 1_000, 20, 10_000, 86_400, 20_000),
-        (700, 25_500, 1_000, 20, 10_000, 86_400, 20_000),
-        (700, 25_000, 0, 20, 10_000, 86_400, 20_000),
-        (700, 25_000, 11_000, 20, 10_000, 86_400, 20_000),
-        (700, 25_000, 1_500, 20, 10_000, 86_400, 20_000),
-        (700, 25_000, 1_000, 0, 10_000, 86_400, 20_000),
-        (700, 25_000, 1_000, 20, 100_001, 86_400, 20_000),
-        (700, 25_000, 1_000, 20, 10_000, 0, 20_000),
-        (700, 25_000, 1_000, 20, 10_000, 86_400, 0),
+        (10_001, 25_000, 20, 10_000, 86_400, 20_000),
+        (700, 999, 20, 10_000, 86_400, 20_000),
+        (700, 100_001, 20, 10_000, 86_400, 20_000),
+        (700, 25_500, 20, 10_000, 86_400, 20_000),
+        (700, 25_000, 0, 10_000, 86_400, 20_000),
+        (700, 25_000, 20, 50_001, 86_400, 20_000),
+        (700, 25_000, 20, 1_500, 86_400, 20_000),
+        (700, 25_000, 20, 10_000, 0, 20_000),
+        (700, 25_000, 20, 10_000, 86_400, 0),
     ];
 
     for (
         haircut_bps,
         exponent_scaled,
-        min_cadence_exponent_scaled,
         cadence_threshold,
-        cadence_sensitivity_scaled,
+        cadence_wave_scaled,
         epoch_duration_seconds,
         wall_sensitivity_scaled,
     ) in invalid_cases
@@ -853,9 +879,8 @@ fn test_configure_prop_amm_rejects_invalid_parameters() {
             true,
             haircut_bps,
             exponent_scaled,
-            min_cadence_exponent_scaled,
             cadence_threshold,
-            cadence_sensitivity_scaled,
+            cadence_wave_scaled,
             epoch_duration_seconds,
             wall_sensitivity_scaled,
             5_000_000_000,
@@ -865,6 +890,51 @@ fn test_configure_prop_amm_rejects_invalid_parameters() {
             "invalid Prop AMM config should fail: {invalid_cases:?}"
         );
     }
+}
+
+#[test]
+fn test_configure_prop_amm_accepts_max_and_zero_cadence_wave() {
+    let mut ctx = setup_prop_amm();
+    let boss = ctx.payer.pubkey();
+
+    let ix = build_configure_prop_amm_with_params_ix(
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        true,
+        700,
+        25_000,
+        7,
+        50_000,
+        86_400,
+        20_000,
+        5_000_000_000,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let (offer, _) = find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint);
+    let pair = read_prop_amm_pair_state(&ctx.svm, &offer);
+    assert_eq!(pair.cadence_threshold, 7);
+    assert_eq!(pair.cadence_wave_scaled, 50_000);
+
+    let ix = build_configure_prop_amm_with_params_ix(
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        true,
+        700,
+        25_000,
+        3,
+        0,
+        86_400,
+        20_000,
+        5_000_000_000,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let pair = read_prop_amm_pair_state(&ctx.svm, &offer);
+    assert_eq!(pair.cadence_threshold, 3);
+    assert_eq!(pair.cadence_wave_scaled, 0);
 }
 
 #[test]
@@ -1533,7 +1603,6 @@ fn test_open_swap_sell_rolls_epoch_tracker_before_recording_trade() {
         true,
         700,
         25_000,
-        1_000,
         20,
         10_000,
         10,
@@ -1550,7 +1619,6 @@ fn test_open_swap_sell_rolls_epoch_tracker_before_recording_trade() {
         true,
         700,
         25_000,
-        1_000,
         20,
         10_000,
         10,

@@ -187,7 +187,6 @@ pub fn build_configure_prop_amm_ix(
     data.push(if enabled { 1 } else { 0 });
     data.extend_from_slice(&curve_peg_haircut_bps.to_le_bytes());
     data.extend_from_slice(&curve_exponent_scaled.to_le_bytes());
-    data.extend_from_slice(&1_000_u32.to_le_bytes());
     data.extend_from_slice(&20_u32.to_le_bytes());
     data.extend_from_slice(&10_000_u32.to_le_bytes());
     data.extend_from_slice(&86_400_i64.to_le_bytes());

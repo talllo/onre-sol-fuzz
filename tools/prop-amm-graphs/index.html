@@ -16,6 +16,7 @@
         --green: #17803d;
         --red: #c93c37;
         --amber: #a96700;
+        --gray: #697386;
       }
 
       * {
@@ -182,7 +183,7 @@
         width: 100%;
         border-collapse: collapse;
         font-size: 13px;
-        min-width: 780px;
+        min-width: 900px;
       }
 
       th,
@@ -226,10 +227,9 @@
       <aside>
         <h1>Prop AMM Curve Explorer</h1>
         <p class="subtle">
-          Mirrors the fixed-point math in
-          <code>programs/onreapp/src/instructions/prop_amm/quote.rs</code>.
-          Sell inputs are raw pair-asset values after redemption pricing and fee.
-          Slider maximums are graph ranges where the on-chain config has no upper bound.
+          Explores Prop AMM sell curve math, including the proposed cadence wave term.
+          Sell inputs are raw pair-asset values after redemption pricing and fee;
+          graph ranges are bounded for exploration.
         </p>
 
         <h2>Configuration</h2>
@@ -247,6 +247,7 @@
               <h3>Single Trade Curve</h3>
               <div class="legend">
                 <span><i class="dot" style="background: var(--blue)"></i>Output %</span>
+                <span><i class="dot" style="background: var(--gray)"></i>Base output %</span>
                 <span><i class="dot" style="background: var(--red)"></i>Haircut %</span>
               </div>
             </div>
@@ -283,6 +284,7 @@
                 <th>Output %</th>
                 <th>Haircut bps</th>
                 <th>Exponent</th>
+                <th>Wave y</th>
                 <th>Wall</th>
                 <th>Pressure Before</th>
                 <th>Pressure After</th>
@@ -298,7 +300,9 @@
     <script>
       const HARD_WALL_SCALE = 1_000_000_000_000n;
       const CURVE_EXPONENT_SCALE = 10_000n;
-      const CURVE_EXPONENT_STEP = 1_000n;
+      const CADENCE_WAVE_SCALE = 10_000n;
+      const CADENCE_WAVE_EASE = 8n;
+      const CADENCE_WAVE_CAP_DIVISOR = 3n;
       const POW_APPROX_Q_SHIFT = 40n;
       const POW_APPROX_Q = 1n << POW_APPROX_Q_SHIFT;
       const POW_APPROX_LN2_Q = 762_123_384_786n;
@@ -314,9 +318,8 @@
         ["poolTargetBps", "Pool target", 0, 10000, 1500, 50, (v) => `${bps(v)}%`],
         ["pegHaircutBps", "Curve peg haircut", 0, 10000, 700, 25, (v) => `${bps(v)}%`],
         ["curveExponentScaled", "Base curve exponent", 1000, 100000, 25000, 1000, (v) => `${(v / 10000).toFixed(1)}x`],
-        ["minCurveExponentScaled", "Min cadence exponent", 1000, 10000, 1000, 1000, (v) => `${(v / 10000).toFixed(1)}x`],
         ["cadenceThreshold", "Cadence threshold", 1, 250, 20, 1, (v) => `${v} trades`],
-        ["cadenceSensitivityScaled", "Cadence sensitivity", 0, 100000, 10000, 1000, (v) => `${(v / 10000).toFixed(1)}x`],
+        ["cadenceWaveScaled", "Cadence wave y", 0, 50000, 10000, 1000, (v) => `${(v / 10000).toFixed(1)}`],
         ["wallSensitivityScaled", "Wall sensitivity", 1, 200000, 20000, 500, (v) => `${(v / 10000).toFixed(2)}x`],
         ["epochDurationSeconds", "Epoch duration", 1, 604800, 86400, 300, (v) => `${v}s`],
       ];
@@ -508,44 +511,77 @@
         return saturatingMul(pegHaircut, utilizationPower) / HARD_WALL_SCALE;
       }
 
+      function clampScaled(value) {
+        if (value < 0n) return 0n;
+        return value > HARD_WALL_SCALE ? HARD_WALL_SCALE : value;
+      }
+
+      function cadenceWaveYForQuoteScaled(amm, now) {
+        const maxWaveY = BigInt(amm.cadenceWaveScaled);
+        if (maxWaveY === 0n) return 0n;
+        const tradeCount = BigInt(previewCurrentSellTradeCount(amm, now));
+        if (tradeCount === 0n) return 0n;
+        const threshold = BigInt(Math.max(1, amm.cadenceThreshold));
+        const ramp = tradeCount >= threshold ? CADENCE_WAVE_SCALE : (tradeCount * CADENCE_WAVE_SCALE) / threshold;
+        return (maxWaveY * ramp) / CADENCE_WAVE_SCALE;
+      }
+
+      function cadenceWaveTargetHaircutScaled(u, waveYScaled) {
+        if (waveYScaled === 0n) return 0n;
+        const normalized = clampScaled(u);
+        if (normalized === 0n) return 0n;
+        const remaining = HARD_WALL_SCALE - normalized;
+        const easedNumerator = normalized * CADENCE_WAVE_EASE;
+        const easedDenominator = easedNumerator + remaining;
+        const easedRise = saturatingMul(easedNumerator, HARD_WALL_SCALE) / easedDenominator;
+        const targetHaircut = saturatingMul(easedRise, waveYScaled) / (CADENCE_WAVE_SCALE * CADENCE_WAVE_CAP_DIVISOR);
+        return clampScaled(targetHaircut);
+      }
+
       function applyHardWallLiquidityFactor(rawSell, actualLiquidity, hardWallReserve, amm, now) {
-        const effectiveExponentScaled = effectiveCurveExponentScaled(amm, now);
+        const effectiveExponentScaled = amm.curveExponentScaled;
+        const cadenceWaveYScaled = cadenceWaveYForQuoteScaled(amm, now);
+        const emptyQuote = {
+          output: 0n,
+          wall: 0n,
+          haircut: 0n,
+          baseHaircut: 0n,
+          waveHaircut: 0n,
+          cadenceWaveYScaled,
+          effectiveExponentScaled,
+          ok: false,
+        };
         if (actualLiquidity <= 0n) {
-          return { output: 0n, wall: 0n, haircut: 0n, effectiveExponentScaled, ok: false, reason: "no liquidity" };
+          return { ...emptyQuote, reason: "no liquidity" };
         }
         if (hardWallReserve <= 0n) {
-          return { output: 0n, wall: 0n, haircut: 0n, effectiveExponentScaled, ok: false, reason: "zero reserve" };
+          return { ...emptyQuote, reason: "zero reserve" };
         }
         if (rawSell > actualLiquidity) {
-          return { output: 0n, wall: 0n, haircut: 0n, effectiveExponentScaled, ok: false, reason: "raw > vault" };
+          return { ...emptyQuote, reason: "raw > vault" };
         }
         const wall = dynamicWallLiquidity(rawSell, actualLiquidity, hardWallReserve, amm, now);
         const utilization = rawSell === 0n ? 0n : rawSell === wall ? HARD_WALL_SCALE : (rawSell * HARD_WALL_SCALE) / wall;
-        const haircut = redemptionHaircutScaled(
+        const baseHaircut = redemptionHaircutScaled(
           utilization,
           amm.pegHaircutBps,
           effectiveExponentScaled,
         );
+        const cadenceTargetHaircut = cadenceWaveTargetHaircutScaled(utilization, cadenceWaveYScaled);
+        const haircut = baseHaircut > cadenceTargetHaircut ? baseHaircut : cadenceTargetHaircut;
+        const waveHaircut = haircut > baseHaircut ? haircut - baseHaircut : 0n;
         const liquidityFactor = HARD_WALL_SCALE > haircut ? HARD_WALL_SCALE - haircut : 0n;
         return {
           output: (rawSell * liquidityFactor) / HARD_WALL_SCALE,
           wall,
           haircut,
+          baseHaircut,
+          waveHaircut,
+          cadenceWaveYScaled,
           effectiveExponentScaled,
           ok: true,
           reason: "quoted",
         };
-      }
-
-      function effectiveCurveExponentScaled(amm, now) {
-        const threshold = Math.max(1, amm.cadenceThreshold);
-        const baseExponent = Math.max(amm.minCurveExponentScaled, amm.curveExponentScaled);
-        if (amm.cadenceSensitivityScaled === 0) return baseExponent;
-        const tradeCount = previewCurrentSellTradeCount(amm, now);
-        if (tradeCount === 0) return baseExponent;
-        const rawReduction = (BigInt(amm.cadenceSensitivityScaled) * BigInt(tradeCount)) / BigInt(threshold);
-        const reduction = Number((rawReduction / CURVE_EXPONENT_STEP) * CURVE_EXPONENT_STEP);
-        return Math.max(amm.minCurveExponentScaled, amm.curveExponentScaled - reduction);
       }
 
       function previewCurrentSellTradeCount(amm, now) {
@@ -590,9 +626,8 @@
         return {
           pegHaircutBps: state.pegHaircutBps,
           curveExponentScaled: state.curveExponentScaled,
-          minCurveExponentScaled: state.minCurveExponentScaled,
           cadenceThreshold: state.cadenceThreshold,
-          cadenceSensitivityScaled: state.cadenceSensitivityScaled,
+          cadenceWaveScaled: state.cadenceWaveScaled,
           wallSensitivityScaled: state.wallSensitivityScaled,
           epochDuration: BigInt(state.epochDurationSeconds),
           currSell: 0n,
@@ -635,6 +670,7 @@
             outputPct: quote.ok && rawSell !== 0n ? Number(quote.output * 1_000_000n / rawSell) / 10_000 : null,
             haircutBps: quote.ok ? Number(quote.haircut * 10_000n / HARD_WALL_SCALE) : null,
             effectiveExponent: quote.effectiveExponentScaled / 10000,
+            cadenceWaveY: Number(quote.cadenceWaveYScaled) / Number(CADENCE_WAVE_SCALE),
             wall: quote.wall,
             pressureBefore,
             effectiveVolume,
@@ -654,12 +690,21 @@
         const maxSell = vault > 0n ? vault : 1n;
         for (let index = 1; index <= 120; index += 1) {
           const rawSell = (maxSell * BigInt(index)) / 120n;
-          const amm = { ...ammBase, currSell: 0n, currBuy: ammBase.currBuy, prevNetSell: ammBase.prevNetSell, currSellTradeCount: 0 };
+          const amm = {
+            ...ammBase,
+            currSell: 0n,
+            currBuy: ammBase.currBuy,
+            prevNetSell: ammBase.prevNetSell,
+            currSellTradeCount: state.cadenceThreshold,
+          };
+          const baseAmm = { ...amm, cadenceWaveScaled: 0 };
           const quote = applyHardWallLiquidityFactor(rawSell, vault, hardWallReserve, amm, 1n);
+          const baseQuote = applyHardWallLiquidityFactor(rawSell, vault, hardWallReserve, baseAmm, 1n);
           points.push({
             ok: quote.ok,
             x: Number(rawSell) / Number(ASSET_SCALE),
             outputPct: quote.ok && rawSell !== 0n ? Number(quote.output * 1_000_000n / rawSell) / 10_000 : null,
+            baseOutputPct: baseQuote.ok && rawSell !== 0n ? Number(baseQuote.output * 1_000_000n / rawSell) / 10_000 : null,
             haircutBps: quote.ok ? Number(quote.haircut * 10_000n / HARD_WALL_SCALE) : null,
           });
         }
@@ -725,7 +770,8 @@
           .map((s) => {
             const scaleY = s.axis === "right" ? rightY : y;
             const d = s.points.map((p, i) => `${i === 0 ? "M" : "L"} ${x(p.x).toFixed(2)} ${scaleY(p.y).toFixed(2)}`).join(" ");
-            return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`;
+            const dash = s.dash ? ` stroke-dasharray="${s.dash}"` : "";
+            return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.5"${dash} vector-effect="non-scaling-stroke"/>`;
           })
           .join("");
         svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -763,6 +809,7 @@
                 <td>${row.outputPct === null ? "-" : `${row.outputPct.toFixed(2)}%`}</td>
                 <td>${row.haircutBps === null ? "-" : row.haircutBps}</td>
                 <td>${row.effectiveExponent.toFixed(1)}x</td>
+                <td>${row.cadenceWaveY.toFixed(1)}</td>
                 <td>${row.ok ? formatAsset(row.wall) : "-"}</td>
                 <td>${formatAsset(row.pressureBefore)}</td>
                 <td>${formatAsset(row.pressureAfter)}</td>
@@ -784,6 +831,7 @@
           "curve-chart",
           [
             { color: "var(--blue)", points: curve.map((p) => ({ x: p.x, y: p.outputPct })) },
+            { color: "var(--gray)", dash: "5 4", points: curve.map((p) => ({ x: p.x, y: p.baseOutputPct })) },
             { color: "var(--red)", points: curve.map((p) => ({ x: p.x, y: p.haircutBps / 100 })) },
           ],
           {
