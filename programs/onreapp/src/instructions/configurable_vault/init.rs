@@ -91,16 +91,9 @@ impl<const KIND: u8> AccountSerialize for ConfigurableVaultInit<KIND> {
 
 impl<const KIND: u8> AccountDeserialize for ConfigurableVaultInit<KIND> {
     fn try_deserialize(buf: &mut &[u8]) -> Result<Self> {
-        let original = *buf;
-        let vault = match ConfigurableVault::try_deserialize(buf) {
-            Ok(vault) => vault,
-            Err(_) => {
-                let mut unchecked = original;
-                let vault = ConfigurableVault::try_deserialize_unchecked(&mut unchecked)?;
-                *buf = unchecked;
-                vault
-            }
-        };
+        // Program-owned zeroed vaults are initialized before this path. Every
+        // existing vault reaching it must carry the canonical discriminator.
+        let vault = ConfigurableVault::try_deserialize(buf)?;
         require!(
             vault.kind == Self::kind().as_u8(),
             crate::OnreError::InvalidConfigurableVaultKind
@@ -110,5 +103,27 @@ impl<const KIND: u8> AccountDeserialize for ConfigurableVaultInit<KIND> {
 
     fn try_deserialize_unchecked(buf: &mut &[u8]) -> Result<Self> {
         Self::try_deserialize(buf)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_valid_vault_body_with_invalid_discriminator() {
+        let vault = ConfigurableVault {
+            kind: ConfigurableVaultKind::OfferFee.as_u8(),
+            withdrawal_destination: Pubkey::default(),
+            bump: 254,
+            reserved: [0; 31],
+        };
+        let mut data = Vec::new();
+        vault.try_serialize(&mut data).unwrap();
+        data[0] ^= u8::MAX;
+
+        let result = ConfigurableVaultInit::<0>::try_deserialize(&mut data.as_slice());
+
+        assert!(result.is_err());
     }
 }
