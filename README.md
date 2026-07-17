@@ -15,6 +15,10 @@ anchor build && cargo test --manifest-path programs/onreapp/Cargo.toml --tests
 anchor keys sync && anchor build
 ```
 
+Lazy PDA initialization uses the SIMD-0312 `CreateAccountAllowPrefund` system
+instruction so a prefunded PDA cannot block account creation. Deployments and
+local validators must have the SIMD-0312 feature active.
+
 ## Program Structure
 
 ```

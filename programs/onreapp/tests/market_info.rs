@@ -6,6 +6,7 @@ use onreapp::state::{CirculatingSupplyExcludedAccounts, CirculatingSupplyExclude
 use solana_sdk::account::Account;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::rent::Rent;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
 
@@ -349,6 +350,39 @@ fn test_refresh_market_stats_permissionless_creates_and_updates_pda() {
     assert_eq!(market_stats.tvl, 5_000_500_000);
     assert_eq!(market_stats.last_updated_at, 1_704_067_201);
     assert_eq!(market_stats.last_updated_slot, 3);
+}
+
+#[test]
+fn test_refresh_market_stats_initializes_prefunded_pda() {
+    let (mut svm, payer, token_in, onyc_mint) =
+        setup_onyc_offer_with_supply(36_500, 1_000_000_000, 86_400, 5_000_000_000, 2_000_000_000);
+    let (market_stats_pda, _) = find_market_stats_pda();
+    let prefund_lamports = Rent::default().minimum_balance(0);
+    svm.airdrop(&market_stats_pda, prefund_lamports).unwrap();
+
+    let ix = build_refresh_market_stats_ix(&payer.pubkey(), &token_in, &onyc_mint);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let market_stats_account = svm.get_account(&market_stats_pda).unwrap();
+    assert_eq!(market_stats_account.owner, PROGRAM_ID);
+    assert!(market_stats_account.lamports > prefund_lamports);
+    assert_eq!(read_market_stats(&svm).bump, find_market_stats_pda().1);
+}
+
+#[test]
+fn test_refresh_market_stats_initializes_fully_prefunded_pda() {
+    let (mut svm, payer, token_in, onyc_mint) =
+        setup_onyc_offer_with_supply(36_500, 1_000_000_000, 86_400, 5_000_000_000, 2_000_000_000);
+    let (market_stats_pda, _) = find_market_stats_pda();
+    svm.airdrop(&market_stats_pda, INITIAL_LAMPORTS).unwrap();
+
+    let ix = build_refresh_market_stats_ix(&payer.pubkey(), &token_in, &onyc_mint);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    let market_stats_account = svm.get_account(&market_stats_pda).unwrap();
+    assert_eq!(market_stats_account.owner, PROGRAM_ID);
+    assert_eq!(market_stats_account.lamports, INITIAL_LAMPORTS);
+    assert_eq!(read_market_stats(&svm).bump, find_market_stats_pda().1);
 }
 
 #[test]
