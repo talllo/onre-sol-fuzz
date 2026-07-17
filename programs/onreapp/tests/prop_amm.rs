@@ -1153,14 +1153,10 @@ fn test_open_swap_sell_applies_default_minimum_haircut() {
         &ctx.usdc_mint,
         zero_net_sell_amount,
     );
-    let quote_metadata = send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).unwrap();
-    let quote = SwapQuote::try_from_slice(get_return_data(&quote_metadata)).unwrap();
-
-    assert_eq!(quote.token_in_amount, zero_net_sell_amount);
-    assert_eq!(quote.token_in_fee_amount, 5_000_000_000);
-    assert_eq!(quote.token_in_net_amount, 0);
-    assert_eq!(quote.token_out_amount, 0);
-    assert_eq!(quote.minimum_out, 0);
+    assert!(
+        send_tx(&mut ctx.svm, &[quote_ix], &[&ctx.payer]).is_err(),
+        "positive input whose minimum haircut leaves zero net amount should fail"
+    );
 
     let ix = build_open_swap_sell_ix(
         &ctx.onyc_mint,
@@ -1173,7 +1169,10 @@ fn test_open_swap_sell_applies_default_minimum_haircut() {
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
-    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
+    assert!(
+        send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).is_err(),
+        "positive input whose minimum haircut leaves zero output should fail"
+    );
 
     let sell_amount = 5_100_000_000;
     let quote_ix = build_quote_swap_ix(&ctx.onyc_mint, &ctx.onyc_mint, &ctx.usdc_mint, sell_amount);
@@ -1199,7 +1198,7 @@ fn test_open_swap_sell_applies_default_minimum_haircut() {
 
     let fee_vault_ata =
         get_associated_token_address(&find_prop_amm_sell_fee_vault_pda().0, &ctx.onyc_mint);
-    assert_eq!(get_token_balance(&ctx.svm, &fee_vault_ata), 10_000_000_000);
+    assert_eq!(get_token_balance(&ctx.svm, &fee_vault_ata), 5_000_000_000);
 }
 
 #[test]

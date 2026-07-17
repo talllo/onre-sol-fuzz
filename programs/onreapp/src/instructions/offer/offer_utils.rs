@@ -514,6 +514,26 @@ mod tests {
     }
 
     #[test]
+    fn process_offer_core_rejects_output_that_rounds_to_zero() {
+        let token_in_mint = Pubkey::new_unique();
+        let token_out_mint = Pubkey::new_unique();
+        let offer = offer_for_test(token_in_mint, token_out_mint, 0, active_vector_for_test());
+
+        let result = process_offer_core_at(
+            &offer,
+            1,
+            token_in_mint,
+            9,
+            token_out_mint,
+            6,
+            1,
+            offer.fee_basis_points,
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn process_offer_core_rejects_missing_active_vector() {
         let token_in_mint = Pubkey::new_unique();
         let token_out_mint = Pubkey::new_unique();

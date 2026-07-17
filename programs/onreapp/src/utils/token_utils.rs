@@ -136,7 +136,7 @@ pub fn transfer_tokens<'info>(
 /// The calculated amount of output tokens
 ///
 /// # Errors
-/// Returns MathOverflow if calculation exceeds u128 limits
+/// Returns an error if calculation overflows or rounds down to zero output.
 /// Maximum allowed token decimals (prevents overflow in exponentiation)
 pub const MAX_TOKEN_DECIMALS: u8 = 18;
 
@@ -176,6 +176,7 @@ pub fn calculate_token_out_amount(
 
     // Validate result fits in u64 before casting
     require!(result <= u64::MAX as u128, crate::OnreError::ResultOverflow);
+    require!(result > 0, crate::OnreError::InvalidAmount);
 
     Ok(result as u64)
 }

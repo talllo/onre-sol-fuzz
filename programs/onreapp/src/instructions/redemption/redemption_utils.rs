@@ -39,7 +39,7 @@ pub struct RedemptionProcessResult {
 ///
 /// # Returns
 /// * `Ok(RedemptionProcessResult)` - Containing price, fees, and token_out amount
-/// * `Err(_)` - If validation fails or no active vector exists
+/// * `Err(_)` - If validation fails, no active vector exists, or the payout rounds to zero
 ///
 /// # Price Calculation
 /// Uses the formula: `token_out = (token_in_net * price * 10^token_out_decimals) / (10^token_in_decimals * 10^9)`
@@ -99,6 +99,7 @@ pub fn process_redemption_core(
 
     // Validate result fits in u64 before casting
     require!(result <= u64::MAX as u128, crate::OnreError::OverflowError);
+    require!(result > 0, crate::OnreError::InvalidAmount);
 
     let token_out_amount = result as u64;
 

@@ -3216,6 +3216,30 @@ fn test_fulfill_redemption_request_very_small_amount() {
     );
 }
 
+#[test]
+fn test_fulfill_redemption_request_rejects_amount_that_rounds_to_zero() {
+    let mut ctx = setup_fulfillable_request(0, 999);
+    let boss = ctx.payer.pubkey();
+
+    let ix = build_fulfill_redemption_request_ix(
+        &boss,
+        &boss,
+        &ctx.main_offer,
+        &ctx.user.pubkey(),
+        &ctx.redemption_tin,
+        &ctx.redemption_tout,
+        0,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+        999,
+    );
+
+    assert!(
+        send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).is_err(),
+        "positive redemption input whose payout rounds to zero should fail"
+    );
+}
+
 // ===========================================================================
 // Token-2022 fulfill tests with varying APR and fees (matching TS coverage)
 // ===========================================================================
