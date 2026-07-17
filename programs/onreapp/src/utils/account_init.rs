@@ -1,4 +1,5 @@
-use anchor_lang::{prelude::*, system_program};
+use anchor_lang::{prelude::*, solana_program::program::invoke_signed, system_program};
+use solana_system_interface::instruction::create_account_allow_prefund;
 
 pub trait PdaAccountInit: AccountSerialize + AccountDeserialize {
     fn pda_seed_prefixes() -> &'static [&'static [u8]];
@@ -8,10 +9,15 @@ pub trait PdaAccountInit: AccountSerialize + AccountDeserialize {
     fn invalid_data_error() -> Error;
 }
 
+/// Loads a program-owned PDA or initializes a system-owned, zero-data PDA.
+///
+/// Initialization uses SIMD-0312 so an attacker cannot block creation by
+/// prefunding the deterministic address. The runtime must have
+/// `CreateAccountAllowPrefund` enabled.
 pub fn load_or_init_pda_account<'info, T>(
     account: &AccountInfo<'info>,
     payer: &AccountInfo<'info>,
-    system_program_account: &AccountInfo<'info>,
+    _system_program_account: &AccountInfo<'info>,
     program_id: &Pubkey,
     bump: u8,
 ) -> Result<T>
@@ -29,19 +35,28 @@ where
         }
 
         let rent_lamports = Rent::get()?.minimum_balance(T::init_space());
-        system_program::create_account(
-            CpiContext::new_with_signer(
-                system_program_account.key(),
-                system_program::CreateAccount {
-                    from: payer.clone(),
-                    to: account.clone(),
-                },
-                &signer_seeds,
-            ),
-            rent_lamports,
+        let lamports_to_transfer = rent_lamports.saturating_sub(account.lamports());
+        let payer_and_lamports =
+            (lamports_to_transfer > 0).then_some((payer.key, lamports_to_transfer));
+        let create_account_ix = create_account_allow_prefund(
+            account.key,
+            payer_and_lamports,
             T::init_space() as u64,
             program_id,
-        )?;
+        );
+        if payer_and_lamports.is_some() {
+            invoke_signed(
+                &create_account_ix,
+                &[account.clone(), payer.clone()],
+                &signer_seeds,
+            )?;
+        } else {
+            invoke_signed(
+                &create_account_ix,
+                std::slice::from_ref(account),
+                &signer_seeds,
+            )?;
+        }
 
         return Ok(T::init_value(bump));
     }
