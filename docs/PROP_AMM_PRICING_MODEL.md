@@ -248,6 +248,7 @@ reject if token_in_amount < token_in_fee
 token_in_net = token_in_amount - token_in_fee
 raw = token_in_net * current_offer_price * 10^token_out_decimals
     / (10^token_in_decimals * 10^9)
+reject if raw == 0
 ```
 
 Example:
@@ -354,6 +355,7 @@ The implementation rejects the sell if:
 ```text
 L == 0
 R == 0
+raw == 0
 raw > L
 ```
 
