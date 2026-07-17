@@ -1,8 +1,10 @@
 mod common;
 
+use anchor_lang::AccountSerialize;
 use common::*;
-use onreapp::state::ConfigurableVaultKind;
+use onreapp::state::{ConfigurableVault, ConfigurableVaultKind};
 use solana_compute_budget_interface::ComputeBudgetInstruction;
+use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
@@ -278,6 +280,65 @@ fn test_fee_routing_rejects_invalid_fee_destination() {
     let ix = build_withdraw_offer_fee_vault_ix(&boss, &wrong_wallet.pubkey(), &ctx.onyc_mint, 0);
     let result = send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]);
     assert!(result.is_err(), "wrong fee destination should be rejected");
+}
+
+#[test]
+fn test_fulfill_rejects_configurable_vault_with_invalid_discriminator() {
+    let mut ctx = setup_fee_routing();
+    let boss = ctx.payer.pubkey();
+    let (fee_vault_pda, bump) = find_redemption_fee_vault_pda();
+    let vault = ConfigurableVault {
+        kind: ConfigurableVaultKind::RedemptionFee.as_u8(),
+        withdrawal_destination: Pubkey::default(),
+        bump,
+        reserved: [0; 31],
+    };
+    let mut data = Vec::new();
+    vault.try_serialize(&mut data).unwrap();
+    data[0] ^= u8::MAX;
+    ctx.svm
+        .set_account(
+            fee_vault_pda,
+            Account {
+                lamports: INITIAL_LAMPORTS,
+                data,
+                owner: PROGRAM_ID,
+                executable: false,
+                rent_epoch: 0,
+            },
+        )
+        .unwrap();
+
+    let offer_data = read_redemption_offer(&ctx.svm, &ctx.onyc_mint, &ctx.usdc_mint);
+    let counter = offer_data.request_counter;
+    let ix = build_create_redemption_request_ix(
+        &ctx.user.pubkey(),
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        REDEMPTION_AMOUNT,
+        counter,
+        &TOKEN_PROGRAM_ID,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.user]).unwrap();
+    advance_slot(&mut ctx.svm);
+
+    let ix = build_fulfill_redemption_request_ix(
+        &boss,
+        &boss,
+        &find_offer_pda(&ctx.usdc_mint, &ctx.onyc_mint).0,
+        &ctx.user.pubkey(),
+        &ctx.onyc_mint,
+        &ctx.usdc_mint,
+        counter,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+        REDEMPTION_AMOUNT,
+    );
+
+    assert!(
+        send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).is_err(),
+        "a program-owned configurable vault with an invalid discriminator should fail"
+    );
 }
 
 #[test]
