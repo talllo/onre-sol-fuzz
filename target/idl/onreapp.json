@@ -9223,6 +9223,8 @@
         "Delegates to `offer::take_offer_permissionless`.",
         "Similar to take_offer but routes token transfers through intermediary accounts",
         "owned by the program instead of direct user-to-boss and vault-to-user transfers.",
+        "Permissionless execution does not require approval; the approval argument is",
+        "retained only for legacy instruction-data compatibility.",
         "Emits an `OfferTakenPermissionlessEvent` upon success.",
         "",
         "# Arguments",
@@ -9694,13 +9696,7 @@
           ]
         },
         {
-          "name": "instructions_sysvar",
-          "docs": [
-            "Instructions sysvar for approval signature verification",
-            "",
-            "Required for cryptographic verification of approval messages when offers",
-            "require a signature from state.approver1 or state.approver2."
-          ]
+          "name": "instructions_sysvar"
         },
         {
           "name": "user",
@@ -9744,6 +9740,12 @@
     },
     {
       "name": "take_offer_permissionless_v2",
+      "docs": [
+        "Takes an offer through the V2 permissionless route without approval verification.",
+        "",
+        "Unlike the legacy permissionless instruction, V2 has no approval-message argument",
+        "or instructions-sysvar account."
+      ],
       "discriminator": [
         250,
         180,
@@ -10121,9 +10123,6 @@
           "name": "circulating_supply_excluded_balance"
         },
         {
-          "name": "instructions_sysvar"
-        },
-        {
           "name": "user",
           "writable": true,
           "signer": true
@@ -10144,16 +10143,6 @@
         {
           "name": "token_in_amount",
           "type": "u64"
-        },
-        {
-          "name": "approval_message",
-          "type": {
-            "option": {
-              "defined": {
-                "name": "ApprovalMessage"
-              }
-            }
-          }
         }
       ]
     },

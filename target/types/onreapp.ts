@@ -9229,6 +9229,8 @@ export type Onreapp = {
         "Delegates to `offer::take_offer_permissionless`.",
         "Similar to take_offer but routes token transfers through intermediary accounts",
         "owned by the program instead of direct user-to-boss and vault-to-user transfers.",
+        "Permissionless execution does not require approval; the approval argument is",
+        "retained only for legacy instruction-data compatibility.",
         "Emits an `OfferTakenPermissionlessEvent` upon success.",
         "",
         "# Arguments",
@@ -9700,13 +9702,7 @@ export type Onreapp = {
           ]
         },
         {
-          "name": "instructionsSysvar",
-          "docs": [
-            "Instructions sysvar for approval signature verification",
-            "",
-            "Required for cryptographic verification of approval messages when offers",
-            "require a signature from state.approver1 or state.approver2."
-          ]
+          "name": "instructionsSysvar"
         },
         {
           "name": "user",
@@ -9750,6 +9746,12 @@ export type Onreapp = {
     },
     {
       "name": "takeOfferPermissionlessV2",
+      "docs": [
+        "Takes an offer through the V2 permissionless route without approval verification.",
+        "",
+        "Unlike the legacy permissionless instruction, V2 has no approval-message argument",
+        "or instructions-sysvar account."
+      ],
       "discriminator": [
         250,
         180,
@@ -10127,9 +10129,6 @@ export type Onreapp = {
           "name": "circulatingSupplyExcludedBalance"
         },
         {
-          "name": "instructionsSysvar"
-        },
-        {
           "name": "user",
           "writable": true,
           "signer": true
@@ -10150,16 +10149,6 @@ export type Onreapp = {
         {
           "name": "tokenInAmount",
           "type": "u64"
-        },
-        {
-          "name": "approvalMessage",
-          "type": {
-            "option": {
-              "defined": {
-                "name": "approvalMessage"
-              }
-            }
-          }
         }
       ]
     },

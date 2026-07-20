@@ -54,7 +54,7 @@ Offers use up to 10 `OfferVector` entries with APR-based compound interest. Pric
 | `boss`             | Primary authority with full control (two-step transfer via propose/accept) |
 | `admins[20]`       | Can enable the kill switch                                                 |
 | `worker`           | Fulfills/cancels redemptions and settles BUFFER                             |
-| `approvers`        | Trusted keys for cryptographic approval verification (ed25519)             |
+| `approvers`        | Trusted keys for regular-path approval verification (ed25519)              |
 
 ### Kill Switch Semantics
 

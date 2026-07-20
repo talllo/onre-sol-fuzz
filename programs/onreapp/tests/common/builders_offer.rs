@@ -169,7 +169,6 @@ pub fn build_take_offer_permissionless_v2_ix(
     token_in_mint: &Pubkey,
     token_out_mint: &Pubkey,
     token_in_amount: u64,
-    approval_message: Option<&[u8]>,
     token_in_program: &Pubkey,
     token_out_program: &Pubkey,
 ) -> Instruction {
@@ -180,7 +179,6 @@ pub fn build_take_offer_permissionless_v2_ix(
         token_in_mint,
         token_out_mint,
         token_in_amount,
-        approval_message,
         token_in_program,
         token_out_program,
         &main_offer,
@@ -194,7 +192,6 @@ pub fn build_take_offer_permissionless_v2_ix_with_main_offer(
     token_in_mint: &Pubkey,
     token_out_mint: &Pubkey,
     token_in_amount: u64,
-    approval_message: Option<&[u8]>,
     token_in_program: &Pubkey,
     token_out_program: &Pubkey,
     main_offer: &Pubkey,
@@ -254,13 +251,6 @@ pub fn build_take_offer_permissionless_v2_ix_with_main_offer(
     );
     let mut data = ix_discriminator("take_offer_permissionless_v2").to_vec();
     data.extend_from_slice(&token_in_amount.to_le_bytes());
-    match approval_message {
-        Some(msg_bytes) => {
-            data.push(1);
-            data.extend_from_slice(msg_bytes);
-        }
-        None => data.push(0),
-    }
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![
@@ -292,7 +282,6 @@ pub fn build_take_offer_permissionless_v2_ix_with_main_offer(
             AccountMeta::new(performance_fee_vault_onyc_ata, false),
             AccountMeta::new(market_stats_pda, false),
             AccountMeta::new_readonly(excluded_balance_pda, false),
-            AccountMeta::new_readonly(SYSVAR_INSTRUCTIONS_ID, false),
             AccountMeta::new(*user, true),
             AccountMeta::new_readonly(ATA_PROGRAM_ID, false),
             AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),

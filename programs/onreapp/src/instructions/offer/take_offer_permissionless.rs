@@ -14,7 +14,6 @@ use crate::instructions::market_info::{load_main_offer, refresh_market_stats_pda
 use crate::instructions::offer::offer_utils::{
     calculate_redemption_vault_refill_amount, is_onyc_token_out_mint,
     load_redemption_offer_vault_target_bps_for_offer, process_offer_core, should_accrue_onyc_mint,
-    verify_offer_approval,
 };
 use crate::instructions::Offer;
 use crate::state::{ConfigurableVaultKind, State};
@@ -195,11 +194,7 @@ pub struct TakeOfferPermissionless<'info> {
     /// CHECK: PDA derivation is validated through seeds constraint
     pub mint_authority: UncheckedAccount<'info>,
 
-    /// Instructions sysvar for approval signature verification
-    ///
-    /// Required for cryptographic verification of approval messages when offers
-    /// require a signature from state.approver1 or state.approver2.
-    /// CHECK: Validated through address constraint to instructions sysvar
+    /// CHECK: Retained and validated for legacy instruction-layout compatibility.
     pub instructions_sysvar: UncheckedAccount<'info>,
 
     /// The user executing the offer and paying for account creation
@@ -321,9 +316,6 @@ pub struct TakeOfferPermissionlessV2<'info> {
     /// CHECK: PDA validation and data loading are handled by market stats refresh.
     pub circulating_supply_excluded_balance: UncheckedAccount<'info>,
 
-    /// CHECK: Validated through address constraint to instructions sysvar
-    pub instructions_sysvar: UncheckedAccount<'info>,
-
     #[account(mut)]
     pub user: Signer<'info>,
 
@@ -358,14 +350,13 @@ pub(crate) struct PermissionlessRedemptionVaultRefill<'a, 'info> {
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
 /// * `token_in_amount` - Amount of token_in the user is willing to pay (including fees)
-/// * `approval_message` - Optional cryptographic approval from trusted authority
+/// * `_approval_message` - Ignored legacy argument retained for instruction compatibility
 ///
 /// # Process Flow
 /// 1. Validate offer allows permissionless operations
-/// 2. Verify approval requirements if offer needs approval
-/// 3. Calculate current price and token amounts
-/// 4. Execute atomic transfers through intermediary accounts
-/// 5. Emit event with transaction details
+/// 2. Calculate current price and token amounts
+/// 3. Execute atomic transfers through intermediary accounts
+/// 4. Emit event with transaction details
 ///
 /// # Returns
 /// * `Ok(())` - If the offer is successfully executed
@@ -375,7 +366,7 @@ pub(crate) struct PermissionlessRedemptionVaultRefill<'a, 'info> {
 /// # Access Control
 /// - Only available for offers with allow_permissionless enabled
 /// - Kill switch prevents execution when activated
-/// - Approval verification when required
+/// - Permissionless execution never requires an approval signature
 ///
 /// # Events
 /// * `OfferTakenPermissionlessEvent` - Emitted with execution details and routing information
@@ -383,8 +374,13 @@ pub(crate) struct PermissionlessRedemptionVaultRefill<'a, 'info> {
 pub fn take_offer_permissionless<'info>(
     ctx: Context<'info, TakeOfferPermissionless<'info>>,
     token_in_amount: u64,
-    approval_message: Option<ApprovalMessage>,
+    _approval_message: Option<ApprovalMessage>,
 ) -> Result<()> {
+    require_keys_eq!(
+        INSTRUCTIONS_SYSVAR_ID,
+        ctx.accounts.instructions_sysvar.key(),
+        crate::OnreError::InvalidInstructionsSysvar
+    );
     let boss_token_in_account = get_associated_token_account(
         &ctx.accounts.boss_token_in_account,
         &ctx.accounts.boss.key(),
@@ -417,11 +413,9 @@ pub fn take_offer_permissionless<'info>(
         &ctx.accounts.offer,
         &ctx.accounts.state,
         &ctx.accounts.user,
-        &ctx.accounts.instructions_sysvar,
         &ctx.accounts.token_in_mint,
         &mut ctx.accounts.token_out_mint,
         token_in_amount,
-        &approval_message,
         &ctx.accounts.token_in_program,
         &ctx.accounts.user_token_in_account,
         &ctx.accounts.permissionless_token_in_account,
@@ -447,7 +441,6 @@ pub fn take_offer_permissionless<'info>(
 pub fn take_offer_permissionless_v2<'info>(
     ctx: Context<'info, TakeOfferPermissionlessV2<'info>>,
     token_in_amount: u64,
-    approval_message: Option<ApprovalMessage>,
 ) -> Result<()> {
     let offer_proceeds_token_in_account = get_or_create_configurable_vault_token_account::<
         { ConfigurableVaultKind::OfferProceeds.as_u8() },
@@ -509,11 +502,9 @@ pub fn take_offer_permissionless_v2<'info>(
         &ctx.accounts.offer,
         &ctx.accounts.state,
         &ctx.accounts.user,
-        &ctx.accounts.instructions_sysvar,
         &ctx.accounts.token_in_mint,
         &mut ctx.accounts.token_out_mint,
         token_in_amount,
-        &approval_message,
         &ctx.accounts.token_in_program,
         &ctx.accounts.user_token_in_account,
         &permissionless_token_in_account,
@@ -550,11 +541,9 @@ pub(crate) fn execute_take_offer_permissionless<'info>(
     offer_account: &AccountLoader<'info, Offer>,
     state: &Account<'info, State>,
     user: &Signer<'info>,
-    instructions_sysvar: &UncheckedAccount<'info>,
     token_in_mint: &InterfaceAccount<'info, Mint>,
     token_out_mint: &mut InterfaceAccount<'info, Mint>,
     token_in_amount: u64,
-    approval_message: &Option<ApprovalMessage>,
     token_in_program: &Interface<'info, TokenInterface>,
     user_token_in_account: &InterfaceAccount<'info, TokenAccount>,
     permissionless_token_in_account: &InterfaceAccount<'info, TokenAccount>,
@@ -574,11 +563,6 @@ pub(crate) fn execute_take_offer_permissionless<'info>(
     redemption_vault_refill: Option<PermissionlessRedemptionVaultRefill<'info, 'info>>,
     system_program: &Program<'info, System>,
 ) -> Result<()> {
-    require_keys_eq!(
-        INSTRUCTIONS_SYSVAR_ID,
-        instructions_sysvar.key(),
-        crate::OnreError::InvalidInstructionsSysvar
-    );
     let (va, va_bump) = Pubkey::find_program_address(&[seeds::OFFER_VAULT_AUTHORITY], program_id);
     require_keys_eq!(va, vault_authority.key());
     let (pa, pa_bump) =
@@ -595,17 +579,6 @@ pub(crate) fn execute_take_offer_permissionless<'info>(
         offer.allow_permissionless(),
         crate::OnreError::PermissionlessNotAllowed
     );
-
-    // Verify approval if needed
-    verify_offer_approval(
-        &offer,
-        approval_message,
-        program_id,
-        &user.key(),
-        &state.approver1,
-        &state.approver2,
-        instructions_sysvar,
-    )?;
 
     let result = process_offer_core(
         &offer,

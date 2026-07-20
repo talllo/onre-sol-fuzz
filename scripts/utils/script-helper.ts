@@ -544,7 +544,6 @@ export class ScriptHelper {
         tokenInMint: PublicKey;
         tokenOutMint: PublicKey;
         user: PublicKey;
-        approvalMessage?: any;
         tokenInProgram?: PublicKey;
         tokenOutProgram?: PublicKey;
     }) {
@@ -556,7 +555,7 @@ export class ScriptHelper {
         const state = await this.getState();
 
         return await this.program.methods
-            .takeOfferPermissionlessV2(new BN(params.tokenInAmount), params.approvalMessage ?? null)
+            .takeOfferPermissionlessV2(new BN(params.tokenInAmount))
             .accountsPartial({
                 offer: this.getOfferPda(params.tokenInMint, params.tokenOutMint),
                 state: this.statePda,
@@ -589,7 +588,6 @@ export class ScriptHelper {
                 circulatingSupplyExcludedBalance: this.pdas.circulatingSupplyExcludedBalancePda,
                 tokenInProgram,
                 tokenOutProgram,
-                instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
                 systemProgram: anchor.web3.SystemProgram.programId,
                 mainOffer: state.mainOffer as PublicKey,
