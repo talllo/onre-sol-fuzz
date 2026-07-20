@@ -3,6 +3,8 @@ use anchor_lang::prelude::*;
 
 pub const SECONDS_PER_YEAR: u128 = 31_536_000;
 pub const YIELD_SCALE: u128 = 1_000_000;
+/// Maximum configurable BUFFER gross APR (100%, scale = 1_000_000).
+pub const MAX_BUFFER_GROSS_APR: u64 = 1_000_000;
 pub const BASIS_POINTS_SCALE: u128 = MAX_BASIS_POINTS as u128;
 pub const BASIS_POINT_TO_YIELD_SCALE: u128 = YIELD_SCALE / BASIS_POINTS_SCALE;
 

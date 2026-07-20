@@ -252,7 +252,7 @@ If your integration touches BUFFER:
 
 - `initialize_buffer` must be given an offer account, and that offer's `token_out_mint` must be the ONyc mint
 - `set_main_offer` changes the canonical offer used by every BUFFER accrual and ONYC market-stat refresh path
-- `set_buffer_gross_apr` first settles pending BUFFER accrual and refreshes market stats, then updates `gross_apr`
+- `set_buffer_gross_apr` accepts values from 0 through `1_000_000` (0% through 100%), first settles pending BUFFER accrual and refreshes market stats, then updates `gross_apr`
 - BUFFER accrual reads `current_yield` and current NAV from the active vector on `state.main_offer`; a separate traded offer only determines user execution pricing
 - `set_buffer_gross_apr`, `set_buffer_fee_config`, and `burn_for_nav_increase` require the boss signer to be writable because it pays for lazy `MarketStats` initialization; callers may run permissionless `refresh_market_stats` first or let the first of these boss instructions create the PDA
 

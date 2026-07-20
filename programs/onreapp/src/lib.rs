@@ -547,7 +547,8 @@ pub mod onreapp {
 
     /// Sets BUFFER gross yield.
     ///
-    /// Settles pending BUFFER accrual using the main offer, refreshes market stats, then updates gross APR.
+    /// Accepts gross APR from 0% through 100% (scale = 1_000_000). Settles pending
+    /// BUFFER accrual using the main offer, refreshes market stats, then updates gross APR.
     pub fn set_buffer_gross_apr(ctx: Context<SetBufferGrossYield>, gross_yield: u64) -> Result<()> {
         buffer::set_buffer_gross_apr(ctx, gross_yield)
     }

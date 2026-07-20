@@ -7786,7 +7786,8 @@ export type Onreapp = {
       "docs": [
         "Sets BUFFER gross yield.",
         "",
-        "Settles pending BUFFER accrual using the main offer, refreshes market stats, then updates gross APR."
+        "Accepts gross APR from 0% through 100% (scale = 1_000_000). Settles pending",
+        "BUFFER accrual using the main offer, refreshes market stats, then updates gross APR."
       ],
       "discriminator": [
         245,

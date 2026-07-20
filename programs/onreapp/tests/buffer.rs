@@ -1,6 +1,7 @@
 mod common;
 
 use common::*;
+use onreapp::instructions::MAX_BUFFER_GROSS_APR;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
@@ -732,6 +733,42 @@ fn test_set_buffer_gross_yield_rejects_no_change() {
     let ix = build_set_buffer_gross_yield_ix(&boss, &state.main_offer, &onyc_mint, 150_000);
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(result.is_err(), "setting same gross yield should fail");
+}
+
+#[test]
+fn test_set_buffer_gross_yield_accepts_maximum_apr() {
+    let (mut svm, payer, _token_in_mint, onyc_mint, _caller) =
+        setup_buffer_context(150_000, 50_000, 0, 0);
+    let boss = payer.pubkey();
+    let state = read_state(&svm);
+
+    let ix =
+        build_set_buffer_gross_yield_ix(&boss, &state.main_offer, &onyc_mint, MAX_BUFFER_GROSS_APR);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    assert_eq!(read_buffer_state(&svm).gross_yield, MAX_BUFFER_GROSS_APR);
+}
+
+#[test]
+fn test_set_buffer_gross_yield_rejects_apr_above_maximum() {
+    let initial_gross_yield = 150_000;
+    let (mut svm, payer, _token_in_mint, onyc_mint, _caller) =
+        setup_buffer_context(initial_gross_yield, 50_000, 0, 0);
+    let boss = payer.pubkey();
+    let state = read_state(&svm);
+
+    let ix = build_set_buffer_gross_yield_ix(
+        &boss,
+        &state.main_offer,
+        &onyc_mint,
+        MAX_BUFFER_GROSS_APR + 1,
+    );
+
+    assert!(
+        send_tx(&mut svm, &[ix], &[&payer]).is_err(),
+        "gross APR above 100% should fail"
+    );
+    assert_eq!(read_buffer_state(&svm).gross_yield, initial_gross_yield);
 }
 
 #[test]
