@@ -12,16 +12,18 @@ export async function executeBufferSetFees(opts: GlobalOptions & Record<string, 
                 return helper.buildSetBufferFeeConfigIx({
                     managementFeeBps: params.managementFeeBps,
                     performanceFeeBps: params.performanceFeeBps,
+                    performanceFeeHighWatermarkEnabled: params.performanceFeeHighWatermarkEnabled,
                     boss,
                 });
             },
             title: "Set BUFFER Fee Config Transaction",
-            description: "Updates BUFFER management and performance fee settings",
+            description: "Updates BUFFER management and performance fee settings and high-water-mark behavior",
             showParamSummary: {
                 title: "Setting BUFFER fees:",
                 params: {
                     managementFeeBps: params.managementFeeBps,
                     performanceFeeBps: params.performanceFeeBps,
+                    performanceFeeHighWatermarkEnabled: params.performanceFeeHighWatermarkEnabled,
                 },
             },
         });

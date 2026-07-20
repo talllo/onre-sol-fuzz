@@ -214,6 +214,7 @@ pub struct BufferStateData {
     pub management_fee_basis_points: u16,
     pub performance_fee_basis_points: u16,
     pub performance_fee_high_watermark: u64,
+    pub performance_fee_high_watermark_enabled: bool,
     pub last_accrual_timestamp: i64,
     pub bump: u8,
 }
@@ -233,6 +234,7 @@ pub fn read_buffer_state(svm: &LiteSVM) -> BufferStateData {
         management_fee_basis_points: buffer_state.management_fee_basis_points,
         performance_fee_basis_points: buffer_state.performance_fee_basis_points,
         performance_fee_high_watermark: buffer_state.performance_fee_high_watermark,
+        performance_fee_high_watermark_enabled: buffer_state.performance_fee_high_watermark_enabled,
         last_accrual_timestamp: buffer_state.last_accrual_timestamp,
         bump: buffer_state.bump,
     }

@@ -7546,7 +7546,9 @@
       "docs": [
         "Sets BUFFER fee split parameters.",
         "",
-        "Both fee values are expressed in basis points and applied during accrual."
+        "Both fee values are expressed in basis points and applied during accrual. When the",
+        "performance-fee high-water mark is disabled, every nonzero accrual pays the configured",
+        "performance fee regardless of current NAV."
       ],
       "discriminator": [
         68,
@@ -7772,6 +7774,10 @@
         {
           "name": "performance_fee_basis_points",
           "type": "u16"
+        },
+        {
+          "name": "performance_fee_high_watermark_enabled",
+          "type": "bool"
         }
       ]
     },
@@ -13802,6 +13808,14 @@
           {
             "name": "new_performance_fee_basis_points",
             "type": "u16"
+          },
+          {
+            "name": "old_performance_fee_high_watermark_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "new_performance_fee_high_watermark_enabled",
+            "type": "bool"
           }
         ]
       }
@@ -13872,6 +13886,10 @@
             "type": "u64"
           },
           {
+            "name": "performance_fee_high_watermark_enabled",
+            "type": "bool"
+          },
+          {
             "name": "last_accrual_timestamp",
             "type": "i64"
           },
@@ -13884,7 +13902,7 @@
             "type": {
               "array": [
                 "u8",
-                136
+                135
               ]
             }
           }

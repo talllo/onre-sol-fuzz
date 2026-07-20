@@ -95,6 +95,7 @@ pub(crate) fn accrue_buffer<'info>(
         buffer_state.performance_fee_basis_points,
         current_nav,
         old_previous_performance_fee_high_watermark,
+        buffer_state.performance_fee_high_watermark_enabled,
     )?;
 
     if buffer_mint_amount > 0 {

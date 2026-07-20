@@ -287,7 +287,7 @@ fn test_take_offer_v2_accrues_buffer_and_splits_fees() {
     let ix = build_set_buffer_gross_yield_ix(&boss, &main_offer, &ctx.onyc_mint, 150_000);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
-    let ix = build_set_buffer_fee_config_ix(&boss, &main_offer, &ctx.onyc_mint, 100, 1_000);
+    let ix = build_set_buffer_fee_config_ix(&boss, &main_offer, &ctx.onyc_mint, 100, 1_000, true);
     send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
 
     advance_slot(&mut ctx.svm);

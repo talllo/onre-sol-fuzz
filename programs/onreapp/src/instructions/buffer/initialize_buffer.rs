@@ -105,6 +105,7 @@ pub fn initialize_buffer(ctx: Context<InitializeBuffer>) -> Result<()> {
     );
 
     buffer_state.onyc_mint = ctx.accounts.onyc_mint.key();
+    buffer_state.performance_fee_high_watermark_enabled = true;
     buffer_state.last_accrual_timestamp = now;
     buffer_state.bump = ctx.bumps.buffer_state;
 

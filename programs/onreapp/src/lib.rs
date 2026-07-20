@@ -560,16 +560,20 @@ pub mod onreapp {
 
     /// Sets BUFFER fee split parameters.
     ///
-    /// Both fee values are expressed in basis points and applied during accrual.
+    /// Both fee values are expressed in basis points and applied during accrual. When the
+    /// performance-fee high-water mark is disabled, every nonzero accrual pays the configured
+    /// performance fee regardless of current NAV.
     pub fn set_buffer_fee_config(
         ctx: Context<SetBufferFeeConfig>,
         management_fee_basis_points: u16,
         performance_fee_basis_points: u16,
+        performance_fee_high_watermark_enabled: bool,
     ) -> Result<()> {
         buffer::set_buffer_fee_config(
             ctx,
             management_fee_basis_points,
             performance_fee_basis_points,
+            performance_fee_high_watermark_enabled,
         )
     }
 

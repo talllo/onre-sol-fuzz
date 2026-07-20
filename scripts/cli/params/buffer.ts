@@ -46,6 +46,14 @@ export const bufferFeeConfigParams: ParamDefinition[] = [
         flag: "--performance-fee-bps",
         transform: (value: any) => parseInt(value, 10),
     },
+    {
+        name: "performanceFeeHighWatermarkEnabled",
+        type: "boolean",
+        description: "Enable the performance-fee high-water mark",
+        required: true,
+        flag: "--performance-fee-high-watermark-enabled",
+        default: true,
+    },
 ];
 
 export const bufferReserveVaultParams: ParamDefinition[] = [

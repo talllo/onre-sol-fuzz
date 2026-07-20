@@ -19,6 +19,8 @@ pub struct BufferFeeConfigUpdatedEvent {
     pub new_management_fee_basis_points: u16,
     pub old_performance_fee_basis_points: u16,
     pub new_performance_fee_basis_points: u16,
+    pub old_performance_fee_high_watermark_enabled: bool,
+    pub new_performance_fee_high_watermark_enabled: bool,
 }
 
 #[event]
