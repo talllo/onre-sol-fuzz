@@ -90,7 +90,7 @@ The BUFFER module stores two separate inputs for accrual:
 
 | Field           | Source                                                             |
 | --------------- | ------------------------------------------------------------------ |
-| `gross_apr`     | Set explicitly by `set_buffer_gross_apr`                           |
+| `gross_apr`     | Set by `set_buffer_gross_apr`; capped at `1_000_000` (100%)         |
 | `current_yield` | Read from the active APR on `state.main_offer`                    |
 
 `state.main_offer` must be set before `mint_to` or `initialize_buffer`; both instructions validate the supplied offer against the configured address. It can be updated later with `set_main_offer`, and it must always point to an offer whose `token_out_mint` is ONyc. Every BUFFER-aware path uses `state.main_offer` for global accrual and market statistics. When the path executes a different offer, that offer still determines the user's trade or redemption price.

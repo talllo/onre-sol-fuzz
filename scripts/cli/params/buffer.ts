@@ -23,7 +23,7 @@ export const bufferGrossYieldParams: ParamDefinition[] = [
     {
         name: "grossYield",
         type: "apr",
-        description: "Gross yield (scale=1e6; 100000 = 10%)",
+        description: "Gross yield (scale=1e6; 100000 = 10%; maximum = 1000000 / 100%)",
         required: true,
         flag: "--gross-yield",
     },

@@ -46,6 +46,9 @@ BUFFER accrual reads and updates these `BufferState` fields:
 
 `last_accrual_timestamp` is the start timestamp of that unpaid interval.
 
+`gross_apr` uses scale `1_000_000`, where `1_000_000` is 100%. The
+`set_buffer_gross_apr` instruction accepts values from 0 through `1_000_000`.
+
 ## Interval Model
 
 Each accrual interval is handled as:

@@ -4,7 +4,8 @@ use crate::instructions::buffer::accounts::{
     BufferAccrualAccountsBumps,
 };
 use crate::instructions::buffer::{
-    accrue_buffer::accrue_buffer_from_accounts, BufferAccrualAccounts, BufferGrossYieldUpdatedEvent,
+    accrue_buffer::accrue_buffer_from_accounts, BufferAccrualAccounts,
+    BufferGrossYieldUpdatedEvent, MAX_BUFFER_GROSS_APR,
 };
 use crate::instructions::market_info::market_stats::refresh_market_stats_pda;
 use crate::instructions::Offer;
@@ -60,6 +61,11 @@ pub struct SetBufferGrossYield<'info> {
 }
 
 pub fn set_buffer_gross_apr(ctx: Context<SetBufferGrossYield>, gross_yield: u64) -> Result<()> {
+    require!(
+        gross_yield <= MAX_BUFFER_GROSS_APR,
+        crate::OnreError::InvalidAPR
+    );
+
     let mut buffer_state = ctx.accounts.buffer_accounts.load_buffer_state()?;
 
     require!(
