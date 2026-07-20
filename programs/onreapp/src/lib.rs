@@ -353,6 +353,8 @@ pub mod onreapp {
     /// Delegates to `offer::take_offer_permissionless`.
     /// Similar to take_offer but routes token transfers through intermediary accounts
     /// owned by the program instead of direct user-to-boss and vault-to-user transfers.
+    /// Permissionless execution does not require approval; the approval argument is
+    /// retained only for legacy instruction-data compatibility.
     /// Emits an `OfferTakenPermissionlessEvent` upon success.
     ///
     /// # Arguments
@@ -366,12 +368,15 @@ pub mod onreapp {
         offer::take_offer_permissionless(ctx, token_in_amount, approval_message)
     }
 
+    /// Takes an offer through the V2 permissionless route without approval verification.
+    ///
+    /// Unlike the legacy permissionless instruction, V2 has no approval-message argument
+    /// or instructions-sysvar account.
     pub fn take_offer_permissionless_v2<'info>(
         ctx: Context<'info, TakeOfferPermissionlessV2<'info>>,
         token_in_amount: u64,
-        approval_message: Option<ApprovalMessage>,
     ) -> Result<()> {
-        offer::take_offer_permissionless_v2(ctx, token_in_amount, approval_message)
+        offer::take_offer_permissionless_v2(ctx, token_in_amount)
     }
 
     /// Proposes a new boss for ownership transfer.

@@ -96,6 +96,7 @@ flowchart TD
 Notes:
 
 - `take_offer_permissionless_v2` uses `fee_basis_points_permissionless`, which defaults to `0` for newly created and upgraded offers until the boss calls `update_offer_permissionless_fee`.
+- Permissionless execution does not check `needs_approval` or verify an approval signature. The legacy instruction retains but ignores its approval argument and instructions-sysvar account; V2 omits both from its interface.
 - The permissionless authority is an intermediary signer. V2 permissionless fees route to `PermissionlessOfferFee`; net token-in otherwise follows the same burn, refill, and proceeds rules as `take_offer_v2`.
 - Refill is skipped if the supplied redemption offer account is uninitialized or disabled, the target is zero, `MarketStats` cannot be read, or token-in is program-controlled.
 

@@ -797,7 +797,6 @@ fn test_take_offer_permissionless_v2_after_buffer_accrual_respects_max_supply() 
         &ctx.usdc_mint,
         &ctx.onyc_mint,
         10_000,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );

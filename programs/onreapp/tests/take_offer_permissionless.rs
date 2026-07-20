@@ -91,11 +91,11 @@ struct PermissionlessOfferCtx {
 }
 
 // ===========================================================================
-// Ed25519 Approval + Permissionless Take Offer Tests
+// Legacy approval-layout compatibility tests
 // ===========================================================================
 
 #[test]
-fn test_take_offer_permissionless_with_valid_approval() {
+fn test_take_offer_permissionless_accepts_ignored_valid_approval() {
     let mut ctx = setup_permissionless_offer();
     let boss = ctx.payer.pubkey();
 
@@ -121,7 +121,7 @@ fn test_take_offer_permissionless_with_valid_approval() {
     let expiry_unix = 1704067200u64 + 3600; // 1 hour from now
     let approval_msg_bytes = serialize_approval_message(&PROGRAM_ID, &user.pubkey(), expiry_unix);
 
-    // Build Ed25519 verify instruction (must be right before the program instruction)
+    // Legacy callers may still include the old Ed25519 instruction and message.
     let ed25519_ix = build_ed25519_verify_ix(&ctx.approver, &approval_msg_bytes);
 
     // Build take_offer_permissionless instruction
@@ -136,7 +136,7 @@ fn test_take_offer_permissionless_with_valid_approval() {
         &TOKEN_PROGRAM_ID,
     );
 
-    // Send both instructions in one transaction (Ed25519 verify must be before take_offer)
+    // The permissionless handler accepts but ignores the legacy approval payload.
     let result = send_tx(&mut ctx.svm, &[ed25519_ix, take_ix], &[&user]);
     assert!(
         result.is_ok(),
@@ -168,7 +168,7 @@ fn test_take_offer_permissionless_with_valid_approval() {
 }
 
 #[test]
-fn test_take_offer_permissionless_fails_without_approval() {
+fn test_take_offer_permissionless_succeeds_without_approval() {
     let mut ctx = setup_permissionless_offer();
     let boss = ctx.payer.pubkey();
 
@@ -198,15 +198,11 @@ fn test_take_offer_permissionless_fails_without_approval() {
         &TOKEN_PROGRAM_ID,
     );
 
-    let result = send_tx(&mut ctx.svm, &[take_ix], &[&user]);
-    assert!(
-        result.is_err(),
-        "should fail without approval when needs_approval is true"
-    );
+    send_tx(&mut ctx.svm, &[take_ix], &[&user]).unwrap();
 }
 
 #[test]
-fn test_take_offer_permissionless_fails_with_expired_approval() {
+fn test_take_offer_permissionless_ignores_expired_approval() {
     let mut ctx = setup_permissionless_offer();
     let boss = ctx.payer.pubkey();
 
@@ -241,12 +237,11 @@ fn test_take_offer_permissionless_fails_with_expired_approval() {
         &TOKEN_PROGRAM_ID,
     );
 
-    let result = send_tx(&mut ctx.svm, &[ed25519_ix, take_ix], &[&user]);
-    assert!(result.is_err(), "should fail with expired approval message");
+    send_tx(&mut ctx.svm, &[ed25519_ix, take_ix], &[&user]).unwrap();
 }
 
 #[test]
-fn test_take_offer_permissionless_fails_with_wrong_approver() {
+fn test_take_offer_permissionless_ignores_unconfigured_approver() {
     let mut ctx = setup_permissionless_offer();
     let boss = ctx.payer.pubkey();
 
@@ -282,15 +277,11 @@ fn test_take_offer_permissionless_fails_with_wrong_approver() {
         &TOKEN_PROGRAM_ID,
     );
 
-    let result = send_tx(&mut ctx.svm, &[ed25519_ix, take_ix], &[&user]);
-    assert!(
-        result.is_err(),
-        "should fail when Ed25519 is signed by wrong approver"
-    );
+    send_tx(&mut ctx.svm, &[ed25519_ix, take_ix], &[&user]).unwrap();
 }
 
 #[test]
-fn test_take_offer_permissionless_fails_with_wrong_user_in_approval() {
+fn test_take_offer_permissionless_ignores_approval_user() {
     let mut ctx = setup_permissionless_offer();
     let boss = ctx.payer.pubkey();
 
@@ -327,15 +318,11 @@ fn test_take_offer_permissionless_fails_with_wrong_user_in_approval() {
         &TOKEN_PROGRAM_ID,
     );
 
-    let result = send_tx(&mut ctx.svm, &[ed25519_ix, take_ix], &[&user]);
-    assert!(
-        result.is_err(),
-        "should fail when approval message is for a different user"
-    );
+    send_tx(&mut ctx.svm, &[ed25519_ix, take_ix], &[&user]).unwrap();
 }
 
 #[test]
-fn test_take_offer_permissionless_fails_with_wrong_program_in_approval() {
+fn test_take_offer_permissionless_ignores_approval_program() {
     let mut ctx = setup_permissionless_offer();
     let boss = ctx.payer.pubkey();
 
@@ -372,15 +359,11 @@ fn test_take_offer_permissionless_fails_with_wrong_program_in_approval() {
         &TOKEN_PROGRAM_ID,
     );
 
-    let result = send_tx(&mut ctx.svm, &[ed25519_ix, take_ix], &[&user]);
-    assert!(
-        result.is_err(),
-        "should fail when approval message has wrong program_id"
-    );
+    send_tx(&mut ctx.svm, &[ed25519_ix, take_ix], &[&user]).unwrap();
 }
 
 // ===========================================================================
-// Permissionless flow without approval (needs_approval=false)
+// Permissionless flow
 // ===========================================================================
 
 struct PermissionlessNoApprovalCtx {
@@ -406,18 +389,25 @@ fn setup_permissionless_no_approval_v2_with_fee(fee_bps: u16) -> PermissionlessN
 }
 
 fn setup_permissionless_no_approval_with_fee(fee_bps: u16) -> PermissionlessNoApprovalCtx {
+    setup_permissionless_with_fee_and_approval_requirement(fee_bps, false)
+}
+
+fn setup_permissionless_with_fee_and_approval_requirement(
+    fee_bps: u16,
+    needs_approval: bool,
+) -> PermissionlessNoApprovalCtx {
     let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
 
     let usdc_mint = create_mint(&mut svm, &payer, 6, &boss);
 
-    // needs_approval=false, allow_permissionless=true
+    // Permissionless access is enabled independently from the regular-path approval flag.
     let ix = build_make_offer_ix(
         &boss,
         &usdc_mint,
         &onyc_mint,
         fee_bps,
-        false,
+        needs_approval,
         true,
         &TOKEN_PROGRAM_ID,
     );
@@ -490,7 +480,6 @@ fn test_permissionless_basic_success() {
         &ctx.usdc_mint,
         &ctx.onyc_mint,
         1_000_100,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -507,6 +496,53 @@ fn test_permissionless_basic_success() {
         &get_associated_token_address(&ctx.user.pubkey(), &ctx.usdc_mint),
     );
     assert_eq!(user_usdc, 10_000_000_000 - 1_000_100);
+}
+
+#[test]
+fn test_v2_regular_requires_approval_while_permissionless_skips_it() {
+    let mut ctx = setup_permissionless_with_fee_and_approval_requirement(0, true);
+    configure_main_offer(&mut ctx);
+    let boss = ctx.payer.pubkey();
+    let current_time = get_clock_time(&ctx.svm);
+
+    let ix = build_add_offer_vector_ix(
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        Some(current_time),
+        current_time,
+        1_000_000_000,
+        0,
+        86_400,
+    );
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer]).unwrap();
+
+    let regular_ix = build_take_offer_v2_ix(
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        1_000_000,
+        None,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+    assert!(
+        send_tx(&mut ctx.svm, &[regular_ix], &[&ctx.payer, &ctx.user]).is_err(),
+        "regular V2 should enforce the offer approval requirement"
+    );
+
+    let ix = build_take_offer_permissionless_v2_ix(
+        &ctx.user.pubkey(),
+        &boss,
+        &ctx.usdc_mint,
+        &ctx.onyc_mint,
+        1_000_000,
+        &TOKEN_PROGRAM_ID,
+        &TOKEN_PROGRAM_ID,
+    );
+
+    send_tx(&mut ctx.svm, &[ix], &[&ctx.payer, &ctx.user]).unwrap();
 }
 
 #[test]
@@ -561,7 +597,6 @@ fn test_regular_and_permissionless_use_different_offer_fees_for_same_amount() {
         &ctx.usdc_mint,
         &ctx.onyc_mint,
         token_in_amount,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -661,7 +696,6 @@ fn test_take_offer_permissionless_v2_accrues_buffer_and_refreshes_market_stats()
         &ctx.usdc_mint,
         &ctx.onyc_mint,
         1_000_000,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
         &main_offer,
@@ -768,7 +802,6 @@ fn test_take_offer_permissionless_v2_refills_redemption_vault_then_overflows_to_
         &ctx.usdc_mint,
         &ctx.onyc_mint,
         1_000_000,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );
@@ -804,7 +837,6 @@ fn test_take_offer_permissionless_v2_refills_redemption_vault_then_overflows_to_
         &ctx.usdc_mint,
         &ctx.onyc_mint,
         1_000_001,
-        None,
         &TOKEN_PROGRAM_ID,
         &TOKEN_PROGRAM_ID,
     );

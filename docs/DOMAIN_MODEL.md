@@ -109,7 +109,7 @@ flowchart TD
 | Boss | Primary governance signer. Creates core configuration, manages admins and can disable emergency mode. |
 | Admin | Can activate the kill switch for emergency response. |
 | Worker | Can fulfill or cancel redemption requests and settle BUFFER accrual. |
-| Approvers | Off-chain signers used by approval-gated offer execution. |
+| Approvers | Off-chain signers used by approval-gated regular offer execution. |
 | Mint authority PDA | Program authority used when the program controls a mint. |
 | Offer vault authority PDA | Program authority for regular offer vault token accounts. |
 | Redemption vault authority PDA | Program authority for redemption vault token accounts. |
@@ -320,8 +320,8 @@ The market snapshot is the shared reporting surface for TVL, NAV, NAV adjustment
 | Max supply | Optional global ONYC supply cap. |
 | Max mint amount | Optional cap on one logical ONYC mint operation. Buffer accrual applies it to the total gross accrual before splitting reserve and fee mints. |
 | Fee limits | Offer and redemption fees are bounded by program limits. |
-| Approval mode | Offer execution can require off-chain approval signatures. |
-| Permissionless mode | Offer execution can be allowed through the permissionless authority path. |
+| Approval mode | Regular offer execution can require off-chain approval signatures. |
+| Permissionless mode | Offer execution can be allowed through the permissionless authority path without approval verification. |
 
 ## Primary Business Flows
 
