@@ -39,6 +39,7 @@ BUFFER accrual reads and updates these `BufferState` fields:
 - `previous_supply`
 - `management_fee_basis_points`
 - `performance_fee_basis_points`
+- `performance_fee_high_watermark_enabled`
 - `last_accrual_timestamp`
 - `performance_fee_high_watermark`
 
@@ -48,6 +49,16 @@ BUFFER accrual reads and updates these `BufferState` fields:
 
 `gross_apr` uses scale `1_000_000`, where `1_000_000` is 100%. The
 `set_buffer_gross_apr` instruction accepts values from 0 through `1_000_000`.
+
+`performance_fee_high_watermark_enabled` defaults to `true`. When enabled,
+performance fees are minted only after the high-water mark has been initialized
+and current NAV is at or above it. When disabled, every nonzero BUFFER accrual
+mints the configured performance fee regardless of current NAV. The watermark
+continues to track the maximum observed NAV while disabled, so re-enabling it
+restores the usual all-time-high threshold.
+
+`set_buffer_fee_config` first settles pending accrual under the existing fee and
+high-water-mark settings, then applies the new values to the next interval.
 
 ## Interval Model
 
@@ -103,6 +114,8 @@ Steps:
    - reserve mint
    - management fee mint
    - performance fee mint
+   The performance fee is gated by the stored high-water mark only when
+   `performance_fee_high_watermark_enabled` is `true`.
 7. Mint all parts
 8. Update:
    - `performance_fee_high_watermark`

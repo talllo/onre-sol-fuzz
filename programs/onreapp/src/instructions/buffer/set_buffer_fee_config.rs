@@ -63,6 +63,7 @@ pub fn set_buffer_fee_config(
     ctx: Context<SetBufferFeeConfig>,
     management_fee_basis_points: u16,
     performance_fee_basis_points: u16,
+    performance_fee_high_watermark_enabled: bool,
 ) -> Result<()> {
     require!(
         management_fee_basis_points <= MAX_BASIS_POINTS,
@@ -76,12 +77,16 @@ pub fn set_buffer_fee_config(
     let mut buffer_state = ctx.accounts.buffer_accounts.load_buffer_state()?;
     require!(
         buffer_state.management_fee_basis_points != management_fee_basis_points
-            || buffer_state.performance_fee_basis_points != performance_fee_basis_points,
+            || buffer_state.performance_fee_basis_points != performance_fee_basis_points
+            || buffer_state.performance_fee_high_watermark_enabled
+                != performance_fee_high_watermark_enabled,
         crate::OnreError::NoChange
     );
 
     let old_management_fee_basis_points = buffer_state.management_fee_basis_points;
     let old_performance_fee_basis_points = buffer_state.performance_fee_basis_points;
+    let old_performance_fee_high_watermark_enabled =
+        buffer_state.performance_fee_high_watermark_enabled;
 
     let offer = ctx.accounts.main_offer.load()?;
     require_keys_eq!(
@@ -117,6 +122,7 @@ pub fn set_buffer_fee_config(
     buffer_state = ctx.accounts.buffer_accounts.load_buffer_state()?;
     buffer_state.management_fee_basis_points = management_fee_basis_points;
     buffer_state.performance_fee_basis_points = performance_fee_basis_points;
+    buffer_state.performance_fee_high_watermark_enabled = performance_fee_high_watermark_enabled;
     ctx.accounts
         .buffer_accounts
         .store_buffer_state(&buffer_state)?;
@@ -126,6 +132,8 @@ pub fn set_buffer_fee_config(
         new_management_fee_basis_points: management_fee_basis_points,
         old_performance_fee_basis_points,
         new_performance_fee_basis_points: performance_fee_basis_points,
+        old_performance_fee_high_watermark_enabled,
+        new_performance_fee_high_watermark_enabled: performance_fee_high_watermark_enabled,
     });
 
     Ok(())

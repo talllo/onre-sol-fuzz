@@ -57,9 +57,13 @@ export async function configureBufferSmoke(runtime: SmokeRuntime, mainOffer: Pub
         throw new Error(`BUFFER gross APR mismatch: ${bufferAfterApr.grossApr.toString()}`);
     }
 
-    if (bufferAfterApr.managementFeeBasisPoints !== DEFAULT_MANAGEMENT_FEE_BPS || bufferAfterApr.performanceFeeBasisPoints !== DEFAULT_PERFORMANCE_FEE_BPS) {
+    if (
+        bufferAfterApr.managementFeeBasisPoints !== DEFAULT_MANAGEMENT_FEE_BPS ||
+        bufferAfterApr.performanceFeeBasisPoints !== DEFAULT_PERFORMANCE_FEE_BPS ||
+        !bufferAfterApr.performanceFeeHighWatermarkEnabled
+    ) {
         const feeIx = await runtime.program.methods
-            .setBufferFeeConfig(DEFAULT_MANAGEMENT_FEE_BPS, DEFAULT_PERFORMANCE_FEE_BPS)
+            .setBufferFeeConfig(DEFAULT_MANAGEMENT_FEE_BPS, DEFAULT_PERFORMANCE_FEE_BPS, true)
             .accountsPartial(bufferConfigAccounts(runtime, mainOffer))
             .instruction();
         await sendIxs(runtime, `set BUFFER fee config ${DEFAULT_MANAGEMENT_FEE_BPS}/${DEFAULT_PERFORMANCE_FEE_BPS} bps`, [feeIx]);
@@ -73,6 +77,9 @@ export async function configureBufferSmoke(runtime: SmokeRuntime, mainOffer: Pub
     }
     if (bufferAfterFees.performanceFeeBasisPoints !== DEFAULT_PERFORMANCE_FEE_BPS) {
         throw new Error("performance fee bps mismatch after setBufferFeeConfig");
+    }
+    if (!bufferAfterFees.performanceFeeHighWatermarkEnabled) {
+        throw new Error("performance fee high-water mark should be enabled after setBufferFeeConfig");
     }
 
     const after = await runtime.program.account.marketStats.fetch(PDAS.marketStats);

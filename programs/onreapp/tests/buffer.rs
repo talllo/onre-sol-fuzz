@@ -23,7 +23,7 @@ const THIRTY_DAYS_SECONDS: u64 = 2_592_000;
 //   management_slice_apr = min(spread, management_fee_apr)
 //   management_fee = floor(gross_mint * management_slice_apr / spread)
 //   remaining = gross_mint - management_fee
-//   if performance_hwm_nav is initialized and current_nav >= performance_hwm_nav:
+//   if HWM is disabled, or performance_hwm_nav is initialized and current_nav >= it:
 //     performance_fee = floor(remaining * performance_fee_bps / 10000)
 //   else:
 //     performance_fee = 0
@@ -32,7 +32,7 @@ const THIRTY_DAYS_SECONDS: u64 = 2_592_000;
 // High-water mark:
 // - HWM is tracked in NAV/price units, not vault balance.
 // - The first baseline accrual seeds HWM without charging performance fees.
-// - Performance fees are charged only after HWM has been initialized.
+// - With HWM enabled, performance fees are charged only after HWM has been initialized.
 //
 // Burn for NAV support:
 //   total_assets      = circulating_supply * current_nav / 1e9
@@ -147,6 +147,7 @@ fn setup_buffer_context(
             &onyc_mint,
             management_fee_basis_points,
             performance_fee_basis_points,
+            true,
         );
         send_tx(&mut svm, &[ix], &[&payer]).unwrap();
         advance_slot(&mut svm);
@@ -360,6 +361,7 @@ fn test_initialize_buffer_success() {
     assert_eq!(buffer_state.management_fee_basis_points, 0);
     assert_eq!(buffer_state.performance_fee_basis_points, 0);
     assert_eq!(buffer_state.performance_fee_high_watermark, 0);
+    assert!(buffer_state.performance_fee_high_watermark_enabled);
 
     let (reserve_vault_authority_pda, _) = find_reserve_vault_authority_pda();
     let buffer_vault_ata = derive_ata(&reserve_vault_authority_pda, &onyc_mint, &TOKEN_PROGRAM_ID);
@@ -697,12 +699,13 @@ fn test_set_buffer_fee_config_lazily_initializes_market_stats() {
     let (mut svm, payer, onyc_mint, main_offer) = setup_buffer_without_market_stats();
     let boss = payer.pubkey();
 
-    let ix = build_set_buffer_fee_config_ix(&boss, &main_offer, &onyc_mint, 100, 1_000);
+    let ix = build_set_buffer_fee_config_ix(&boss, &main_offer, &onyc_mint, 100, 1_000, true);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
     let buffer_state = read_buffer_state(&svm);
     assert_eq!(buffer_state.management_fee_basis_points, 100);
     assert_eq!(buffer_state.performance_fee_basis_points, 1_000);
+    assert!(buffer_state.performance_fee_high_watermark_enabled);
     assert_eq!(read_market_stats(&svm).nav, NAV_1_0);
 }
 
@@ -812,9 +815,23 @@ fn test_set_buffer_fee_config_rejects_no_change() {
     let boss = payer.pubkey();
     let state = read_state(&svm);
 
-    let ix = build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 100, 1_000);
+    let ix = build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 100, 1_000, true);
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(result.is_err(), "setting same fee config should fail");
+}
+
+#[test]
+fn test_set_buffer_fee_config_allows_high_watermark_toggle_only() {
+    let (mut svm, payer, _token_in_mint, onyc_mint, _caller) =
+        setup_buffer_context(150_000, 50_000, 100, 1_000);
+    let boss = payer.pubkey();
+    let state = read_state(&svm);
+
+    let ix =
+        build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 100, 1_000, false);
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+
+    assert!(!read_buffer_state(&svm).performance_fee_high_watermark_enabled);
 }
 
 #[test]
@@ -831,6 +848,7 @@ fn test_set_buffer_fee_config_rejects_non_boss() {
         &onyc_mint,
         200,
         2_000,
+        false,
     );
     let result = send_tx(&mut svm, &[ix], &[&non_boss]);
     assert!(result.is_err(), "non-boss should not update buffer fees");
@@ -838,6 +856,7 @@ fn test_set_buffer_fee_config_rejects_non_boss() {
     let buffer_state = read_buffer_state(&svm);
     assert_eq!(buffer_state.management_fee_basis_points, 100);
     assert_eq!(buffer_state.performance_fee_basis_points, 1_000);
+    assert!(buffer_state.performance_fee_high_watermark_enabled);
 }
 
 #[test]
@@ -850,7 +869,8 @@ fn test_set_buffer_fee_config_rejects_when_killed() {
     let ix = build_set_kill_switch_ix(&boss, true);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
-    let ix = build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 200, 2_000);
+    let ix =
+        build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 200, 2_000, false);
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(
         result.is_err(),
@@ -860,6 +880,7 @@ fn test_set_buffer_fee_config_rejects_when_killed() {
     let buffer_state = read_buffer_state(&svm);
     assert_eq!(buffer_state.management_fee_basis_points, 100);
     assert_eq!(buffer_state.performance_fee_basis_points, 1_000);
+    assert!(buffer_state.performance_fee_high_watermark_enabled);
 }
 
 #[test]
@@ -1070,7 +1091,8 @@ fn test_set_buffer_fee_config_settles_pending_accrual_before_fee_change() {
     advance_slot(&mut svm);
     advance_clock_by(&mut svm, HALF_YEAR_SECONDS);
 
-    let ix = build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 100, 1_000);
+    let ix =
+        build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 100, 1_000, false);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
 
     let buffer_state_after_update = read_buffer_state(&svm);
@@ -1079,6 +1101,7 @@ fn test_set_buffer_fee_config_settles_pending_accrual_before_fee_change() {
         buffer_state_after_update.performance_fee_basis_points,
         1_000
     );
+    assert!(!buffer_state_after_update.performance_fee_high_watermark_enabled);
     assert_eq!(get_token_balance(&svm, &reserve_vault_onyc_ata), 50_000_000);
     assert_eq!(get_token_balance(&svm, &management_fee_vault_onyc_ata), 0);
     assert_eq!(get_token_balance(&svm, &performance_fee_vault_onyc_ata), 0);
@@ -1114,11 +1137,11 @@ fn test_set_buffer_fee_config_rejects_fee_above_max() {
     let boss = payer.pubkey();
     let state = read_state(&svm);
 
-    let ix = build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 10_001, 0);
+    let ix = build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 10_001, 0, true);
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(result.is_err(), "management fee above max bps should fail");
 
-    let ix = build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 0, 10_001);
+    let ix = build_set_buffer_fee_config_ix(&boss, &state.main_offer, &onyc_mint, 0, 10_001, true);
     let result = send_tx(&mut svm, &[ix], &[&payer]);
     assert!(result.is_err(), "performance fee above max bps should fail");
 }

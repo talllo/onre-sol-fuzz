@@ -87,6 +87,7 @@ export function printBufferState(bufferState: any, json: boolean = false): void 
                     managementFeeBasisPoints: bufferState.managementFeeBasisPoints,
                     performanceFeeBasisPoints: bufferState.performanceFeeBasisPoints,
                     performanceFeeHighWatermark: bufferState.performanceFeeHighWatermark.toString(),
+                    performanceFeeHighWatermarkEnabled: bufferState.performanceFeeHighWatermarkEnabled,
                     lastAccrualTimestamp: bufferState.lastAccrualTimestamp.toString(),
                 },
                 null,
@@ -110,6 +111,7 @@ export function printBufferState(bufferState: any, json: boolean = false): void 
         ["Management Fee (bps)", bufferState.managementFeeBasisPoints.toString()],
         ["Performance Fee (bps)", bufferState.performanceFeeBasisPoints.toString()],
         ["Performance HWM", bufferState.performanceFeeHighWatermark.toString()],
+        ["Performance HWM Enabled", bufferState.performanceFeeHighWatermarkEnabled ? "Yes" : "No"],
         ["Last Accrual Timestamp", bufferState.lastAccrualTimestamp.toString()],
     );
 

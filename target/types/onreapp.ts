@@ -7552,7 +7552,9 @@ export type Onreapp = {
       "docs": [
         "Sets BUFFER fee split parameters.",
         "",
-        "Both fee values are expressed in basis points and applied during accrual."
+        "Both fee values are expressed in basis points and applied during accrual. When the",
+        "performance-fee high-water mark is disabled, every nonzero accrual pays the configured",
+        "performance fee regardless of current NAV."
       ],
       "discriminator": [
         68,
@@ -7778,6 +7780,10 @@ export type Onreapp = {
         {
           "name": "performanceFeeBasisPoints",
           "type": "u16"
+        },
+        {
+          "name": "performanceFeeHighWatermarkEnabled",
+          "type": "bool"
         }
       ]
     },
@@ -13808,6 +13814,14 @@ export type Onreapp = {
           {
             "name": "newPerformanceFeeBasisPoints",
             "type": "u16"
+          },
+          {
+            "name": "oldPerformanceFeeHighWatermarkEnabled",
+            "type": "bool"
+          },
+          {
+            "name": "newPerformanceFeeHighWatermarkEnabled",
+            "type": "bool"
           }
         ]
       }
@@ -13878,6 +13892,10 @@ export type Onreapp = {
             "type": "u64"
           },
           {
+            "name": "performanceFeeHighWatermarkEnabled",
+            "type": "bool"
+          },
+          {
             "name": "lastAccrualTimestamp",
             "type": "i64"
           },
@@ -13890,7 +13908,7 @@ export type Onreapp = {
             "type": {
               "array": [
                 "u8",
-                136
+                135
               ]
             }
           }

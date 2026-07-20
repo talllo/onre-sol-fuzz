@@ -155,6 +155,7 @@ pub fn build_set_buffer_fee_config_ix(
     onyc_mint: &Pubkey,
     management_fee_basis_points: u16,
     performance_fee_basis_points: u16,
+    performance_fee_high_watermark_enabled: bool,
 ) -> Instruction {
     let (state_pda, _) = find_state_pda();
     let (buffer_state_pda, _) = find_buffer_state_pda();
@@ -180,6 +181,7 @@ pub fn build_set_buffer_fee_config_ix(
     let mut data = ix_discriminator("set_buffer_fee_config").to_vec();
     data.extend_from_slice(&management_fee_basis_points.to_le_bytes());
     data.extend_from_slice(&performance_fee_basis_points.to_le_bytes());
+    data.push(performance_fee_high_watermark_enabled as u8);
     Instruction {
         program_id: PROGRAM_ID,
         accounts: vec![

@@ -58,6 +58,7 @@ pub fn calculate_buffer_fee_split(
     performance_fee_basis_points: u16,
     current_nav: u64,
     performance_fee_high_watermark: u64,
+    performance_fee_high_watermark_enabled: bool,
 ) -> Result<BufferAccrualBreakdown> {
     let management_fee_mint_amount = if apr_delta == 0 || buffer_mint_amount == 0 {
         0
@@ -88,21 +89,22 @@ pub fn calculate_buffer_fee_split(
     // ensures performance fees apply for an interval whose stepped NAV is exactly at
     // the stored watermark, rather than skipping that entire fixed-price window and
     // only starting once NAV jumps strictly above it in a later step.
-    let performance_fee_mint_amount =
-        if performance_fee_high_watermark != 0 && current_nav >= performance_fee_high_watermark {
-            let fee_u128 = (buffer_mint_amount_after_management as u128)
-                .checked_mul(performance_fee_basis_points as u128)
-                .ok_or(crate::OnreError::MathOverflow)?
-                .checked_div(BASIS_POINTS_SCALE)
-                .ok_or(crate::OnreError::MathOverflow)?;
-            require!(
-                fee_u128 <= u64::MAX as u128,
-                crate::OnreError::ResultOverflow
-            );
-            fee_u128 as u64
-        } else {
-            0
-        };
+    let performance_fee_mint_amount = if !performance_fee_high_watermark_enabled
+        || (performance_fee_high_watermark != 0 && current_nav >= performance_fee_high_watermark)
+    {
+        let fee_u128 = (buffer_mint_amount_after_management as u128)
+            .checked_mul(performance_fee_basis_points as u128)
+            .ok_or(crate::OnreError::MathOverflow)?
+            .checked_div(BASIS_POINTS_SCALE)
+            .ok_or(crate::OnreError::MathOverflow)?;
+        require!(
+            fee_u128 <= u64::MAX as u128,
+            crate::OnreError::ResultOverflow
+        );
+        fee_u128 as u64
+    } else {
+        0
+    };
 
     let reserve_mint_amount = buffer_mint_amount_after_management
         .checked_sub(performance_fee_mint_amount)
@@ -220,7 +222,8 @@ mod tests {
 
     #[test]
     fn calculate_buffer_fee_split_charges_performance_fee_at_high_watermark_boundary() {
-        let split = calculate_buffer_fee_split(10_000, 100_000, 100, 2_000, 1_000, 1_000).unwrap();
+        let split =
+            calculate_buffer_fee_split(10_000, 100_000, 100, 2_000, 1_000, 1_000, true).unwrap();
 
         assert_eq!(split.buffer_mint_amount, 10_000);
         assert_eq!(split.management_fee_mint_amount, 1_000);
@@ -231,7 +234,8 @@ mod tests {
 
     #[test]
     fn calculate_buffer_fee_split_seeds_uninitialized_high_watermark_without_performance_fee() {
-        let split = calculate_buffer_fee_split(10_000, 100_000, 100, 2_000, 1_000, 0).unwrap();
+        let split =
+            calculate_buffer_fee_split(10_000, 100_000, 100, 2_000, 1_000, 0, true).unwrap();
 
         assert_eq!(split.buffer_mint_amount, 10_000);
         assert_eq!(split.management_fee_mint_amount, 1_000);
@@ -249,12 +253,32 @@ mod tests {
             1_000,
             900_000_000,
             1_000_000_000,
+            true,
         )
         .unwrap();
 
         assert_eq!(split.management_fee_mint_amount, 10_000_000);
         assert_eq!(split.performance_fee_mint_amount, 0);
         assert_eq!(split.reserve_mint_amount, 90_000_000);
+        assert_eq!(split.new_performance_fee_high_watermark, 1_000_000_000);
+    }
+
+    #[test]
+    fn calculate_buffer_fee_split_charges_performance_fee_below_disabled_high_watermark() {
+        let split = calculate_buffer_fee_split(
+            100_000_000,
+            100_000,
+            100,
+            1_000,
+            900_000_000,
+            1_000_000_000,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(split.management_fee_mint_amount, 10_000_000);
+        assert_eq!(split.performance_fee_mint_amount, 9_000_000);
+        assert_eq!(split.reserve_mint_amount, 81_000_000);
         assert_eq!(split.new_performance_fee_high_watermark, 1_000_000_000);
     }
 }

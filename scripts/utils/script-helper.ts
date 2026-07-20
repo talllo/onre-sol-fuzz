@@ -757,12 +757,17 @@ export class ScriptHelper {
             .instruction();
     }
 
-    async buildSetBufferFeeConfigIx(params: { managementFeeBps: number; performanceFeeBps: number; boss: PublicKey }) {
+    async buildSetBufferFeeConfigIx(params: {
+        managementFeeBps: number;
+        performanceFeeBps: number;
+        performanceFeeHighWatermarkEnabled: boolean;
+        boss: PublicKey;
+    }) {
         const state = await this.getState();
         const onycMint = state.onycMint as PublicKey;
 
         return await this.program.methods
-            .setBufferFeeConfig(params.managementFeeBps, params.performanceFeeBps)
+            .setBufferFeeConfig(params.managementFeeBps, params.performanceFeeBps, params.performanceFeeHighWatermarkEnabled)
             .accountsPartial({
                 boss: params.boss,
                 mainOffer: state.mainOffer as PublicKey,

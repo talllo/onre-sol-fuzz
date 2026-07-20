@@ -103,6 +103,10 @@ Typical on-chain BUFFER setup order:
 4. call `set_buffer_gross_apr`
 5. optionally call `set_buffer_fee_config`
 
+`set_buffer_fee_config` also controls whether the performance fee uses the
+high-water mark. The high-water mark is enabled by default; when disabled,
+every nonzero BUFFER accrual pays the configured performance fee.
+
 `set_buffer_gross_apr`, `set_buffer_fee_config`, and `burn_for_nav_increase`
 accept a writable boss signer because the boss pays for lazy `MarketStats` PDA
 creation. Integrations may instead initialize that PDA first with the
@@ -204,6 +208,7 @@ The current CLI exposes only a subset of the on-chain BUFFER flow:
 - available BUFFER commands: `buffer get`, `buffer initialize`, `buffer set-gross-yield`, `buffer set-fees`, `buffer reserve-deposit`, `buffer reserve-withdraw`, `buffer burn`
 - related state/vault commands: `state set-main-offer`, `vault set-configurable-destination`, `vault withdraw-configurable`
 - `buffer initialize` requires `--offer` and `--onyc-mint`
+- `buffer set-fees` accepts `--performance-fee-high-watermark-enabled <true|false>` and defaults it to `true`
 - `current_yield` is not set manually; it is derived from the active APR on the offer supplied to the accrual path
 
 The CLI does not group the full administrative BUFFER flow under the `buffer`

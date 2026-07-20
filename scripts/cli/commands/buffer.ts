@@ -41,12 +41,12 @@ export function registerBufferCommands(program: Command): void {
 
     program
         .command("set-fees")
-        .description("Set BUFFER management and performance fees")
+        .description("Set BUFFER management and performance fees and high-water-mark behavior")
         .option("--management-fee-bps <bps>", "Management fee in basis points")
         .option("--performance-fee-bps <bps>", "Performance fee in basis points")
+        .option("--performance-fee-high-watermark-enabled <boolean>", "Enable the performance-fee high-water mark (true or false)")
         .action(async (options, cmd) => {
-            const opts = { ...options, managementFeeBps: options.managementFeeBps, performanceFeeBps: options.performanceFeeBps, ...cmd.optsWithGlobals() } as GlobalOptions &
-                Record<string, any>;
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeBufferSetFees(opts);
         });
 
