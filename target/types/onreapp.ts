@@ -899,12 +899,12 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_in_mint",
+                "path": "redemptionOffer.tokenInMint",
                 "account": "redemptionOffer"
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_out_mint",
+                "path": "redemptionOffer.tokenOutMint",
                 "account": "redemptionOffer"
               }
             ]
@@ -944,12 +944,12 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_request.offer",
+                "path": "redemptionRequest.offer",
                 "account": "redemptionRequest"
               },
               {
                 "kind": "account",
-                "path": "redemption_request.request_id",
+                "path": "redemptionRequest.requestId",
                 "account": "redemptionRequest"
               }
             ]
@@ -1415,7 +1415,7 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "state.onyc_mint",
+                "path": "state.onycMint",
                 "account": "state"
               }
             ]
@@ -1579,12 +1579,12 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_in_mint",
+                "path": "redemptionOffer.tokenInMint",
                 "account": "redemptionOffer"
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_out_mint",
+                "path": "redemptionOffer.tokenOutMint",
                 "account": "redemptionOffer"
               }
             ]
@@ -1634,7 +1634,7 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.request_counter",
+                "path": "redemptionOffer.requestCounter",
                 "account": "redemptionOffer"
               }
             ]
@@ -8481,12 +8481,12 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_in_mint",
+                "path": "redemptionOffer.tokenInMint",
                 "account": "redemptionOffer"
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_out_mint",
+                "path": "redemptionOffer.tokenOutMint",
                 "account": "redemptionOffer"
               }
             ]
@@ -11166,12 +11166,12 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_in_mint",
+                "path": "redemptionOffer.tokenInMint",
                 "account": "redemptionOffer"
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_out_mint",
+                "path": "redemptionOffer.tokenOutMint",
                 "account": "redemptionOffer"
               }
             ]
@@ -11262,12 +11262,12 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_in_mint",
+                "path": "redemptionOffer.tokenInMint",
                 "account": "redemptionOffer"
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_out_mint",
+                "path": "redemptionOffer.tokenOutMint",
                 "account": "redemptionOffer"
               }
             ]
@@ -11355,12 +11355,12 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_in_mint",
+                "path": "redemptionOffer.tokenInMint",
                 "account": "redemptionOffer"
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_out_mint",
+                "path": "redemptionOffer.tokenOutMint",
                 "account": "redemptionOffer"
               }
             ]
@@ -12803,7 +12803,7 @@ export type Onreapp = {
     {
       "code": 6007,
       "name": "expired",
-      "msg": "expired"
+      "msg": "Expired"
     },
     {
       "code": 6008,
@@ -13063,7 +13063,7 @@ export type Onreapp = {
     {
       "code": 6059,
       "name": "overflow",
-      "msg": "overflow"
+      "msg": "Overflow"
     },
     {
       "code": 6060,
@@ -13233,7 +13233,7 @@ export type Onreapp = {
     {
       "code": 6093,
       "name": "unauthorized",
-      "msg": "unauthorized"
+      "msg": "Unauthorized"
     },
     {
       "code": 6094,
