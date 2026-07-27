@@ -1,4 +1,9 @@
 use super::*;
+use anchor_lang::ToAccountMetas;
+
+// OTR-5 paths use Anchor-generated account metas below. Hand-writing their
+// writability here would let tests pass after removing the production
+// `#[account(mut)]` annotations that fund lazy MarketStats initialization.
 
 pub fn build_initialize_buffer_ix(
     boss: &Pubkey,
@@ -129,22 +134,25 @@ pub fn build_set_buffer_gross_yield_ix(
     data.extend_from_slice(&gross_yield.to_le_bytes());
     Instruction {
         program_id: PROGRAM_ID,
-        accounts: vec![
-            AccountMeta::new_readonly(state_pda, false),
-            AccountMeta::new(*boss, true),
-            AccountMeta::new_readonly(*main_offer, false),
-            AccountMeta::new(*onyc_mint, false),
-            AccountMeta::new_readonly(offer_vault_authority_pda, false),
-            AccountMeta::new_readonly(mint_authority_pda, false),
-            AccountMeta::new(buffer_state_pda, false),
-            AccountMeta::new(reserve_vault_onyc_ata, false),
-            AccountMeta::new(management_fee_vault_onyc_ata, false),
-            AccountMeta::new(performance_fee_vault_onyc_ata, false),
-            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
-            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
-            AccountMeta::new(market_stats_pda, false),
-            AccountMeta::new_readonly(excluded_balance_pda, false),
-        ],
+        accounts: onreapp::accounts::SetBufferGrossYield {
+            state: state_pda,
+            boss: *boss,
+            main_offer: *main_offer,
+            onyc_mint: *onyc_mint,
+            offer_vault_authority: offer_vault_authority_pda,
+            mint_authority: mint_authority_pda,
+            buffer_accounts: onreapp::accounts::BufferAccrualAccounts {
+                buffer_state: buffer_state_pda,
+                reserve_vault_onyc_account: reserve_vault_onyc_ata,
+                management_fee_vault_onyc_account: management_fee_vault_onyc_ata,
+                performance_fee_vault_onyc_account: performance_fee_vault_onyc_ata,
+            },
+            token_program: TOKEN_PROGRAM_ID,
+            system_program: SYSTEM_PROGRAM_ID,
+            market_stats: market_stats_pda,
+            circulating_supply_excluded_balance: excluded_balance_pda,
+        }
+        .to_account_metas(None),
         data,
     }
 }
@@ -184,22 +192,25 @@ pub fn build_set_buffer_fee_config_ix(
     data.push(performance_fee_high_watermark_enabled as u8);
     Instruction {
         program_id: PROGRAM_ID,
-        accounts: vec![
-            AccountMeta::new_readonly(state_pda, false),
-            AccountMeta::new(*boss, true),
-            AccountMeta::new_readonly(*main_offer, false),
-            AccountMeta::new(*onyc_mint, false),
-            AccountMeta::new_readonly(offer_vault_authority_pda, false),
-            AccountMeta::new_readonly(mint_authority_pda, false),
-            AccountMeta::new(buffer_state_pda, false),
-            AccountMeta::new(reserve_vault_onyc_ata, false),
-            AccountMeta::new(management_fee_vault_onyc_ata, false),
-            AccountMeta::new(performance_fee_vault_onyc_ata, false),
-            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
-            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
-            AccountMeta::new(market_stats_pda, false),
-            AccountMeta::new_readonly(excluded_balance_pda, false),
-        ],
+        accounts: onreapp::accounts::SetBufferFeeConfig {
+            state: state_pda,
+            boss: *boss,
+            main_offer: *main_offer,
+            onyc_mint: *onyc_mint,
+            offer_vault_authority: offer_vault_authority_pda,
+            mint_authority: mint_authority_pda,
+            buffer_accounts: onreapp::accounts::BufferAccrualAccounts {
+                buffer_state: buffer_state_pda,
+                reserve_vault_onyc_account: reserve_vault_onyc_ata,
+                management_fee_vault_onyc_account: management_fee_vault_onyc_ata,
+                performance_fee_vault_onyc_account: performance_fee_vault_onyc_ata,
+            },
+            token_program: TOKEN_PROGRAM_ID,
+            system_program: SYSTEM_PROGRAM_ID,
+            market_stats: market_stats_pda,
+            circulating_supply_excluded_balance: excluded_balance_pda,
+        }
+        .to_account_metas(None),
         data,
     }
 }
@@ -316,25 +327,26 @@ pub fn build_burn_for_nav_increase_ix(
 
     Instruction {
         program_id: PROGRAM_ID,
-        accounts: vec![
-            AccountMeta::new_readonly(state_pda, false),
-            AccountMeta::new(buffer_state_pda, false),
-            AccountMeta::new(*boss, true),
-            AccountMeta::new_readonly(*main_offer, false),
-            AccountMeta::new(*onyc_mint, false),
-            AccountMeta::new_readonly(offer_vault_authority_pda, false),
-            AccountMeta::new_readonly(reserve_vault_authority_pda, false),
-            AccountMeta::new(buffer_vault_onyc_ata, false),
-            AccountMeta::new_readonly(management_fee_vault_pda, false),
-            AccountMeta::new(management_fee_vault_onyc_ata, false),
-            AccountMeta::new_readonly(performance_fee_vault_pda, false),
-            AccountMeta::new(performance_fee_vault_onyc_ata, false),
-            AccountMeta::new_readonly(mint_authority_pda, false),
-            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
-            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
-            AccountMeta::new(market_stats_pda, false),
-            AccountMeta::new_readonly(excluded_balance_pda, false),
-        ],
+        accounts: onreapp::accounts::BurnForNavIncrease {
+            state: state_pda,
+            buffer_state: buffer_state_pda,
+            boss: *boss,
+            main_offer: *main_offer,
+            onyc_mint: *onyc_mint,
+            offer_vault_authority: offer_vault_authority_pda,
+            reserve_vault_authority: reserve_vault_authority_pda,
+            reserve_vault_onyc_account: buffer_vault_onyc_ata,
+            management_fee_vault: management_fee_vault_pda,
+            management_fee_vault_onyc_account: management_fee_vault_onyc_ata,
+            performance_fee_vault: performance_fee_vault_pda,
+            performance_fee_vault_onyc_account: performance_fee_vault_onyc_ata,
+            mint_authority: mint_authority_pda,
+            token_program: TOKEN_PROGRAM_ID,
+            system_program: SYSTEM_PROGRAM_ID,
+            market_stats: market_stats_pda,
+            circulating_supply_excluded_balance: excluded_balance_pda,
+        }
+        .to_account_metas(None),
         data,
     }
 }
