@@ -156,7 +156,7 @@ fn setup_buffer_context(
     (svm, payer, token_in_mint, onyc_mint, caller)
 }
 
-fn setup_buffer_without_market_stats() -> (litesvm::LiteSVM, Keypair, Pubkey, Pubkey) {
+fn setup_buffer_without_market_stats() -> (litesvm::LiteSVM, Keypair, Keypair, Pubkey, Pubkey) {
     let (mut svm, payer, onyc_mint) = setup_initialized();
     let boss = payer.pubkey();
     let token_in_mint = create_mint(&mut svm, &payer, 6, &boss);
@@ -198,7 +198,17 @@ fn setup_buffer_without_market_stats() -> (litesvm::LiteSVM, Keypair, Pubkey, Pu
 
     assert!(svm.get_account(&find_market_stats_pda().0).is_none());
 
-    (svm, payer, onyc_mint, main_offer)
+    // Keep the boss distinct from the transaction fee payer. Solana always
+    // promotes the fee payer to writable, which would mask a missing
+    // `#[account(mut)]` on the boss account metadata under test.
+    let new_boss = Keypair::new();
+    svm.airdrop(&new_boss.pubkey(), INITIAL_LAMPORTS).unwrap();
+    let ix = build_propose_boss_ix(&boss, &new_boss.pubkey());
+    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let ix = build_accept_boss_ix(&new_boss.pubkey());
+    send_tx(&mut svm, &[ix], &[&payer, &new_boss]).unwrap();
+
+    (svm, payer, new_boss, onyc_mint, main_offer)
 }
 
 fn setup_transfer_fee_onyc_buffer() -> (litesvm::LiteSVM, Keypair, Pubkey, Keypair) {
@@ -684,11 +694,10 @@ fn test_set_main_offer_rejects_no_change() {
 
 #[test]
 fn test_set_buffer_gross_yield_lazily_initializes_market_stats() {
-    let (mut svm, payer, onyc_mint, main_offer) = setup_buffer_without_market_stats();
-    let boss = payer.pubkey();
+    let (mut svm, payer, boss, onyc_mint, main_offer) = setup_buffer_without_market_stats();
 
-    let ix = build_set_buffer_gross_yield_ix(&boss, &main_offer, &onyc_mint, 150_000);
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let ix = build_set_buffer_gross_yield_ix(&boss.pubkey(), &main_offer, &onyc_mint, 150_000);
+    send_tx(&mut svm, &[ix], &[&payer, &boss]).unwrap();
 
     assert_eq!(read_buffer_state(&svm).gross_yield, 150_000);
     assert_eq!(read_market_stats(&svm).nav, NAV_1_0);
@@ -696,11 +705,11 @@ fn test_set_buffer_gross_yield_lazily_initializes_market_stats() {
 
 #[test]
 fn test_set_buffer_fee_config_lazily_initializes_market_stats() {
-    let (mut svm, payer, onyc_mint, main_offer) = setup_buffer_without_market_stats();
-    let boss = payer.pubkey();
+    let (mut svm, payer, boss, onyc_mint, main_offer) = setup_buffer_without_market_stats();
 
-    let ix = build_set_buffer_fee_config_ix(&boss, &main_offer, &onyc_mint, 100, 1_000, true);
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let ix =
+        build_set_buffer_fee_config_ix(&boss.pubkey(), &main_offer, &onyc_mint, 100, 1_000, true);
+    send_tx(&mut svm, &[ix], &[&payer, &boss]).unwrap();
 
     let buffer_state = read_buffer_state(&svm);
     assert_eq!(buffer_state.management_fee_basis_points, 100);
@@ -711,15 +720,14 @@ fn test_set_buffer_fee_config_lazily_initializes_market_stats() {
 
 #[test]
 fn test_burn_for_nav_increase_lazily_initializes_market_stats() {
-    let (mut svm, payer, onyc_mint, main_offer) = setup_buffer_without_market_stats();
-    let boss = payer.pubkey();
+    let (mut svm, payer, boss, onyc_mint, main_offer) = setup_buffer_without_market_stats();
 
-    let ix = build_deposit_reserve_vault_ix(&boss, &onyc_mint, 300_000_000);
+    let ix = build_deposit_reserve_vault_ix(&payer.pubkey(), &onyc_mint, 300_000_000);
     send_tx(&mut svm, &[ix], &[&payer]).unwrap();
     assert!(svm.get_account(&find_market_stats_pda().0).is_none());
 
-    let ix = build_burn_for_nav_increase_ix(&boss, &main_offer, &onyc_mint, 100_000_000);
-    send_tx(&mut svm, &[ix], &[&payer]).unwrap();
+    let ix = build_burn_for_nav_increase_ix(&boss.pubkey(), &main_offer, &onyc_mint, 100_000_000);
+    send_tx(&mut svm, &[ix], &[&payer, &boss]).unwrap();
 
     assert_eq!(get_mint_supply(&svm, &onyc_mint), 900_000_000);
     assert_eq!(read_market_stats(&svm).nav, NAV_1_0);
