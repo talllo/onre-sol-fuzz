@@ -403,7 +403,7 @@ export class ScriptHelper {
         const tokenInProgram = params.tokenInProgram ?? TOKEN_PROGRAM_ID;
         const tokenOutProgram = params.tokenOutProgram ?? TOKEN_PROGRAM_ID;
         const boss = await this.getBoss();
-        const bossTokenInAccount = getAssociatedTokenAddressSync(params.tokenInMint, boss, false, tokenInProgram);
+        const bossTokenInAccount = getAssociatedTokenAddressSync(params.tokenInMint, boss, true, tokenInProgram);
         const createBossTokenInIx = createAssociatedTokenAccountIdempotentInstruction(params.user, bossTokenInAccount, boss, params.tokenInMint, tokenInProgram);
 
         const takeIx = await this.program.methods
@@ -499,7 +499,7 @@ export class ScriptHelper {
         const tokenInProgram = params.tokenInProgram ?? TOKEN_PROGRAM_ID;
         const tokenOutProgram = params.tokenOutProgram ?? TOKEN_PROGRAM_ID;
         const boss = await this.getBoss();
-        const bossTokenInAccount = getAssociatedTokenAddressSync(params.tokenInMint, boss, false, tokenInProgram);
+        const bossTokenInAccount = getAssociatedTokenAddressSync(params.tokenInMint, boss, true, tokenInProgram);
         const permissionlessTokenInAccount = getAssociatedTokenAddressSync(params.tokenInMint, permissionlessAuthority, true, tokenInProgram);
         const permissionlessTokenOutAccount = getAssociatedTokenAddressSync(params.tokenOutMint, permissionlessAuthority, true, tokenOutProgram);
 
