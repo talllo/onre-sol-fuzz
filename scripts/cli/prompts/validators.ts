@@ -16,14 +16,14 @@ export function validatePublicKey(value: string): boolean | string {
 }
 
 /**
- * Validate basis points (0-10000)
+ * Validate fee basis points (0-1000)
  */
 export function validateBasisPoints(value: number): boolean | string {
     if (value === undefined || value === null || isNaN(value)) {
         return "Basis points value is required";
     }
-    if (value < 0 || value > 10000) {
-        return "Basis points must be between 0 and 10000";
+    if (value < 0 || value > 1000) {
+        return "Basis points must be between 0 and 1000";
     }
     if (!Number.isInteger(value)) {
         return "Basis points must be a whole number";
@@ -72,6 +72,9 @@ export function validateTimestamp(value: string | number): boolean | string {
         if (value.toLowerCase() === "now") {
             return true;
         }
+        if (/^\d+$/.test(value.trim())) {
+            return true;
+        }
         const date = new Date(value);
         if (isNaN(date.getTime())) {
             return "Invalid date format. Use ISO format (e.g., 2025-06-01T00:00:00Z) or 'now'";
@@ -110,6 +113,9 @@ export function parseTimestamp(value: string | number): number {
     }
     if (value.toLowerCase() === "now") {
         return Math.floor(Date.now() / 1000);
+    }
+    if (/^\d+$/.test(value.trim())) {
+        return parseInt(value, 10);
     }
     return Math.floor(new Date(value).getTime() / 1000);
 }

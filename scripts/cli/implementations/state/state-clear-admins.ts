@@ -19,7 +19,7 @@ export async function executeStateClearAdmins(opts: GlobalOptions & Record<strin
         }
 
         // Confirm dangerous action
-        if (!opts.json && !opts.dryRun) {
+        if (!opts.json && !opts.dryRun && !opts.yes) {
             console.log(chalk.yellow(`\nThis will remove all ${adminCount} admin(s).`));
 
             const confirmed = await confirmDangerousOperation(`Remove all ${adminCount} admin(s)?`);

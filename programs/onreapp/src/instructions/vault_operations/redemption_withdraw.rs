@@ -1,6 +1,6 @@
 use crate::constants::seeds;
 use crate::state::State;
-use crate::utils::transfer_tokens;
+use crate::utils::{has_transfer_fee, transfer_tokens};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
@@ -70,7 +70,8 @@ pub struct RedemptionVaultWithdraw<'info> {
     #[account(
         seeds = [seeds::STATE],
         bump = state.bump,
-        has_one = boss
+        has_one = boss,
+        constraint = !state.is_killed @ crate::OnreError::KillSwitchActivated
     )]
     pub state: Box<Account<'info, State>>,
 
@@ -111,6 +112,11 @@ pub struct RedemptionVaultWithdraw<'info> {
 /// # Events
 /// * `RedemptionVaultWithdrawEvent` - Emitted with mint, amount, and withdrawer details
 pub fn redemption_vault_withdraw(ctx: Context<RedemptionVaultWithdraw>, amount: u64) -> Result<()> {
+    require!(
+        !has_transfer_fee(&ctx.accounts.token_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
+
     // Create signer seeds for redemption vault authority
     let redemption_vault_authority_seeds = &[
         seeds::REDEMPTION_OFFER_VAULT_AUTHORITY,

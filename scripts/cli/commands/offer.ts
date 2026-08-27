@@ -5,9 +5,12 @@ import {
     executeOfferDeleteAllVectors,
     executeOfferDeleteVector,
     executeOfferFetch,
+    executeOfferList,
     executeOfferMake,
+    executeOfferSetDisabled,
     executeOfferTake,
     executeOfferUpdateFee,
+    executeOfferUpdatePermissionlessFee,
 } from "../implementations";
 
 /**
@@ -26,6 +29,15 @@ export function registerOfferCommands(program: Command): void {
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeOfferMake(opts);
+        });
+
+    // offer list
+    program
+        .command("list")
+        .description("List all token offers on-chain")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeOfferList(opts);
         });
 
     // offer fetch
@@ -47,6 +59,7 @@ export function registerOfferCommands(program: Command): void {
         .option("-o, --token-out <mint>", "Token out mint")
         .option("-a, --amount <amount>", "Amount of token in to provide")
         .option("--permissionless", "Use permissionless flow")
+        .option("--legacy", "Use legacy take_offer instruction instead of take_offer_v2")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeOfferTake(opts);
@@ -60,7 +73,7 @@ export function registerOfferCommands(program: Command): void {
         .option("-o, --token-out <mint>", "Token out mint")
         .option("--base-time <timestamp>", "Base time (ISO date or unix timestamp)")
         .option("--base-price <price>", "Base price (scaled by 1e9)")
-        .option("--apr <value>", "APR in basis points (36500 = 3.65%)")
+        .option("--apr <value>", "APR value (scale=6, so 10000 = 1%)")
         .option("--duration <seconds>", "Price fix duration in seconds")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
@@ -89,6 +102,30 @@ export function registerOfferCommands(program: Command): void {
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeOfferUpdateFee(opts);
+        });
+
+    // offer update-permissionless-fee
+    program
+        .command("update-permissionless-fee")
+        .description("Update the permissionless fee for an offer")
+        .option("-i, --token-in <mint>", "Token in mint")
+        .option("-o, --token-out <mint>", "Token out mint")
+        .option("-f, --fee <bps>", "New permissionless fee in basis points")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeOfferUpdatePermissionlessFee(opts);
+        });
+
+    // offer set-disabled
+    program
+        .command("set-disabled")
+        .description("Enable or disable an offer")
+        .option("-i, --token-in <mint>", "Token in mint")
+        .option("-o, --token-out <mint>", "Token out mint")
+        .option("--disabled <boolean>", "Disabled state (true/false)")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeOfferSetDisabled(opts);
         });
 
     // offer delete-all-vectors

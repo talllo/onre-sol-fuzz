@@ -77,5 +77,6 @@ export async function buildAndHandleTransaction(context: CommandContext<any>, op
         description,
         dryRun: opts.dryRun,
         json: opts.json,
+        yes: opts.yes,
     });
 }

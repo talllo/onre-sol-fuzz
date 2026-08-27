@@ -15,7 +15,7 @@ export const tokenPairParams: ParamDefinition[] = [
     {
         name: "tokenIn",
         type: "mint",
-        description: "Token in mint (e.g., USDC)",
+        description: "Token in mint (e.g., USDC or USDT)",
         required: true,
         flag: "--token-in",
         shortFlag: "-i",
@@ -54,16 +54,3 @@ export const vaultParams: ParamDefinition[] = [
         shortFlag: "-a",
     },
 ];
-
-/**
- * Fee parameter (basis points)
- * Used by: offer, redemption commands
- */
-export const feeParam: ParamDefinition = {
-    name: "fee",
-    type: "basisPoints",
-    description: "Fee in basis points (100 = 1%)",
-    required: true,
-    flag: "--fee",
-    shortFlag: "-f",
-};

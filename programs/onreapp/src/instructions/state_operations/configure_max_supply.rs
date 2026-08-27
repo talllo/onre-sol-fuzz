@@ -2,7 +2,7 @@ use crate::constants::seeds;
 use crate::state::State;
 use anchor_lang::prelude::*;
 
-/// Event emitted when the ONyc maximum supply is successfully configured
+/// Event emitted when the maximum supply cap is successfully configured
 ///
 /// Provides transparency for tracking max supply configuration changes.
 #[event]
@@ -13,10 +13,10 @@ pub struct MaxSupplyConfiguredEvent {
     pub new_max_supply: u64,
 }
 
-/// Account structure for configuring the ONyc token maximum supply
+/// Account structure for configuring the program-controlled mint supply cap
 ///
 /// This struct defines the accounts required to set or update the maximum
-/// supply cap for ONyc tokens. Only the boss can configure this setting.
+/// supply cap used by program-controlled minting paths. Only the boss can configure this setting.
 #[derive(Accounts)]
 pub struct ConfigureMaxSupply<'info> {
     /// Program state account containing the max supply configuration
@@ -35,11 +35,11 @@ pub struct ConfigureMaxSupply<'info> {
     pub boss: Signer<'info>,
 }
 
-/// Configures the maximum supply cap for ONyc token minting
+/// Configures the maximum supply cap for program-controlled minting paths
 ///
 /// This instruction allows the boss to set or update the maximum supply cap
-/// that restricts ONyc token minting. When set to a non-zero value, all minting
-/// operations will be validated against this cap to prevent unbounded inflation.
+/// that restricts program-controlled token minting. When set to a non-zero value,
+/// mint operations using this state cap validate the destination mint supply against it.
 ///
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
@@ -58,7 +58,7 @@ pub struct ConfigureMaxSupply<'info> {
 /// - Setting to 0 removes the cap (unlimited minting)
 ///
 /// # Events
-/// * `MaxSupplyConfigured` - Emitted with old and new max supply values
+/// * `MaxSupplyConfiguredEvent` - Emitted with old and new max supply values
 pub fn configure_max_supply(ctx: Context<ConfigureMaxSupply>, max_supply: u64) -> Result<()> {
     let state = &mut ctx.accounts.state;
 

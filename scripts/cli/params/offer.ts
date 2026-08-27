@@ -1,5 +1,6 @@
 import { ParamDefinition } from "../prompts/types";
 import { tokenPairParams } from "./common";
+import type { NetworkConfig } from "../../utils/script-helper";
 
 /**
  * Offer command parameter definitions
@@ -90,6 +91,17 @@ export const updateFeeParams: ParamDefinition[] = [
     },
 ];
 
+export const setOfferDisabledParams: ParamDefinition[] = [
+    ...tokenPairParams,
+    {
+        name: "disabled",
+        type: "boolean",
+        description: "Whether the offer should be disabled",
+        required: true,
+        flag: "--disabled",
+    },
+];
+
 export const takeOfferParams: ParamDefinition[] = [
     ...tokenPairParams,
     {
@@ -107,5 +119,34 @@ export const takeOfferParams: ParamDefinition[] = [
         required: true,
         flag: "--permissionless",
         default: false,
+    },
+    {
+        name: "legacy",
+        type: "boolean",
+        description: "Use legacy take offer instruction",
+        required: true,
+        flag: "--legacy",
+        default: false,
+    },
+];
+
+export const fetchOfferParams: ParamDefinition[] = [
+    {
+        name: "tokenIn",
+        type: "mint",
+        description: "Token in mint (e.g., USDC or USDT)",
+        required: false,
+        flag: "--token-in",
+        shortFlag: "-i",
+        default: (cfg: NetworkConfig) => cfg.mints.usdc,
+    },
+    {
+        name: "tokenOut",
+        type: "mint",
+        description: "Token out mint (e.g., ONyc)",
+        required: false,
+        flag: "--token-out",
+        shortFlag: "-o",
+        default: (cfg: NetworkConfig) => cfg.mints.onyc,
     },
 ];

@@ -1,0 +1,23 @@
+services:
+  onre-surfpool:
+    platform: linux/amd64
+    container_name: onre-surfpool-ui
+    build:
+      context: .
+      dockerfile: Dockerfile.surfpool
+    environment:
+      SURFPOOL_DATASOURCE_RPC_URL: ${SURFPOOL_DATASOURCE_RPC_URL:-}
+      SURFPOOL_AIRDROP_LAMPORTS: ${SURFPOOL_AIRDROP_LAMPORTS:-10000000000000}
+      SURFPOOL_REGRESSION_SKIP_BUILD: "1"
+      UI_PORT: "5173"
+    ports:
+      - "5173:5173"
+      - "8899:8899"
+      - "8900:8900"
+      - "18488:18488"
+    volumes:
+      - surfpool-wallet:/workspace/.docker-surfpool
+    restart: "no"
+
+volumes:
+  surfpool-wallet:

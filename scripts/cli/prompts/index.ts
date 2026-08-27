@@ -38,6 +38,11 @@ export async function promptForParams(
             throw new Error(`Missing required parameter: ${param.name} (${param.flag || param.name})`);
         }
 
+        if (noInteractive && !param.required) {
+            result[param.name] = undefined;
+            continue;
+        }
+
         // Prompt for the value
         result[param.name] = await promptForSingleParam(param, config);
     }
@@ -61,6 +66,9 @@ async function promptForSingleParam(param: ParamDefinition, config: NetworkConfi
 
         case "amount":
             return promptAmount(message, defaultValue);
+
+        case "u64":
+            return promptU64(message, defaultValue);
 
         case "basisPoints":
             return promptBasisPoints(message, defaultValue);
@@ -113,6 +121,7 @@ async function promptMint(message: string, config: NetworkConfig, defaultValue?:
     let defaultChoice = "custom";
     if (defaultValue) {
         if (defaultValue.equals(config.mints.usdc)) defaultChoice = "usdc";
+        else if (config.mints.usdt && defaultValue.equals(config.mints.usdt)) defaultChoice = "usdt";
         else if (defaultValue.equals(config.mints.onyc)) defaultChoice = "onyc";
         else if (defaultValue.equals(config.mints.usdg)) defaultChoice = "usdg";
     }
@@ -122,6 +131,14 @@ async function promptMint(message: string, config: NetworkConfig, defaultValue?:
             name: `USDC  ${chalk.gray(config.mints.usdc.toBase58().slice(0, 8) + "...")}`,
             value: "usdc",
         },
+        ...(config.mints.usdt
+            ? [
+                {
+                    name: `USDT  ${chalk.gray(config.mints.usdt.toBase58().slice(0, 8) + "...")}`,
+                    value: "usdt",
+                },
+            ]
+            : []),
         {
             name: `ONyc  ${chalk.gray(config.mints.onyc.toBase58().slice(0, 8) + "...")}`,
             value: "onyc",
@@ -151,7 +168,11 @@ async function promptMint(message: string, config: NetworkConfig, defaultValue?:
         return new PublicKey(address.trim());
     }
 
-    return config.mints[selection as keyof typeof config.mints];
+    const mint = config.mints[selection as keyof typeof config.mints];
+    if (!mint) {
+        throw new Error(`${selection.toUpperCase()} mint is not configured for ${config.name}`);
+    }
+    return mint;
 }
 
 /**
@@ -167,6 +188,23 @@ async function promptAmount(message: string, defaultValue?: number): Promise<num
         },
     });
     return value!;
+}
+
+/**
+ * Prompt for a large token amount as string (supports values >= 2^53)
+ */
+async function promptU64(message: string, defaultValue?: string): Promise<string> {
+    const value = await input({
+        message,
+        default: defaultValue,
+        validate: (val) => {
+            if (!val || val.trim() === "") return "Amount is required";
+            if (!/^\d+$/.test(val.trim())) return "Amount must be a positive integer";
+            if (BigInt(val.trim()) <= 0n) return "Amount must be positive";
+            return true;
+        },
+    });
+    return value.trim();
 }
 
 /**
@@ -247,6 +285,12 @@ function transformValue(value: any, param: ParamDefinition, config: NetworkConfi
                 // Check for known mint aliases
                 const lower = value.toLowerCase();
                 if (lower === "usdc") return config.mints.usdc;
+                if (lower === "usdt") {
+                    if (!config.mints.usdt) {
+                        throw new Error(`USDT mint is not configured for ${config.name}`);
+                    }
+                    return config.mints.usdt;
+                }
                 if (lower === "onyc") return config.mints.onyc;
                 if (lower === "usdg") return config.mints.usdg;
                 return new PublicKey(value);
@@ -255,6 +299,9 @@ function transformValue(value: any, param: ParamDefinition, config: NetworkConfi
 
         case "timestamp":
             return parseTimestamp(value);
+
+        case "u64":
+            return typeof value === "string" ? value : value.toString();
 
         case "amount":
         case "basisPoints":

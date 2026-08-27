@@ -15,33 +15,35 @@ export type Onreapp = {
   "docs": [
     "The main program module for the Onre App.",
     "",
-    "This module defines the entry points for all program instructions. It facilitates the creation",
-    "and management of offers where a \"boss\" provides one or two types of buy tokens in exchange for",
-    "sell tokens. A key feature is the dynamic pricing model for offers, where the amount of",
-    "sell token required can change over the offer's duration based on predefined parameters.",
+    "This module defines the entry points for all program instructions. It facilitates",
+    "creation and management of offers where users provide `token_in` and receive",
+    "`token_out`. A key feature is the dynamic pricing model for offers, where the",
+    "`token_out` amount for a given `token_in` amount changes over time based on",
+    "configured pricing vectors.",
     "",
     "Core functionalities include:",
     "- Making offers with dynamic pricing (`make_offer`).",
     "- Taking offers with current market pricing (`take_offer`, `take_offer_permissionless`).",
     "- Managing offer vectors for price control (`add_offer_vector`, `delete_offer_vector`).",
-    "- Program state initialization and management (`initialize`, `set_boss`, `add_admin`, `remove_admin`).",
+    "- Program state initialization and management (`initialize`, `propose_boss`, `accept_boss`, `add_admin`, `remove_admin`).",
     "- Vault operations for token deposits and withdrawals (`offer_vault_deposit`, `offer_vault_withdraw`).",
     "- Market information queries (`get_nav`, `get_apy`, `get_tvl`, `get_circulating_supply`).",
     "- Mint authority management (`transfer_mint_authority_to_program`, `transfer_mint_authority_to_boss`).",
-    "- Emergency controls (`set_kill_switch`) and approval mechanisms (`set_approver`).",
+    "- Emergency controls (`set_kill_switch`) and approval mechanisms (`add_approver`, `remove_approver`).",
     "",
     "# Dynamic Pricing Model",
     "The price for offers is determined by time-based vectors with APR (Annual Percentage Rate) growth:",
-    "- `base_time`: The timestamp when the vector becomes active.",
-    "- `base_price`: The initial price at the base_time with 9 decimal precision.",
-    "- `apr`: Annual percentage rate scaled by 1,000,000 (e.g., 1_000_000 = 1% APR).",
+    "- `start_time`: The timestamp when the vector becomes active.",
+    "- `base_time`: The timestamp used as the elapsed-time baseline for price growth.",
+    "- `base_price`: The price at `base_time` with 9 decimal precision.",
+    "- `apr`: Annual percentage rate with scale=6 (e.g., 10_000 = 1%, 1_000_000 = 100%).",
     "- `price_fix_duration`: Duration in seconds for each discrete pricing step.",
     "The price increases over time based on the APR, calculated in discrete intervals.",
     "",
     "# Security",
     "- Access controls are enforced, for example, ensuring only the `boss` can create offers or update critical state.",
     "- PDA (Program Derived Address) accounts are used for offer and token authorities, ensuring ownership.",
-    "- Events are emitted for significant actions (e.g., `OfferMadeOne`, `OfferTakenTwo`) for off-chain traceability."
+    "- Events are emitted for significant actions (e.g., `OfferMadeEvent`, `OfferTakenEvent`) for off-chain traceability."
   ],
   "instructions": [
     {
@@ -106,7 +108,7 @@ export type Onreapp = {
       "docs": [
         "Adds a new admin to the state.",
         "",
-        "Delegates to `admin::add_admin` to add a new admin to the admin list.",
+        "Delegates to `state_operations::add_admin` to add a new admin to the admin list.",
         "Only the boss can call this instruction to add new admins.",
         "# Arguments",
         "- `ctx`: Context for `AddAdmin`.",
@@ -226,14 +228,15 @@ export type Onreapp = {
       "docs": [
         "Adds a time vector to an existing offer.",
         "",
-        "Delegates to `offer::add_offer_time_vector`.",
-        "Creates a new time vector with auto-generated vector_start_timestamp for the specified offer.",
-        "Emits a `OfferVectorAdded` event upon success.",
+        "Delegates to `offer::add_offer_vector`.",
+        "Creates a pricing vector for the specified offer. If `start_time` is not supplied,",
+        "the vector starts at `max(base_time, current_time)`.",
+        "Emits an `OfferVectorAddedEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `AddOfferVector`.",
         "- `start_time`: Unix timestamp when the vector becomes active.",
-        "- `base_time`: Unix timestamp when the vector becomes active.",
+        "- `base_time`: Unix timestamp used as the elapsed-time baseline for price growth.",
         "- `base_price`: Price at the beginning of the vector.",
         "- `apr`: Annual Percentage Rate (APR) (see OfferVector::apr for details).",
         "- `price_fix_duration`: Duration in seconds for each price interval."
@@ -350,23 +353,489 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "burnForNavIncrease",
+      "docs": [
+        "Burns ONyc from the BUFFER reserve vault to preserve NAV after an asset-base adjustment.",
+        "",
+        "Callable by boss only."
+      ],
+      "discriminator": [
+        8,
+        13,
+        69,
+        178,
+        183,
+        45,
+        102,
+        205
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bufferState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "mainOffer"
+        },
+        {
+          "name": "onycMint",
+          "writable": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "offerVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "reserveVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  115,
+                  101,
+                  114,
+                  118,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "reserveVaultOnycAccount",
+          "writable": true
+        },
+        {
+          "name": "managementFeeVault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  110,
+                  97,
+                  103,
+                  101,
+                  109,
+                  101,
+                  110,
+                  116,
+                  95,
+                  102,
+                  101,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "managementFeeVaultOnycAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "managementFeeVault"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "onycMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "performanceFeeVault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  102,
+                  111,
+                  114,
+                  109,
+                  97,
+                  110,
+                  99,
+                  101,
+                  95,
+                  102,
+                  101,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "performanceFeeVaultOnycAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "performanceFeeVault"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "onycMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "mintAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "marketStats",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "assetAdjustmentAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "cancelRedemptionRequest",
       "docs": [
         "Cancels a redemption request.",
         "",
         "Delegates to `redemption::cancel_redemption_request`.",
-        "This instruction cancels a pending redemption request. The request can be cancelled",
-        "by the redeemer, redemption_admin, or boss. Upon cancellation, the status is changed",
-        "to cancelled and the amount is subtracted from the redemption offer's requested_redemptions.",
-        "The redemption request account is NOT closed.",
+        "This instruction cancels an unfulfilled or partially fulfilled redemption request.",
+        "The request can be cancelled by the redeemer, worker, or boss. Upon",
+        "cancellation, the unfulfilled token_in amount is returned to the redeemer, that",
+        "returned amount is subtracted from the redemption offer's requested_redemptions,",
+        "and the redemption request account is closed.",
         "Emits a `RedemptionRequestCancelledEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `CancelRedemptionRequest`.",
         "",
         "# Access Control",
-        "- Signer must be one of: redeemer, redemption_admin, or boss",
-        "- Request must be in pending state (status = 0)"
+        "- Signer must be one of: redeemer, worker, or boss",
+        "- Request must have an unfulfilled amount remaining."
       ],
       "discriminator": [
         77,
@@ -382,7 +851,7 @@ export type Onreapp = {
         {
           "name": "state",
           "docs": [
-            "Program state account containing redemption_admin and boss for authorization"
+            "Program state account containing worker and boss authorization."
           ],
           "pda": {
             "seeds": [
@@ -430,12 +899,12 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_in_mint",
+                "path": "redemptionOffer.tokenInMint",
                 "account": "redemptionOffer"
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_out_mint",
+                "path": "redemptionOffer.tokenOutMint",
                 "account": "redemptionOffer"
               }
             ]
@@ -445,7 +914,7 @@ export type Onreapp = {
           "name": "redemptionRequest",
           "docs": [
             "The redemption request account to cancel",
-            "Account is closed after cancellation and rent is returned to redemption_admin"
+            "Account is closed after cancellation and rent is returned to the worker."
           ],
           "writable": true,
           "pda": {
@@ -475,12 +944,12 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_request.offer",
+                "path": "redemptionRequest.offer",
                 "account": "redemptionRequest"
               },
               {
                 "kind": "account",
-                "path": "redemption_request.request_id",
+                "path": "redemptionRequest.requestId",
                 "account": "redemptionRequest"
               }
             ]
@@ -490,7 +959,7 @@ export type Onreapp = {
           "name": "signer",
           "docs": [
             "The signer who is cancelling the request",
-            "Can be either the redeemer, redemption_admin, or boss"
+            "Can be either the redeemer, worker, or boss."
           ],
           "writable": true,
           "signer": true
@@ -502,9 +971,9 @@ export type Onreapp = {
           ]
         },
         {
-          "name": "redemptionAdmin",
+          "name": "worker",
           "docs": [
-            "Redemption admin receives the rent from closing the redemption request"
+            "Worker receives the rent from closing the redemption request."
           ],
           "writable": true
         },
@@ -634,60 +1103,7 @@ export type Onreapp = {
             "Receives back the tokens that were locked in the redemption request.",
             "Created if needed in case the redeemer closed their account after locking all tokens."
           ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "redeemer"
-              },
-              {
-                "kind": "account",
-                "path": "tokenProgram"
-              },
-              {
-                "kind": "account",
-                "path": "tokenInMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
+          "writable": true
         },
         {
           "name": "tokenProgram",
@@ -717,7 +1133,7 @@ export type Onreapp = {
       "docs": [
         "Clears all admins from the state.",
         "",
-        "Delegates to `admin::clear_admins` to remove all admins from the admin list.",
+        "Delegates to `state_operations::clear_admins` to remove all admins from the admin list.",
         "Only the boss can call this instruction to clear all admins."
       ],
       "discriminator": [
@@ -774,14 +1190,14 @@ export type Onreapp = {
         "Closes the program state account and returns the rent to the boss.",
         "",
         "Delegates to `state_operations::close_state`.",
-        "This instruction permanently deletes the program's main state account",
-        "and transfers its rent balance back to the boss. Once closed, the state",
-        "cannot be recovered and the program becomes effectively non-functional.",
+        "This instruction closes the current main state account, clears its data,",
+        "and transfers its rent balance back to the boss. The closed state data",
+        "cannot be recovered; the state PDA can be initialized again later.",
         "Only the boss can call this instruction.",
         "Emits a `StateClosedEvent` upon success.",
         "",
         "# Warning",
-        "This is a destructive operation that effectively disables the program.",
+        "This is a destructive operation for the current state configuration.",
         "Use with extreme caution.",
         "",
         "# Arguments",
@@ -831,14 +1247,66 @@ export type Onreapp = {
       "args": []
     },
     {
+      "name": "configureMaxMintAmount",
+      "docs": [
+        "Configures the maximum amount allowed in one logical program mint operation.",
+        "",
+        "Setting to 0 removes the cap. BUFFER accrual checks the cap against the",
+        "total gross accrual before splitting it across reserve and fee vaults."
+      ],
+      "discriminator": [
+        7,
+        197,
+        225,
+        52,
+        209,
+        53,
+        89,
+        172
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "maxMintAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "configureMaxSupply",
       "docs": [
-        "Configures the maximum supply cap for ONyc token minting.",
+        "Configures the maximum supply cap for program-controlled minting paths.",
         "",
         "Delegates to `state_operations::configure_max_supply`.",
         "This instruction allows the boss to set or update the maximum supply cap",
-        "that restricts ONyc token minting. Setting to 0 removes the cap.",
-        "Emits a `MaxSupplyConfigured` event upon success.",
+        "that restricts program-controlled token minting. Setting to 0 removes the cap.",
+        "Emits a `MaxSupplyConfiguredEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `ConfigureMaxSupply`.",
@@ -893,6 +1361,143 @@ export type Onreapp = {
       "args": [
         {
           "name": "maxSupply",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "configurePropAmm",
+      "discriminator": [
+        235,
+        104,
+        216,
+        250,
+        252,
+        160,
+        107,
+        181
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "offer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "assetMint"
+              },
+              {
+                "kind": "account",
+                "path": "state.onycMint",
+                "account": "state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "assetMint"
+        },
+        {
+          "name": "propAmmPairState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  112,
+                  97,
+                  105,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "enabled",
+          "type": "bool"
+        },
+        {
+          "name": "curvePegHaircutBps",
+          "type": "u16"
+        },
+        {
+          "name": "curveExponentScaled",
+          "type": "u32"
+        },
+        {
+          "name": "cadenceThreshold",
+          "type": "u32"
+        },
+        {
+          "name": "cadenceWaveScaled",
+          "type": "u32"
+        },
+        {
+          "name": "epochDurationSeconds",
+          "type": "i64"
+        },
+        {
+          "name": "wallSensitivityScaled",
+          "type": "u32"
+        },
+        {
+          "name": "minimumSellHaircutOnyc",
           "type": "u64"
         }
       ]
@@ -974,16 +1579,22 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_in_mint",
+                "path": "redemptionOffer.tokenInMint",
                 "account": "redemptionOffer"
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_out_mint",
+                "path": "redemptionOffer.tokenOutMint",
                 "account": "redemptionOffer"
               }
             ]
           }
+        },
+        {
+          "name": "offer",
+          "docs": [
+            "The original offer associated with the redemption offer."
+          ]
         },
         {
           "name": "redemptionRequest",
@@ -1023,7 +1634,7 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.request_counter",
+                "path": "redemptionOffer.requestCounter",
                 "account": "redemptionOffer"
               }
             ]
@@ -1355,7 +1966,7 @@ export type Onreapp = {
         "Delegates to `offer::delete_offer_vector`.",
         "Removes the specified time vector from the offer by setting it to default values.",
         "Only the boss can delete time vectors from offers.",
-        "Emits a `OfferVectorDeleted` event upon success.",
+        "Emits an `OfferVectorDeletedEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `DeleteOfferVector`.",
@@ -1455,39 +2066,25 @@ export type Onreapp = {
       ]
     },
     {
-      "name": "fulfillRedemptionRequest",
+      "name": "depositReserveVault",
       "docs": [
-        "Fulfills a redemption request.",
+        "Deposits ONyc into the BUFFER reserve vault.",
         "",
-        "Delegates to `redemption::fulfill_redemption_request`.",
-        "This instruction fulfills a pending redemption request by handling token operations:",
-        "- Burns token_in (ONyc) if program has mint authority, else sends to boss",
-        "- Mints token_out if program has mint authority, else transfers from vault",
-        "- Uses current price from the underlying offer to calculate token_out amount",
-        "Emits a `RedemptionRequestFulfilledEvent` upon success.",
-        "",
-        "# Arguments",
-        "- `ctx`: Context for `FulfillRedemptionRequest`.",
-        "",
-        "# Access Control",
-        "- Only redemption_admin can fulfill redemptions"
+        "Callable by any signer."
       ],
       "discriminator": [
-        140,
-        124,
-        139,
-        242,
-        179,
-        153,
-        208,
-        66
+        159,
+        91,
+        174,
+        234,
+        207,
+        12,
+        167,
+        9
       ],
       "accounts": [
         {
           "name": "state",
-          "docs": [
-            "Program state account containing redemption_admin and boss authorization"
-          ],
           "pda": {
             "seeds": [
               {
@@ -1504,114 +2101,257 @@ export type Onreapp = {
           }
         },
         {
-          "name": "boss",
-          "docs": [
-            "The boss account that may receive tokens when program lacks mint authority"
-          ],
+          "name": "bufferState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "reserveVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  115,
+                  101,
+                  114,
+                  118,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "onycMint",
           "relations": [
-            "state"
+            "state",
+            "bufferState"
           ]
         },
         {
-          "name": "offer",
-          "docs": [
-            "The underlying offer that defines pricing"
-          ]
+          "name": "depositorOnycAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "depositor"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "onycMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "reserveVaultOnycAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "reserveVaultAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "onycMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "depositor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "fulfillRedemptionRequest",
+      "docs": [
+        "Fulfills a redemption request with ONyc buffer accrual support.",
+        "",
+        "Delegates to `redemption::fulfill_redemption_request`."
+      ],
+      "discriminator": [
+        140,
+        124,
+        139,
+        242,
+        179,
+        153,
+        208,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "offer"
         },
         {
           "name": "redemptionOffer",
-          "docs": [
-            "The redemption offer account"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  100,
-                  101,
-                  109,
-                  112,
-                  116,
-                  105,
-                  111,
-                  110,
-                  95,
-                  111,
-                  102,
-                  102,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "redemption_offer.token_in_mint",
-                "account": "redemptionOffer"
-              },
-              {
-                "kind": "account",
-                "path": "redemption_offer.token_out_mint",
-                "account": "redemptionOffer"
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "redemptionRequest",
-          "docs": [
-            "The redemption request account to fulfill",
-            "Account is closed after fulfillment and rent is returned to redemption_admin"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  100,
-                  101,
-                  109,
-                  112,
-                  116,
-                  105,
-                  111,
-                  110,
-                  95,
-                  114,
-                  101,
-                  113,
-                  117,
-                  101,
-                  115,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "redemption_request.offer",
-                "account": "redemptionRequest"
-              },
-              {
-                "kind": "account",
-                "path": "redemption_request.request_id",
-                "account": "redemptionRequest"
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "redemptionVaultAuthority",
-          "docs": [
-            "Program-derived redemption vault authority that controls token operations",
-            "",
-            "This PDA manages token transfers and burning operations."
-          ],
           "pda": {
             "seeds": [
               {
@@ -1656,291 +2396,140 @@ export type Onreapp = {
         },
         {
           "name": "vaultTokenInAccount",
-          "docs": [
-            "Redemption vault account for token_in (to receive tokens for burning or storage)",
-            "",
-            "Used as intermediate account when burning token_in or as permanent storage",
-            "when program lacks mint authority."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "redemptionVaultAuthority"
-              },
-              {
-                "kind": "account",
-                "path": "tokenInProgram"
-              },
-              {
-                "kind": "account",
-                "path": "tokenInMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
+          "writable": true
         },
         {
           "name": "vaultTokenOutAccount",
-          "docs": [
-            "Redemption vault account for token_out distribution when using transfer mechanism",
-            "",
-            "Source of output tokens when the program lacks mint authority",
-            "and must transfer from pre-funded vault instead of minting."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "redemptionVaultAuthority"
-              },
-              {
-                "kind": "account",
-                "path": "tokenOutProgram"
-              },
-              {
-                "kind": "account",
-                "path": "tokenOutMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
+          "writable": true
         },
         {
           "name": "tokenInMint",
-          "docs": [
-            "Input token mint (typically ONyc)",
-            "",
-            "Must be mutable to allow burning operations when program has mint authority."
-          ],
           "writable": true
         },
         {
-          "name": "tokenInProgram",
-          "docs": [
-            "Token program interface for input token operations"
-          ]
+          "name": "tokenInProgram"
         },
         {
           "name": "tokenOutMint",
-          "docs": [
-            "Output token mint (typically stablecoin like USDC)",
-            "",
-            "Must be mutable to allow minting operations when program has mint authority."
-          ],
           "writable": true
         },
         {
-          "name": "tokenOutProgram",
-          "docs": [
-            "Token program interface for output token operations"
-          ]
+          "name": "tokenOutProgram"
         },
         {
           "name": "userTokenOutAccount",
-          "docs": [
-            "User's output token account (destination for redeemed tokens)",
-            "",
-            "Created automatically if it doesn't exist."
-          ],
+          "writable": true
+        },
+        {
+          "name": "offerProceedsVault",
           "writable": true,
           "pda": {
             "seeds": [
               {
-                "kind": "account",
-                "path": "redeemer"
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
               },
               {
-                "kind": "account",
-                "path": "tokenOutProgram"
-              },
-              {
-                "kind": "account",
-                "path": "tokenOutMint"
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  99,
+                  101,
+                  101,
+                  100,
+                  115
+                ]
               }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
+            ]
           }
         },
         {
-          "name": "bossTokenInAccount",
-          "docs": [
-            "Boss's input token account for receiving tokens when program lacks mint authority",
-            "",
-            "Only used when program doesn't have mint authority of token_in."
-          ],
+          "name": "offerProceedsTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "redemptionFeeVault",
           "writable": true,
           "pda": {
             "seeds": [
               {
-                "kind": "account",
-                "path": "boss"
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
               },
               {
-                "kind": "account",
-                "path": "tokenInProgram"
-              },
-              {
-                "kind": "account",
-                "path": "tokenInMint"
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  102,
+                  101,
+                  101
+                ]
               }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
+            ]
           }
+        },
+        {
+          "name": "redemptionFeeTokenInAccount",
+          "writable": true
         },
         {
           "name": "mintAuthority",
-          "docs": [
-            "Program-derived mint authority for direct token minting",
-            "",
-            "Used when the program has mint authority and can mint token_out directly."
-          ],
           "pda": {
             "seeds": [
               {
@@ -1966,35 +2555,170 @@ export type Onreapp = {
           }
         },
         {
-          "name": "redeemer",
-          "docs": [
-            "The user who created the redemption request"
-          ]
+          "name": "redeemer"
         },
         {
-          "name": "redemptionAdmin",
-          "docs": [
-            "Redemption admin must sign to authorize fulfillment"
-          ],
+          "name": "worker",
           "writable": true,
           "signer": true
         },
         {
+          "name": "bufferAccounts",
+          "accounts": [
+            {
+              "name": "bufferState",
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "reserveVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "managementFeeVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "performanceFeeVaultOnycAccount",
+              "writable": true
+            }
+          ]
+        },
+        {
           "name": "associatedTokenProgram",
-          "docs": [
-            "Associated Token Program for automatic token account creation"
-          ],
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "systemProgram",
-          "docs": [
-            "System program required for account creation"
-          ],
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "offerVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "offerVaultOnycAccount"
+        },
+        {
+          "name": "marketStats",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mainOffer"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "getApy",
@@ -2084,7 +2808,7 @@ export type Onreapp = {
       "docs": [
         "Delegates to `market_info::get_circulating_supply`.",
         "This is a read-only instruction that calculates and returns the current circulating supply",
-        "for an offer based on the total token supply minus the vault amount.",
+        "based on total ONyc supply minus the offer-vault ONyc ATA balance.",
         "circulating_supply = total_supply - vault_amount",
         "Emits a `GetCirculatingSupplyEvent` upon success.",
         "",
@@ -2092,7 +2816,7 @@ export type Onreapp = {
         "- `ctx`: Context for `GetCirculatingSupply`.",
         "",
         "# Returns",
-        "- `Ok(circulating_supply)`: The calculated circulating supply for the offer in base units"
+        "- `Ok(circulating_supply)`: The calculated global ONyc circulating supply in base units"
       ],
       "discriminator": [
         132,
@@ -2136,9 +2860,6 @@ export type Onreapp = {
         },
         {
           "name": "vaultAuthority",
-          "docs": [
-            "The vault authority PDA that controls vault token accounts"
-          ],
           "pda": {
             "seeds": [
               {
@@ -2171,20 +2892,89 @@ export type Onreapp = {
           }
         },
         {
-          "name": "onycVaultAccount",
-          "docs": [
-            "The vault's ONyc token account to exclude from circulating supply",
-            "",
-            "This account holds tokens that are not considered in circulation.",
-            "The account address is validated to match the expected ATA address",
-            "and can be uninitialized (treated as zero balance)."
+          "name": "onycVaultAccount"
+        },
+        {
+          "name": "tokenProgram"
+        }
+      ],
+      "args": [],
+      "returns": "u64"
+    },
+    {
+      "name": "getCirculatingSupplyV2",
+      "docs": [
+        "Gets circulating supply using the cached excluded-balance PDA."
+      ],
+      "discriminator": [
+        57,
+        115,
+        7,
+        115,
+        9,
+        100,
+        135,
+        111
+      ],
+      "accounts": [
+        {
+          "name": "onycMint",
+          "relations": [
+            "state"
           ]
         },
         {
-          "name": "tokenProgram",
-          "docs": [
-            "SPL Token program for account validation"
-          ]
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [],
@@ -2270,8 +3060,9 @@ export type Onreapp = {
         "Gets the NAV adjustment (price change) for a specific offer.",
         "",
         "Delegates to `market_info::get_nav_adjustment`.",
-        "This is a read-only instruction that calculates the price difference",
-        "between the current vector and the previous vector at the current time.",
+        "This is a read-only instruction that calculates the price jump at the",
+        "active vector's start time by comparing the active vector's starting",
+        "price with the previous vector's price at that same transition timestamp.",
         "Returns a signed integer representing the price change.",
         "Emits a `GetNavAdjustmentEvent` upon success.",
         "",
@@ -2343,19 +3134,19 @@ export type Onreapp = {
     {
       "name": "getTvl",
       "docs": [
-        "Gets the current TVL (Total Value Locked) for a specific offer with 9 decimal precision",
+        "Gets the current TVL (Total Value Locked) for an ONyc offer.",
         "",
         "Delegates to `market_info::get_tvl`.",
-        "This is a read-only instruction that calculates and returns the current TVL",
-        "for an offer based on the token_out supply and current NAV (price).",
-        "TVL = token_out_supply * current_NAV",
+        "This legacy read-only instruction calculates TVL from circulating ONyc supply:",
+        "total ONyc mint supply minus the offer-vault ONyc ATA balance.",
+        "TVL = circulating_supply * current_NAV / 10^9.",
         "Emits a `GetTVLEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `GetTVL`.",
         "",
         "# Returns",
-        "- `Ok(tvl)`: The calculated TVL (mantissa) for the offer with scale=9"
+        "- `Ok(tvl)`: The calculated TVL in ONyc base units"
       ],
       "discriminator": [
         88,
@@ -2413,9 +3204,6 @@ export type Onreapp = {
         },
         {
           "name": "vaultAuthority",
-          "docs": [
-            "The vault authority PDA that controls vault token accounts"
-          ],
           "pda": {
             "seeds": [
               {
@@ -2448,20 +3236,114 @@ export type Onreapp = {
           }
         },
         {
-          "name": "vaultTokenOutAccount",
-          "docs": [
-            "The vault's token_out account to exclude from circulating supply",
-            "",
-            "This account holds tokens that should not be included in TVL calculations.",
-            "The account address is validated to match the expected ATA address",
-            "and can be uninitialized (treated as zero balance)."
-          ]
+          "name": "vaultTokenOutAccount"
         },
         {
-          "name": "tokenOutProgram",
-          "docs": [
-            "SPL Token program for vault account validation"
-          ]
+          "name": "tokenOutProgram"
+        }
+      ],
+      "args": [],
+      "returns": "u64"
+    },
+    {
+      "name": "getTvlV2",
+      "docs": [
+        "Gets ONyc TVL using the cached excluded-balance PDA."
+      ],
+      "discriminator": [
+        64,
+        43,
+        63,
+        112,
+        186,
+        8,
+        1,
+        165
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenInMint"
+        },
+        {
+          "name": "tokenOutMint"
+        },
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [],
@@ -2629,6 +3511,406 @@ export type Onreapp = {
       "args": []
     },
     {
+      "name": "initializeBuffer",
+      "docs": [
+        "Initializes the standalone BUFFER pool state and vault accounts.",
+        "",
+        "Creates BUFFER state as a separate PDA so existing offer/redemption state",
+        "remains unchanged. Only the boss can initialize BUFFER."
+      ],
+      "discriminator": [
+        43,
+        127,
+        69,
+        196,
+        129,
+        6,
+        159,
+        210
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bufferState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "reserveVaultAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  115,
+                  101,
+                  114,
+                  118,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "managementFeeVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  110,
+                  97,
+                  103,
+                  101,
+                  109,
+                  101,
+                  110,
+                  116,
+                  95,
+                  102,
+                  101,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "performanceFeeVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  102,
+                  111,
+                  114,
+                  109,
+                  97,
+                  110,
+                  99,
+                  101,
+                  95,
+                  102,
+                  101,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "onycMint",
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "offer"
+        },
+        {
+          "name": "reserveVaultOnycAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "reserveVaultAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "onycMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "managementFeeVaultOnycAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "managementFeeVault"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "onycMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "performanceFeeVaultOnycAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "performanceFeeVault"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "onycMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initializePermissionlessAuthority",
       "docs": [
         "Initializes a permissionless account.",
@@ -2736,9 +4018,8 @@ export type Onreapp = {
         "Creates an offer.",
         "",
         "Delegates to `offer::make_offer`.",
-        "The price of the token_out changes over time based on `base_price`,",
-        "`end_price`, and `price_fix_duration` within the offer's active time window.",
-        "Emits a `OfferMade` event upon success.",
+        "Initializes the offer account for a token pair; pricing vectors are added separately.",
+        "Emits an `OfferMadeEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `MakeOffer`.",
@@ -2986,10 +4267,11 @@ export type Onreapp = {
         "",
         "# Arguments",
         "- `ctx`: Context for `MakeRedemptionOffer`.",
-        "- `fee_basis_points`: Fee in basis points (10000 = 100%) charged when fulfilling redemption requests",
+        "- `fee_basis_points`: Fee in basis points, capped at 1000 bps (10%).",
+        "- `fee_basis_points_prop_amm_sell`: Prop AMM sell fee in basis points, capped at 1000 bps (10%).",
         "",
         "# Access Control",
-        "- Only the boss or redemption_admin can call this instruction"
+        "- Only the boss can call this instruction"
       ],
       "discriminator": [
         6,
@@ -3005,7 +4287,7 @@ export type Onreapp = {
         {
           "name": "state",
           "docs": [
-            "Program state account containing boss and redemption_admin authorization"
+            "Program state account containing boss authorization."
           ],
           "pda": {
             "seeds": [
@@ -3198,7 +4480,7 @@ export type Onreapp = {
           "docs": [
             "Vault account for storing output tokens (e.g., USDC) for redemption payouts",
             "",
-            "Created automatically if needed. Used for distributing stable tokens to redeemers."
+            "Created automatically if needed. Used for distributing output tokens to redeemers."
           ],
           "writable": true,
           "pda": {
@@ -3299,12 +4581,15 @@ export type Onreapp = {
           }
         },
         {
-          "name": "signer",
+          "name": "boss",
           "docs": [
-            "The account creating the redemption offer (must be boss or redemption_admin)"
+            "Boss creating and funding the redemption offer."
           ],
           "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "state"
+          ]
         },
         {
           "name": "associatedTokenProgram",
@@ -3325,6 +4610,10 @@ export type Onreapp = {
         {
           "name": "feeBasisPoints",
           "type": "u16"
+        },
+        {
+          "name": "feeBasisPointsPropAmmSell",
+          "type": "u16"
         }
       ]
     },
@@ -3333,10 +4622,10 @@ export type Onreapp = {
       "docs": [
         "Mints ONyc tokens to the boss's account.",
         "",
-        "Delegates to `state_operations::mint_to` to mint ONyc tokens.",
+        "Delegates to `mint_authority::mint_to` to mint ONyc tokens.",
         "Only the boss can call this instruction to mint ONyc tokens to their account.",
         "The program must have mint authority for the ONyc token.",
-        "Emits a `OnycTokensMinted` event upon success.",
+        "Emits an `OnycTokensMintedEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `MintTo`.",
@@ -3514,6 +4803,58 @@ export type Onreapp = {
             "System program required for account creation and rent payment"
           ],
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "mainOffer"
+        },
+        {
+          "name": "bufferAccounts",
+          "accounts": [
+            {
+              "name": "bufferState",
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "reserveVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "managementFeeVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "performanceFeeVaultOnycAccount",
+              "writable": true
+            }
+          ]
+        },
+        {
+          "name": "marketStats",
+          "writable": true
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance"
         }
       ],
       "args": [
@@ -3529,9 +4870,8 @@ export type Onreapp = {
         "Deposits tokens into the offer vault.",
         "",
         "Delegates to `vault_operations::offer_vault_deposit`.",
-        "Transfers tokens from boss's account to offer vault's token account for the specified mint.",
+        "Transfers tokens from the depositor's token account to the offer vault token account for the specified mint.",
         "Creates vault token account if it doesn't exist using init_if_needed.",
-        "Only the boss can call this instruction.",
         "",
         "# Arguments",
         "- `ctx`: Context for `OfferVaultDeposit`.",
@@ -3548,6 +4888,26 @@ export type Onreapp = {
         74
       ],
       "accounts": [
+        {
+          "name": "state",
+          "docs": [
+            "Program state account containing kill switch status"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
         {
           "name": "vaultAuthority",
           "docs": [
@@ -3594,9 +4954,9 @@ export type Onreapp = {
           ]
         },
         {
-          "name": "bossTokenAccount",
+          "name": "depositorTokenAccount",
           "docs": [
-            "Boss's token account serving as the source of deposited tokens",
+            "Depositor's token account serving as the source of deposited tokens",
             "",
             "Must have sufficient balance to cover the requested deposit amount."
           ],
@@ -3605,7 +4965,7 @@ export type Onreapp = {
             "seeds": [
               {
                 "kind": "account",
-                "path": "boss"
+                "path": "depositor"
               },
               {
                 "kind": "account",
@@ -3719,35 +5079,12 @@ export type Onreapp = {
           }
         },
         {
-          "name": "boss",
+          "name": "depositor",
           "docs": [
-            "The boss account authorized to deposit tokens and pay for account creation"
+            "The depositor account paying for account creation and providing tokens"
           ],
           "writable": true,
-          "signer": true,
-          "relations": [
-            "state"
-          ]
-        },
-        {
-          "name": "state",
-          "docs": [
-            "Program state account containing boss authorization"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
+          "signer": true
         },
         {
           "name": "tokenProgram",
@@ -4033,6 +5370,1030 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "openSwapBuy",
+      "discriminator": [
+        143,
+        202,
+        194,
+        184,
+        129,
+        189,
+        219,
+        139
+      ],
+      "accounts": [
+        {
+          "name": "offer"
+        },
+        {
+          "name": "propAmmPairState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  112,
+                  97,
+                  105,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "redemptionOffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "offerVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "redemptionVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "offerVaultTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "offerVaultTokenOutAccount",
+          "writable": true
+        },
+        {
+          "name": "redemptionVaultTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "tokenInMint",
+          "writable": true
+        },
+        {
+          "name": "tokenInProgram"
+        },
+        {
+          "name": "tokenOutMint",
+          "writable": true
+        },
+        {
+          "name": "tokenOutProgram"
+        },
+        {
+          "name": "userTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "userTokenOutAccount",
+          "writable": true
+        },
+        {
+          "name": "propAmmProceedsVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  112,
+                  114,
+                  111,
+                  99,
+                  101,
+                  101,
+                  100,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "propAmmProceedsTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "propAmmBuyFeeVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  98,
+                  117,
+                  121,
+                  95,
+                  102,
+                  101,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "propAmmBuyFeeTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "permissionlessAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110,
+                  108,
+                  101,
+                  115,
+                  115,
+                  45,
+                  49
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "permissionlessTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "permissionlessTokenOutAccount",
+          "writable": true
+        },
+        {
+          "name": "mintAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bufferAccounts",
+          "accounts": [
+            {
+              "name": "bufferState",
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "reserveVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "managementFeeVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "performanceFeeVaultOnycAccount",
+              "writable": true
+            }
+          ]
+        },
+        {
+          "name": "marketStats",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructionsSysvar"
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "mainOffer"
+        }
+      ],
+      "args": [
+        {
+          "name": "tokenInAmount",
+          "type": "u64"
+        },
+        {
+          "name": "minimumOut",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "openSwapSell",
+      "discriminator": [
+        93,
+        206,
+        188,
+        72,
+        45,
+        138,
+        181,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "propAmmPairState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  112,
+                  97,
+                  105,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "redemptionOffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "offerVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "redemptionVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "redemptionVaultTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "redemptionVaultTokenOutAccount",
+          "writable": true
+        },
+        {
+          "name": "tokenInMint",
+          "writable": true
+        },
+        {
+          "name": "tokenInProgram"
+        },
+        {
+          "name": "tokenOutMint",
+          "writable": true
+        },
+        {
+          "name": "tokenOutProgram"
+        },
+        {
+          "name": "userTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "userTokenOutAccount",
+          "writable": true
+        },
+        {
+          "name": "propAmmProceedsVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  112,
+                  114,
+                  111,
+                  99,
+                  101,
+                  101,
+                  100,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "propAmmProceedsTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "propAmmSellFeeVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  115,
+                  101,
+                  108,
+                  108,
+                  95,
+                  102,
+                  101,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "propAmmSellFeeTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "mintAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bufferAccounts",
+          "accounts": [
+            {
+              "name": "bufferState",
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "reserveVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "managementFeeVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "performanceFeeVaultOnycAccount",
+              "writable": true
+            }
+          ]
+        },
+        {
+          "name": "marketStats",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructionsSysvar"
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "mainOffer"
+        },
+        {
+          "name": "offerVaultOnycAccount"
+        }
+      ],
+      "args": [
+        {
+          "name": "tokenInAmount",
+          "type": "u64"
+        },
+        {
+          "name": "minimumOut",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "proposeBoss",
       "docs": [
         "Proposes a new boss for ownership transfer.",
@@ -4100,14 +6461,307 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "quoteSwapBuy",
+      "discriminator": [
+        229,
+        148,
+        9,
+        48,
+        34,
+        165,
+        115,
+        166
+      ],
+      "accounts": [
+        {
+          "name": "offer"
+        },
+        {
+          "name": "propAmmPairState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  112,
+                  97,
+                  105,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenInMint"
+        },
+        {
+          "name": "tokenOutMint"
+        }
+      ],
+      "args": [
+        {
+          "name": "tokenInAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "quoteSwapSell",
+      "discriminator": [
+        198,
+        1,
+        48,
+        226,
+        172,
+        136,
+        51,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "offer"
+        },
+        {
+          "name": "propAmmPairState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  95,
+                  97,
+                  109,
+                  109,
+                  95,
+                  112,
+                  97,
+                  105,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "redemptionOffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "redemptionVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "redemptionVaultTokenOutAccount",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "redemptionVaultAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutProgram"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "tokenInMint"
+        },
+        {
+          "name": "tokenOutMint"
+        },
+        {
+          "name": "tokenOutProgram"
+        },
+        {
+          "name": "marketStats"
+        }
+      ],
+      "args": [
+        {
+          "name": "tokenInAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "redemptionVaultDeposit",
       "docs": [
         "Deposits tokens into the redemption vault.",
         "",
         "Delegates to `vault_operations::redemption_vault_deposit`.",
-        "Transfers tokens from boss's account to redemption vault's token account for the specified mint.",
+        "Transfers tokens from the depositor's token account to the redemption vault token account for the specified mint.",
         "Creates vault token account if it doesn't exist using init_if_needed.",
-        "Only the boss can call this instruction.",
         "",
         "# Arguments",
         "- `ctx`: Context for `RedemptionVaultDeposit`.",
@@ -4181,9 +6835,9 @@ export type Onreapp = {
           ]
         },
         {
-          "name": "bossTokenAccount",
+          "name": "depositorTokenAccount",
           "docs": [
-            "Boss's token account serving as the source of deposited tokens",
+            "Depositor's token account serving as the source of deposited tokens",
             "",
             "Must have sufficient balance to cover the requested deposit amount."
           ],
@@ -4192,7 +6846,7 @@ export type Onreapp = {
             "seeds": [
               {
                 "kind": "account",
-                "path": "boss"
+                "path": "depositor"
               },
               {
                 "kind": "account",
@@ -4306,20 +6960,18 @@ export type Onreapp = {
           }
         },
         {
-          "name": "boss",
+          "name": "depositor",
           "docs": [
-            "The boss account authorized to deposit tokens and pay for account creation"
+            "The depositor account paying for account creation and providing tokens"
           ],
           "writable": true,
-          "signer": true,
-          "relations": [
-            "state"
-          ]
+          "signer": true
         },
         {
           "name": "state",
           "docs": [
-            "Program state account containing boss authorization"
+            "Program state account containing kill switch status.",
+            "Kept in the legacy account position for upgrade compatibility."
           ],
           "pda": {
             "seeds": [
@@ -4632,11 +7284,154 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "refreshMarketStats",
+      "docs": [
+        "Refreshes the canonical market-stats PDA using current on-chain state.",
+        "",
+        "Delegates to `market_info::refresh_market_stats`.",
+        "Any signer can call this instruction and pay for PDA creation if needed, which",
+        "allows backend automation to refresh market stats even on days without purchases.",
+        "",
+        "# Arguments",
+        "- `ctx`: Context for `RefreshMarketStats`."
+      ],
+      "discriminator": [
+        51,
+        221,
+        140,
+        112,
+        205,
+        53,
+        22,
+        233
+      ],
+      "accounts": [
+        {
+          "name": "mainOffer"
+        },
+        {
+          "name": "tokenInMint",
+          "docs": [
+            "The input mint paired with ONyc for the tracked offer."
+          ]
+        },
+        {
+          "name": "state",
+          "docs": [
+            "Program state holding the canonical ONyc mint."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "onycMint",
+          "docs": [
+            "The canonical ONyc mint for global market stats."
+          ],
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "marketStats",
+          "docs": [
+            "Canonical global market-stats PDA updated by refreshes and purchases."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "docs": [
+            "Any signer can pay for PDA creation and trigger a refresh."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "docs": [
+            "System program for account creation."
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "removeAdmin",
       "docs": [
         "Removes an admin from the state.",
         "",
-        "Delegates to `admin::remove_admin` to remove an admin from the admin list.",
+        "Delegates to `state_operations::remove_admin` to remove an admin from the admin list.",
         "Only the boss can call this instruction to remove admins.",
         "# Arguments",
         "- `ctx`: Context for `RemoveAdmin`.",
@@ -4753,20 +7548,680 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "setBufferFeeConfig",
+      "docs": [
+        "Sets BUFFER fee split parameters.",
+        "",
+        "Both fee values are expressed in basis points and applied during accrual. When the",
+        "performance-fee high-water mark is disabled, every nonzero accrual pays the configured",
+        "performance fee regardless of current NAV."
+      ],
+      "discriminator": [
+        68,
+        233,
+        51,
+        70,
+        228,
+        167,
+        74,
+        147
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "mainOffer"
+        },
+        {
+          "name": "onycMint",
+          "writable": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "offerVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mintAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bufferAccounts",
+          "accounts": [
+            {
+              "name": "bufferState",
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "reserveVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "managementFeeVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "performanceFeeVaultOnycAccount",
+              "writable": true
+            }
+          ]
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "marketStats",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "managementFeeBasisPoints",
+          "type": "u16"
+        },
+        {
+          "name": "performanceFeeBasisPoints",
+          "type": "u16"
+        },
+        {
+          "name": "performanceFeeHighWatermarkEnabled",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "setBufferGrossApr",
+      "docs": [
+        "Sets BUFFER gross yield.",
+        "",
+        "Accepts gross APR from 0% through 100% (scale = 1_000_000). Settles pending",
+        "BUFFER accrual using the main offer, refreshes market stats, then updates gross APR."
+      ],
+      "discriminator": [
+        245,
+        49,
+        142,
+        190,
+        30,
+        123,
+        184,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "mainOffer"
+        },
+        {
+          "name": "onycMint",
+          "writable": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "offerVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mintAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bufferAccounts",
+          "accounts": [
+            {
+              "name": "bufferState",
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "reserveVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "managementFeeVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "performanceFeeVaultOnycAccount",
+              "writable": true
+            }
+          ]
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "marketStats",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "grossYield",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "setCirculatingSupplyExcludedAccounts",
+      "docs": [
+        "Updates the owner list whose ONyc ATAs are excluded from circulating supply."
+      ],
+      "discriminator": [
+        109,
+        247,
+        233,
+        248,
+        196,
+        107,
+        17,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "excludedAccounts",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "owners",
+          "type": {
+            "array": [
+              "pubkey",
+              20
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "setConfigurableVaultDestination",
+      "discriminator": [
+        133,
+        244,
+        254,
+        4,
+        120,
+        3,
+        31,
+        123
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "configurableVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "kind"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "kind",
+          "type": {
+            "defined": {
+              "name": "configurableVaultKind"
+            }
+          }
+        },
+        {
+          "name": "withdrawalDestination",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "setKillSwitch",
       "docs": [
         "Enables or disables the kill switch.",
         "",
-        "Delegates to `kill_switch::kill_switch` to change the kill switch state.",
-        "When enabled (true), the kill switch can halt critical program operations.",
-        "When disabled (false), normal program operations can proceed.",
+        "Delegates to `state_operations::set_kill_switch` to change the kill switch state.",
+        "When enabled (true), the kill switch halts guarded value-moving paths.",
+        "When disabled (false), those guarded paths can proceed normally.",
         "",
         "Access control:",
         "- Both boss and admins can enable the kill switch",
         "- Only the boss can disable the kill switch",
         "",
         "# Arguments",
-        "- `ctx`: Context for `KillSwitch`.",
+        "- `ctx`: Context for `SetKillSwitch`.",
         "- `enable`: True to enable the kill switch, false to disable it."
       ],
       "discriminator": [
@@ -4786,7 +8241,7 @@ export type Onreapp = {
             "Program state account containing the kill switch flag",
             "",
             "Must be mutable to allow kill switch state modifications.",
-            "The kill switch prevents offer operations when enabled."
+            "The kill switch prevents guarded execution paths when enabled."
           ],
           "writable": true,
           "pda": {
@@ -4820,13 +8275,113 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "setMainOffer",
+      "docs": [
+        "Sets the main offer stored in program state.",
+        "",
+        "Only the boss can update this value."
+      ],
+      "discriminator": [
+        129,
+        95,
+        103,
+        81,
+        225,
+        142,
+        102,
+        227
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "offer"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "setOfferDisabled",
+      "docs": [
+        "Enables or disables one offer.",
+        "",
+        "Boss or admins can disable an offer. Only boss can re-enable it."
+      ],
+      "discriminator": [
+        250,
+        160,
+        113,
+        13,
+        46,
+        252,
+        4,
+        86
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "writable": true
+        },
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "disabled",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "setOnycMint",
       "docs": [
         "Sets the Onyc mint in the state.",
         "",
         "Delegates to `state_operations::set_onyc_mint` to change the Onyc mint.",
         "Only the boss can call this instruction to set the Onyc mint.",
-        "Emits a `OnycMintSetEvent` upon success.",
+        "Emits an `ONycMintUpdatedEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `SetOnycMint`."
@@ -4886,36 +8441,110 @@ export type Onreapp = {
       "args": []
     },
     {
-      "name": "setRedemptionAdmin",
+      "name": "setRedemptionOfferDisabled",
+      "discriminator": [
+        44,
+        130,
+        57,
+        167,
+        162,
+        117,
+        37,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "redemptionOffer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "redemptionOffer.tokenInMint",
+                "account": "redemptionOffer"
+              },
+              {
+                "kind": "account",
+                "path": "redemptionOffer.tokenOutMint",
+                "account": "redemptionOffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "disabled",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "setWorker",
       "docs": [
-        "Sets the redemption admin in the state.",
-        "",
-        "Delegates to `state_operations::set_redemption_admin` to change the redemption admin.",
-        "Only the boss can call this instruction to set the redemption admin.",
-        "Emits a `RedemptionAdminUpdatedEvent` upon success.",
+        "Sets the worker authorized for redemption processing and BUFFER settlement.",
         "",
         "# Arguments",
-        "- `ctx`: Context for `SetRedemptionAdmin`.",
-        "- `new_redemption_admin`: Public key of the new redemption admin."
+        "- `ctx`: Context for `SetWorker`.",
+        "- `new_worker`: Public key of the new worker."
       ],
       "discriminator": [
-        122,
-        95,
-        205,
+        36,
+        210,
+        154,
+        242,
+        201,
         126,
-        218,
-        93,
-        18,
-        173
+        112,
+        33
       ],
       "accounts": [
         {
           "name": "state",
           "docs": [
-            "Program state account containing the redemption admin configuration",
-            "",
-            "Must be mutable to allow redemption admin updates and have the boss account",
-            "as the authorized signer for redemption admin configuration management."
+            "Global state containing the worker configuration."
           ],
           "writable": true,
           "pda": {
@@ -4936,7 +8565,7 @@ export type Onreapp = {
         {
           "name": "boss",
           "docs": [
-            "The boss account authorized to configure the redemption admin"
+            "Boss authorized to configure the worker."
           ],
           "signer": true,
           "relations": [
@@ -4946,19 +8575,171 @@ export type Onreapp = {
       ],
       "args": [
         {
-          "name": "newRedemptionAdmin",
+          "name": "newWorker",
           "type": "pubkey"
         }
       ]
     },
     {
+      "name": "settleBuffer",
+      "docs": [
+        "Settles BUFFER accrual and refreshes market stats without a trade.",
+        "Only the configured worker may call this instruction."
+      ],
+      "discriminator": [
+        196,
+        144,
+        145,
+        221,
+        54,
+        210,
+        224,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "docs": [
+            "Global state containing worker, ONyc mint, and main-offer configuration."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "worker",
+          "docs": [
+            "Worker authorized to settle BUFFER and payer for market-stats initialization."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "onycMint",
+          "docs": [
+            "ONyc mint whose supply is increased by BUFFER accrual."
+          ],
+          "writable": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "mintAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "docs": [
+            "Token program controlling the ONyc mint and BUFFER vault accounts."
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "docs": [
+            "System program used if market stats must be initialized."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "mainOffer"
+        },
+        {
+          "name": "bufferAccounts",
+          "accounts": [
+            {
+              "name": "bufferState",
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "reserveVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "managementFeeVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "performanceFeeVaultOnycAccount",
+              "writable": true
+            }
+          ]
+        },
+        {
+          "name": "marketStats",
+          "writable": true
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "takeOffer",
       "docs": [
-        "Takes a offer.",
+        "Takes an offer.",
         "",
         "Delegates to `offer::take_offer`.",
         "Allows a user to exchange token_in for token_out based on the offer's dynamic price.",
-        "Emits a `TakeOfferEvent` upon success.",
+        "Emits an `OfferTakenEvent` upon success.",
         "",
         "# Arguments",
         "- `ctx`: Context for `TakeOffer`.",
@@ -5031,6 +8812,504 @@ export type Onreapp = {
           "name": "boss",
           "docs": [
             "The boss account authorized to receive token_in payments",
+            "",
+            "Must match the boss stored in program state for security validation."
+          ],
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "vaultAuthority",
+          "docs": [
+            "Program-derived authority that controls vault token operations",
+            "",
+            "This PDA manages token transfers and burning operations for the",
+            "burn/mint architecture when program has mint authority."
+          ]
+        },
+        {
+          "name": "vaultTokenInAccount",
+          "docs": [
+            "Vault account for temporary token_in storage during burn operations",
+            "",
+            "Used for burning input tokens when the program has mint authority",
+            "for efficient burn/mint token exchange architecture."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vaultAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInProgram"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vaultTokenOutAccount",
+          "docs": [
+            "Vault account for token_out distribution when using transfer mechanism",
+            "",
+            "Source of output tokens when the program lacks mint authority",
+            "and must transfer from pre-funded vault instead of minting."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vaultAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutProgram"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "tokenInMint",
+          "docs": [
+            "Input token mint account for the exchange",
+            "",
+            "Must be mutable to allow burning operations when program has mint authority.",
+            "Validated against the offer's expected token_in_mint."
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenInProgram",
+          "docs": [
+            "Token program interface for input token operations"
+          ]
+        },
+        {
+          "name": "tokenOutMint",
+          "docs": [
+            "Output token mint account for the exchange",
+            "",
+            "Must be mutable to allow minting operations when program has mint authority.",
+            "Validated against the offer's expected token_out_mint."
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenOutProgram",
+          "docs": [
+            "Token program interface for output token operations"
+          ]
+        },
+        {
+          "name": "userTokenInAccount",
+          "docs": [
+            "User's input token account for payment",
+            "",
+            "Source account from which the user pays token_in for the exchange.",
+            "Must have sufficient balance for the requested token_in_amount."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInProgram"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "userTokenOutAccount",
+          "docs": [
+            "User's output token account for receiving exchanged tokens",
+            "",
+            "Destination account where the user receives token_out from the exchange.",
+            "Created automatically if it doesn't exist using init_if_needed."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutProgram"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "bossTokenInAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "boss"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInProgram"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "mintAuthority",
+          "docs": [
+            "Program-derived mint authority for direct token minting",
+            "",
+            "Used when the program has mint authority and can mint token_out",
+            "directly to users instead of transferring from vault."
+          ]
+        },
+        {
+          "name": "instructionsSysvar",
+          "docs": [
+            "Instructions sysvar for approval signature verification",
+            "",
+            "Required for cryptographic verification of approval messages when offers",
+            "require a signature from state.approver1 or state.approver2."
+          ]
+        },
+        {
+          "name": "user",
+          "docs": [
+            "The user executing the offer and paying for account creation"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "associatedTokenProgram",
+          "docs": [
+            "Associated Token Program for automatic token account creation"
+          ],
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "docs": [
+            "System program required for account creation"
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "tokenInAmount",
+          "type": "u64"
+        },
+        {
+          "name": "approvalMessage",
+          "type": {
+            "option": {
+              "defined": {
+                "name": "approvalMessage"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "takeOfferPermissionless",
+      "docs": [
+        "Takes an offer using permissionless flow with intermediary accounts.",
+        "",
+        "Delegates to `offer::take_offer_permissionless`.",
+        "Similar to take_offer but routes token transfers through intermediary accounts",
+        "owned by the program instead of direct user-to-boss and vault-to-user transfers.",
+        "Permissionless execution does not require approval; the approval argument is",
+        "retained only for legacy instruction-data compatibility.",
+        "Emits an `OfferTakenPermissionlessEvent` upon success.",
+        "",
+        "# Arguments",
+        "- `ctx`: Context for `TakeOfferPermissionless`.",
+        "- `token_in_amount`: Amount of token_in to provide."
+      ],
+      "discriminator": [
+        37,
+        190,
+        224,
+        77,
+        197,
+        39,
+        203,
+        230
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "docs": [
+            "The offer account containing pricing vectors and configuration",
+            "",
+            "Must have allow_permissionless enabled for this instruction to succeed.",
+            "Contains pricing vectors for dynamic price calculation."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "state",
+          "docs": [
+            "Program state account containing authorization and kill switch status"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "docs": [
+            "The boss account authorized by program state",
             "",
             "Must match the boss stored in program state for security validation."
           ],
@@ -5204,539 +9483,38 @@ export type Onreapp = {
           }
         },
         {
-          "name": "tokenInMint",
-          "docs": [
-            "Input token mint account for the exchange",
-            "",
-            "Must be mutable to allow burning operations when program has mint authority.",
-            "Validated against the offer's expected token_in_mint."
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenInProgram",
-          "docs": [
-            "Token program interface for input token operations"
-          ]
-        },
-        {
-          "name": "tokenOutMint",
-          "docs": [
-            "Output token mint account for the exchange",
-            "",
-            "Must be mutable to allow minting operations when program has mint authority.",
-            "Validated against the offer's expected token_out_mint."
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenOutProgram",
-          "docs": [
-            "Token program interface for output token operations"
-          ]
-        },
-        {
-          "name": "userTokenInAccount",
-          "docs": [
-            "User's input token account for payment",
-            "",
-            "Source account from which the user pays token_in for the exchange.",
-            "Must have sufficient balance for the requested token_in_amount."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "user"
-              },
-              {
-                "kind": "account",
-                "path": "tokenInProgram"
-              },
-              {
-                "kind": "account",
-                "path": "tokenInMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "userTokenOutAccount",
-          "docs": [
-            "User's output token account for receiving exchanged tokens",
-            "",
-            "Destination account where the user receives token_out from the exchange.",
-            "Created automatically if it doesn't exist using init_if_needed."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "user"
-              },
-              {
-                "kind": "account",
-                "path": "tokenOutProgram"
-              },
-              {
-                "kind": "account",
-                "path": "tokenOutMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "bossTokenInAccount",
-          "docs": [
-            "Boss's input token account for receiving payments",
-            "",
-            "Destination account where the boss receives token_in payments",
-            "from users taking offers."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "boss"
-              },
-              {
-                "kind": "account",
-                "path": "tokenInProgram"
-              },
-              {
-                "kind": "account",
-                "path": "tokenInMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "mintAuthority",
-          "docs": [
-            "Program-derived mint authority for direct token minting",
-            "",
-            "Used when the program has mint authority and can mint token_out",
-            "directly to users instead of transferring from vault."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "instructionsSysvar",
-          "docs": [
-            "Instructions sysvar for approval signature verification",
-            "",
-            "Required for cryptographic verification of approval messages",
-            "when offers require boss approval for execution."
-          ],
-          "address": "Sysvar1nstructions1111111111111111111111111"
-        },
-        {
-          "name": "user",
-          "docs": [
-            "The user executing the offer and paying for account creation"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "associatedTokenProgram",
-          "docs": [
-            "Associated Token Program for automatic token account creation"
-          ],
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "systemProgram",
-          "docs": [
-            "System program required for account creation"
-          ],
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "tokenInAmount",
-          "type": "u64"
-        },
-        {
-          "name": "approvalMessage",
-          "type": {
-            "option": {
-              "defined": {
-                "name": "approvalMessage"
-              }
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "takeOfferPermissionless",
-      "docs": [
-        "Takes a offer using permissionless flow with intermediary accounts.",
-        "",
-        "Delegates to `offer::take_offer_permissionless`.",
-        "Similar to take_offer but routes token transfers through intermediary accounts",
-        "owned by the program instead of direct user-to-boss and vault-to-user transfers.",
-        "Emits a `TakeOfferPermissionlessEvent` upon success.",
-        "",
-        "# Arguments",
-        "- `ctx`: Context for `TakeOfferPermissionless`.",
-        "- `token_in_amount`: Amount of token_in to provide."
-      ],
-      "discriminator": [
-        37,
-        190,
-        224,
-        77,
-        197,
-        39,
-        203,
-        230
-      ],
-      "accounts": [
-        {
-          "name": "offer",
-          "docs": [
-            "The offer account containing pricing vectors and configuration",
-            "",
-            "Must have allow_permissionless enabled for this instruction to succeed.",
-            "Contains pricing vectors for dynamic price calculation."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  111,
-                  102,
-                  102,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "tokenInMint"
-              },
-              {
-                "kind": "account",
-                "path": "tokenOutMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "state",
-          "docs": [
-            "Program state account containing authorization and kill switch status"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "boss",
-          "docs": [
-            "The boss account authorized to receive token_in payments",
-            "",
-            "Must match the boss stored in program state for security validation."
-          ],
-          "relations": [
-            "state"
-          ]
-        },
-        {
-          "name": "vaultAuthority",
-          "docs": [
-            "Program-derived authority that controls vault token operations",
-            "",
-            "This PDA manages token transfers and burning operations for the",
-            "burn/mint architecture when program has mint authority."
-          ]
-        },
-        {
-          "name": "vaultTokenInAccount",
-          "docs": [
-            "Vault account for temporary token_in storage during burn operations",
-            "",
-            "Used for burning input tokens when the program has mint authority",
-            "for efficient burn/mint token exchange architecture."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "vaultAuthority"
-              },
-              {
-                "kind": "account",
-                "path": "tokenInProgram"
-              },
-              {
-                "kind": "account",
-                "path": "tokenInMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "vaultTokenOutAccount",
-          "docs": [
-            "Vault account for token_out distribution when using transfer mechanism",
-            "",
-            "Source of output tokens when the program lacks mint authority",
-            "and must transfer from pre-funded vault instead of minting."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "vaultAuthority"
-              },
-              {
-                "kind": "account",
-                "path": "tokenOutProgram"
-              },
-              {
-                "kind": "account",
-                "path": "tokenOutMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
           "name": "permissionlessAuthority",
           "docs": [
             "Program-derived authority that controls intermediary token routing accounts",
             "",
             "This PDA manages the intermediary accounts used for permissionless token",
             "routing, enabling secure transfers without direct user-boss relationships."
-          ]
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110,
+                  108,
+                  101,
+                  115,
+                  115,
+                  45,
+                  49
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "permissionlessTokenInAccount",
@@ -5744,7 +9522,7 @@ export type Onreapp = {
             "Intermediary account for routing token_in payments",
             "",
             "Temporary holding account that receives user payments before forwarding",
-            "to boss, enabling permissionless operations without direct relationships."
+            "to the boss account, enabling permissionless operations without direct relationships."
           ],
           "writable": true,
           "pda": {
@@ -5809,60 +9587,7 @@ export type Onreapp = {
             "Temporary holding account that receives output tokens before forwarding",
             "to user, completing the permissionless routing mechanism."
           ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "permissionlessAuthority"
-              },
-              {
-                "kind": "account",
-                "path": "tokenOutProgram"
-              },
-              {
-                "kind": "account",
-                "path": "tokenOutMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
+          "writable": true
         },
         {
           "name": "tokenInMint",
@@ -5967,75 +9692,137 @@ export type Onreapp = {
             "Destination account where the user receives token_out from the exchange.",
             "Created automatically if it doesn't exist using init_if_needed."
           ],
+          "writable": true
+        },
+        {
+          "name": "bossTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "mintAuthority",
+          "docs": [
+            "Program-derived mint authority for direct token minting",
+            "",
+            "Used when the program has mint authority and can mint token_out",
+            "directly instead of transferring from vault."
+          ]
+        },
+        {
+          "name": "instructionsSysvar"
+        },
+        {
+          "name": "user",
+          "docs": [
+            "The user executing the offer and paying for account creation"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "associatedTokenProgram",
+          "docs": [
+            "Associated Token Program for automatic token account creation"
+          ],
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "docs": [
+            "System program required for account creation"
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "tokenInAmount",
+          "type": "u64"
+        },
+        {
+          "name": "approvalMessage",
+          "type": {
+            "option": {
+              "defined": {
+                "name": "approvalMessage"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "takeOfferPermissionlessV2",
+      "docs": [
+        "Takes an offer through the V2 permissionless route without approval verification.",
+        "",
+        "Unlike the legacy permissionless instruction, V2 has no approval-message argument",
+        "or instructions-sysvar account."
+      ],
+      "discriminator": [
+        250,
+        180,
+        68,
+        89,
+        124,
+        124,
+        31,
+        250
+      ],
+      "accounts": [
+        {
+          "name": "offer",
           "writable": true,
           "pda": {
             "seeds": [
               {
-                "kind": "account",
-                "path": "user"
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
               },
               {
                 "kind": "account",
-                "path": "tokenOutProgram"
+                "path": "tokenInMint"
               },
               {
                 "kind": "account",
                 "path": "tokenOutMint"
               }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
+            ]
           }
         },
         {
-          "name": "bossTokenInAccount",
-          "docs": [
-            "Boss's input token account for receiving payments",
-            "",
-            "Final destination account where the boss receives token_in payments",
-            "from users taking offers via intermediary routing."
-          ],
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultAuthority"
+        },
+        {
+          "name": "vaultTokenInAccount",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "account",
-                "path": "boss"
+                "path": "vaultAuthority"
               },
               {
                 "kind": "account",
@@ -6086,45 +9873,676 @@ export type Onreapp = {
           }
         },
         {
-          "name": "mintAuthority",
-          "docs": [
-            "Program-derived mint authority for direct token minting",
-            "",
-            "Used when the program has mint authority and can mint token_out",
-            "directly instead of transferring from vault."
+          "name": "vaultTokenOutAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vaultAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutProgram"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "permissionlessAuthority"
+        },
+        {
+          "name": "permissionlessTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "permissionlessTokenOutAccount",
+          "writable": true
+        },
+        {
+          "name": "tokenInMint",
+          "writable": true
+        },
+        {
+          "name": "tokenInProgram"
+        },
+        {
+          "name": "tokenOutMint",
+          "writable": true
+        },
+        {
+          "name": "tokenOutProgram"
+        },
+        {
+          "name": "userTokenInAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInProgram"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "userTokenOutAccount",
+          "writable": true
+        },
+        {
+          "name": "redemptionOffer"
+        },
+        {
+          "name": "redemptionVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "redemptionVaultTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "offerProceedsVault",
+          "writable": true
+        },
+        {
+          "name": "offerProceedsTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "permissionlessOfferFeeVault",
+          "writable": true
+        },
+        {
+          "name": "permissionlessOfferFeeTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "mintAuthority"
+        },
+        {
+          "name": "bufferAccounts",
+          "accounts": [
+            {
+              "name": "bufferState",
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "reserveVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "managementFeeVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "performanceFeeVaultOnycAccount",
+              "writable": true
+            }
           ]
         },
         {
-          "name": "instructionsSysvar",
-          "docs": [
-            "Instructions sysvar for approval signature verification",
-            "",
-            "Required for cryptographic verification of approval messages",
-            "when offers require boss approval for execution."
-          ],
-          "address": "Sysvar1nstructions1111111111111111111111111"
+          "name": "marketStats",
+          "writable": true
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance"
         },
         {
           "name": "user",
-          "docs": [
-            "The user executing the offer and paying for account creation"
-          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "associatedTokenProgram",
-          "docs": [
-            "Associated Token Program for automatic token account creation"
-          ],
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "systemProgram",
-          "docs": [
-            "System program required for account creation"
-          ],
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "mainOffer"
+        }
+      ],
+      "args": [
+        {
+          "name": "tokenInAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "takeOfferV2",
+      "discriminator": [
+        203,
+        29,
+        22,
+        81,
+        189,
+        205,
+        210,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultAuthority"
+        },
+        {
+          "name": "vaultTokenInAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vaultAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInProgram"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vaultTokenOutAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vaultAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutProgram"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "tokenInMint",
+          "writable": true
+        },
+        {
+          "name": "tokenInProgram"
+        },
+        {
+          "name": "tokenOutMint",
+          "writable": true
+        },
+        {
+          "name": "tokenOutProgram"
+        },
+        {
+          "name": "userTokenInAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInProgram"
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "userTokenOutAccount",
+          "writable": true
+        },
+        {
+          "name": "redemptionOffer"
+        },
+        {
+          "name": "redemptionVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "redemptionVaultTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "offerProceedsVault",
+          "writable": true
+        },
+        {
+          "name": "offerProceedsTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "offerFeeVault",
+          "writable": true
+        },
+        {
+          "name": "offerFeeTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "mintAuthority"
+        },
+        {
+          "name": "bufferAccounts",
+          "accounts": [
+            {
+              "name": "bufferState",
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      98,
+                      117,
+                      102,
+                      102,
+                      101,
+                      114,
+                      95,
+                      115,
+                      116,
+                      97,
+                      116,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "reserveVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "managementFeeVaultOnycAccount",
+              "writable": true
+            },
+            {
+              "name": "performanceFeeVaultOnycAccount",
+              "writable": true
+            }
+          ]
+        },
+        {
+          "name": "marketStats",
+          "writable": true
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance"
+        },
+        {
+          "name": "instructionsSysvar"
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "mainOffer"
         }
       ],
       "args": [
@@ -6361,6 +10779,134 @@ export type Onreapp = {
       "args": []
     },
     {
+      "name": "updateCirculatingSupplyExcludedBalance",
+      "docs": [
+        "Refreshes the cached excluded ONyc balance from the configured owner ATAs."
+      ],
+      "discriminator": [
+        3,
+        26,
+        180,
+        255,
+        32,
+        146,
+        247,
+        85
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "onycMint",
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "excludedAccounts",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "circulatingSupplyExcludedBalance",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  101,
+                  120,
+                  99,
+                  108,
+                  95,
+                  98,
+                  97,
+                  108,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "updateOfferFee",
       "docs": [
         "Updates the fee basis points for an offer.",
@@ -6371,7 +10917,7 @@ export type Onreapp = {
         "",
         "# Arguments",
         "- `ctx`: Context for `UpdateOfferFee`.",
-        "- `new_fee_basis_points`: New fee in basis points (0-10000)."
+        "- `new_fee_basis_points`: New fee in basis points, capped at 1000 bps (10%)."
       ],
       "discriminator": [
         254,
@@ -6467,6 +11013,103 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "updateOfferPermissionlessFee",
+      "docs": [
+        "Updates the fee basis points used only by permissionless offer execution.",
+        "",
+        "Delegates to `offer::update_offer_permissionless_fee`."
+      ],
+      "discriminator": [
+        211,
+        4,
+        141,
+        85,
+        85,
+        236,
+        195,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "docs": [
+            "The offer account whose permissionless fee will be updated."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenInMint"
+              },
+              {
+                "kind": "account",
+                "path": "tokenOutMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenInMint",
+          "docs": [
+            "The input token mint account for offer validation."
+          ]
+        },
+        {
+          "name": "tokenOutMint",
+          "docs": [
+            "The output token mint account for offer validation."
+          ]
+        },
+        {
+          "name": "state",
+          "docs": [
+            "Program state account containing boss authorization."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "docs": [
+            "The boss account authorized to update offer fees."
+          ],
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "newFeeBasisPointsPermissionless",
+          "type": "u16"
+        }
+      ]
+    },
+    {
       "name": "updateRedemptionOfferFee",
       "docs": [
         "Updates the fee configuration for a specific redemption offer.",
@@ -6476,7 +11119,7 @@ export type Onreapp = {
         "",
         "# Arguments",
         "* `ctx` - The instruction context",
-        "* `new_fee_basis_points` - New fee in basis points (10000 = 100%, 500 = 5%)",
+        "* `new_fee_basis_points` - New fee in basis points, capped at 1000 bps (10%).",
         "",
         "# Access Control",
         "- Boss only"
@@ -6495,7 +11138,7 @@ export type Onreapp = {
         {
           "name": "redemptionOffer",
           "docs": [
-            "The redemption offer account whose fee will be updated"
+            "The redemption offer account whose configuration will be updated."
           ],
           "writable": true,
           "pda": {
@@ -6523,12 +11166,12 @@ export type Onreapp = {
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_in_mint",
+                "path": "redemptionOffer.tokenInMint",
                 "account": "redemptionOffer"
               },
               {
                 "kind": "account",
-                "path": "redemption_offer.token_out_mint",
+                "path": "redemptionOffer.tokenOutMint",
                 "account": "redemptionOffer"
               }
             ]
@@ -6571,9 +11214,721 @@ export type Onreapp = {
           "type": "u16"
         }
       ]
+    },
+    {
+      "name": "updateRedemptionOfferPropAmmSellFee",
+      "docs": [
+        "Updates the fee basis points used only by Prop AMM sell-side redemptions."
+      ],
+      "discriminator": [
+        160,
+        118,
+        162,
+        32,
+        102,
+        148,
+        239,
+        5
+      ],
+      "accounts": [
+        {
+          "name": "redemptionOffer",
+          "docs": [
+            "The redemption offer account whose configuration will be updated."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "redemptionOffer.tokenInMint",
+                "account": "redemptionOffer"
+              },
+              {
+                "kind": "account",
+                "path": "redemptionOffer.tokenOutMint",
+                "account": "redemptionOffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "state",
+          "docs": [
+            "Program state account containing boss authorization"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "docs": [
+            "The boss account authorized to update redemption offer fees"
+          ],
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "newFeeBasisPointsPropAmmSell",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "updateRedemptionOfferVaultTarget",
+      "discriminator": [
+        182,
+        79,
+        179,
+        178,
+        68,
+        172,
+        197,
+        1
+      ],
+      "accounts": [
+        {
+          "name": "redemptionOffer",
+          "docs": [
+            "The redemption offer account whose configuration will be updated."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "redemptionOffer.tokenInMint",
+                "account": "redemptionOffer"
+              },
+              {
+                "kind": "account",
+                "path": "redemptionOffer.tokenOutMint",
+                "account": "redemptionOffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "state",
+          "docs": [
+            "Program state account containing boss authorization"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "boss",
+          "docs": [
+            "The boss account authorized to update redemption offer fees"
+          ],
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "newVaultTargetBps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "withdrawConfigurableVault",
+      "discriminator": [
+        255,
+        81,
+        28,
+        61,
+        192,
+        180,
+        29,
+        13
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "configurableVault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  117,
+                  114,
+                  97,
+                  98,
+                  108,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "kind"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultTokenAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "configurableVault"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "destinationTokenAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "destination"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "kind",
+          "type": {
+            "defined": {
+              "name": "configurableVaultKind"
+            }
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdrawReserveVault",
+      "docs": [
+        "Withdraws ONyc from the BUFFER reserve vault.",
+        "",
+        "Callable by boss only."
+      ],
+      "discriminator": [
+        224,
+        37,
+        127,
+        12,
+        213,
+        154,
+        179,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bufferState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "reserveVaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  115,
+                  101,
+                  114,
+                  118,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "onycMint",
+          "relations": [
+            "state",
+            "bufferState"
+          ]
+        },
+        {
+          "name": "bossOnycAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "boss"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "onycMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "reserveVaultOnycAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "reserveVaultAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "onycMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "boss",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
+    {
+      "name": "bufferState",
+      "discriminator": [
+        90,
+        178,
+        221,
+        223,
+        231,
+        223,
+        64,
+        105
+      ]
+    },
+    {
+      "name": "circulatingSupplyExcludedAccounts",
+      "discriminator": [
+        253,
+        157,
+        119,
+        194,
+        173,
+        214,
+        166,
+        155
+      ]
+    },
+    {
+      "name": "circulatingSupplyExcludedBalance",
+      "discriminator": [
+        148,
+        113,
+        150,
+        192,
+        170,
+        44,
+        10,
+        140
+      ]
+    },
+    {
+      "name": "configurableVault",
+      "discriminator": [
+        208,
+        230,
+        235,
+        106,
+        163,
+        86,
+        250,
+        199
+      ]
+    },
+    {
+      "name": "marketStats",
+      "discriminator": [
+        240,
+        45,
+        182,
+        233,
+        92,
+        118,
+        209,
+        83
+      ]
+    },
     {
       "name": "offer",
       "discriminator": [
@@ -6598,6 +11953,19 @@ export type Onreapp = {
         102,
         149,
         52
+      ]
+    },
+    {
+      "name": "propAmmPairState",
+      "discriminator": [
+        83,
+        138,
+        171,
+        182,
+        7,
+        98,
+        212,
+        149
       ]
     },
     {
@@ -6746,6 +12114,123 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "bufferAccruedEvent",
+      "discriminator": [
+        142,
+        74,
+        130,
+        231,
+        194,
+        58,
+        5,
+        20
+      ]
+    },
+    {
+      "name": "bufferBurnedForNavEvent",
+      "discriminator": [
+        116,
+        208,
+        135,
+        209,
+        171,
+        149,
+        163,
+        99
+      ]
+    },
+    {
+      "name": "bufferFeeConfigUpdatedEvent",
+      "discriminator": [
+        222,
+        252,
+        155,
+        30,
+        192,
+        243,
+        117,
+        240
+      ]
+    },
+    {
+      "name": "bufferGrossYieldUpdatedEvent",
+      "discriminator": [
+        180,
+        139,
+        51,
+        75,
+        136,
+        10,
+        63,
+        87
+      ]
+    },
+    {
+      "name": "bufferInitializedEvent",
+      "discriminator": [
+        20,
+        3,
+        84,
+        4,
+        103,
+        231,
+        3,
+        246
+      ]
+    },
+    {
+      "name": "circulatingSupplyExcludedAccountsSetEvent",
+      "discriminator": [
+        120,
+        218,
+        239,
+        105,
+        26,
+        15,
+        181,
+        28
+      ]
+    },
+    {
+      "name": "circulatingSupplyExcludedBalanceUpdatedEvent",
+      "discriminator": [
+        247,
+        56,
+        105,
+        146,
+        129,
+        92,
+        134,
+        92
+      ]
+    },
+    {
+      "name": "configurableVaultDestinationUpdatedEvent",
+      "discriminator": [
+        175,
+        21,
+        184,
+        75,
+        241,
+        98,
+        227,
+        202
+      ]
+    },
+    {
+      "name": "configurableVaultWithdrawnEvent",
+      "discriminator": [
+        248,
+        90,
+        16,
+        109,
+        90,
+        155,
+        34,
+        132
+      ]
+    },
+    {
       "name": "getApyEvent",
       "discriminator": [
         235,
@@ -6769,6 +12254,19 @@ export type Onreapp = {
         242,
         104,
         206
+      ]
+    },
+    {
+      "name": "getCirculatingSupplyV2Event",
+      "discriminator": [
+        3,
+        206,
+        54,
+        103,
+        158,
+        86,
+        35,
+        112
       ]
     },
     {
@@ -6824,6 +12322,45 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "mainOfferUpdatedEvent",
+      "discriminator": [
+        231,
+        184,
+        238,
+        159,
+        91,
+        90,
+        28,
+        198
+      ]
+    },
+    {
+      "name": "marketStatsRefreshedEvent",
+      "discriminator": [
+        125,
+        246,
+        174,
+        224,
+        0,
+        163,
+        111,
+        76
+      ]
+    },
+    {
+      "name": "maxMintAmountConfiguredEvent",
+      "discriminator": [
+        148,
+        177,
+        167,
+        17,
+        6,
+        243,
+        15,
+        12
+      ]
+    },
+    {
       "name": "maxSupplyConfiguredEvent",
       "discriminator": [
         180,
@@ -6876,6 +12413,19 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "offerDisabledSetEvent",
+      "discriminator": [
+        241,
+        236,
+        239,
+        13,
+        242,
+        26,
+        158,
+        158
+      ]
+    },
+    {
       "name": "offerFeeUpdatedEvent",
       "discriminator": [
         65,
@@ -6899,6 +12449,19 @@ export type Onreapp = {
         177,
         83,
         200
+      ]
+    },
+    {
+      "name": "offerPermissionlessFeeUpdatedEvent",
+      "discriminator": [
+        140,
+        216,
+        176,
+        227,
+        74,
+        173,
+        69,
+        147
       ]
     },
     {
@@ -7006,16 +12569,16 @@ export type Onreapp = {
       ]
     },
     {
-      "name": "redemptionAdminUpdatedEvent",
+      "name": "propAmmConfiguredEvent",
       "discriminator": [
+        104,
         110,
-        117,
-        47,
-        219,
-        133,
-        230,
-        199,
-        178
+        198,
+        241,
+        226,
+        200,
+        237,
+        41
       ]
     },
     {
@@ -7032,6 +12595,19 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "redemptionOfferDisabledSetEvent",
+      "discriminator": [
+        187,
+        148,
+        3,
+        190,
+        96,
+        151,
+        65,
+        45
+      ]
+    },
+    {
       "name": "redemptionOfferFeeUpdatedEvent",
       "discriminator": [
         221,
@@ -7042,6 +12618,32 @@ export type Onreapp = {
         154,
         166,
         156
+      ]
+    },
+    {
+      "name": "redemptionOfferPropAmmSellFeeUpdatedEvent",
+      "discriminator": [
+        20,
+        70,
+        77,
+        133,
+        173,
+        84,
+        139,
+        47
+      ]
+    },
+    {
+      "name": "redemptionOfferVaultTargetUpdatedEvent",
+      "discriminator": [
+        199,
+        56,
+        132,
+        45,
+        20,
+        230,
+        171,
+        98
       ]
     },
     {
@@ -7110,6 +12712,32 @@ export type Onreapp = {
       ]
     },
     {
+      "name": "reserveVaultDepositedEvent",
+      "discriminator": [
+        82,
+        100,
+        155,
+        125,
+        96,
+        52,
+        235,
+        0
+      ]
+    },
+    {
+      "name": "reserveVaultWithdrawnEvent",
+      "discriminator": [
+        145,
+        196,
+        225,
+        104,
+        251,
+        144,
+        66,
+        232
+      ]
+    },
+    {
       "name": "stateClosedEvent",
       "discriminator": [
         205,
@@ -7121,63 +12749,706 @@ export type Onreapp = {
         155,
         198
       ]
+    },
+    {
+      "name": "workerUpdatedEvent",
+      "discriminator": [
+        190,
+        3,
+        208,
+        81,
+        65,
+        111,
+        249,
+        100
+      ]
     }
   ],
   "errors": [
     {
       "code": 6000,
-      "name": "expired",
-      "msg": "The approval message has expired."
+      "name": "mathOverflow",
+      "msg": "Math Overflow"
     },
     {
       "code": 6001,
-      "name": "wrongProgram",
-      "msg": "The approval message is for the wrong program."
+      "name": "maxSupplyExceeded",
+      "msg": "Max Supply Exceeded"
     },
     {
       "code": 6002,
-      "name": "wrongUser",
-      "msg": "The approval message is for the wrong user."
+      "name": "maxMintAmountExceeded",
+      "msg": "Max Mint Amount Exceeded"
     },
     {
       "code": 6003,
-      "name": "missingEd25519Ix",
-      "msg": "Missing Ed25519 instruction."
+      "name": "transferFeeNotSupported",
+      "msg": "Transfer Fee Not Supported"
     },
     {
       "code": 6004,
-      "name": "wrongIxProgram",
-      "msg": "The instruction is for the wrong program."
+      "name": "zeroPriceNotAllowed",
+      "msg": "Zero Price Not Allowed"
     },
     {
       "code": 6005,
-      "name": "badEd25519Accounts",
-      "msg": "Ed25519 instruction has accounts."
+      "name": "decimalsExceedMax",
+      "msg": "Decimals Exceed Max"
     },
     {
       "code": 6006,
-      "name": "malformedEd25519Ix",
-      "msg": "Malformed Ed25519 instruction."
+      "name": "resultOverflow",
+      "msg": "Result Overflow"
     },
     {
       "code": 6007,
-      "name": "multipleSigs",
-      "msg": "Multiple signatures found in Ed25519 instruction."
+      "name": "expired",
+      "msg": "Expired"
     },
     {
       "code": 6008,
-      "name": "wrongAuthority",
-      "msg": "The authority public key does not match."
+      "name": "wrongProgram",
+      "msg": "Wrong Program"
     },
     {
       "code": 6009,
-      "name": "msgMismatch",
-      "msg": "The message in the Ed25519 instruction does not match the approval message."
+      "name": "wrongUser",
+      "msg": "Wrong User"
     },
     {
       "code": 6010,
+      "name": "missingEd25519Ix",
+      "msg": "Missing Ed25519 Ix"
+    },
+    {
+      "code": 6011,
+      "name": "wrongIxProgram",
+      "msg": "Wrong Ix Program"
+    },
+    {
+      "code": 6012,
+      "name": "badEd25519Accounts",
+      "msg": "Bad Ed25519 Accounts"
+    },
+    {
+      "code": 6013,
+      "name": "malformedEd25519Ix",
+      "msg": "Malformed Ed25519 Ix"
+    },
+    {
+      "code": 6014,
+      "name": "multipleSigs",
+      "msg": "Multiple Sigs"
+    },
+    {
+      "code": 6015,
+      "name": "wrongAuthority",
+      "msg": "Wrong Authority"
+    },
+    {
+      "code": 6016,
+      "name": "msgMismatch",
+      "msg": "Msg Mismatch"
+    },
+    {
+      "code": 6017,
       "name": "msgDeserialize",
-      "msg": "Failed to deserialize the approval message."
+      "msg": "Msg Deserialize"
+    },
+    {
+      "code": 6018,
+      "name": "invalidFee",
+      "msg": "Invalid Fee"
+    },
+    {
+      "code": 6019,
+      "name": "invalidTokenInMint",
+      "msg": "Invalid Token In Mint"
+    },
+    {
+      "code": 6020,
+      "name": "invalidTokenOutMint",
+      "msg": "Invalid Token Out Mint"
+    },
+    {
+      "code": 6021,
+      "name": "vectorNotFound",
+      "msg": "Vector Not Found"
+    },
+    {
+      "code": 6022,
+      "name": "startTimeInPast",
+      "msg": "Start Time In Past"
+    },
+    {
+      "code": 6023,
+      "name": "invalidBoss",
+      "msg": "Invalid Boss"
+    },
+    {
+      "code": 6024,
+      "name": "killSwitchActivated",
+      "msg": "Kill Switch Activated"
+    },
+    {
+      "code": 6025,
+      "name": "permissionlessNotAllowed",
+      "msg": "Permissionless Not Allowed"
+    },
+    {
+      "code": 6026,
+      "name": "invalidMarketStatsPda",
+      "msg": "Invalid Market Stats Pda"
+    },
+    {
+      "code": 6027,
+      "name": "marketStatsNotWritable",
+      "msg": "Market Stats Not Writable"
+    },
+    {
+      "code": 6028,
+      "name": "invalidInstructionsSysvar",
+      "msg": "Invalid Instructions Sysvar"
+    },
+    {
+      "code": 6029,
+      "name": "invalidPermissionlessTokenOutAccount",
+      "msg": "Invalid Permissionless Token Out Account"
+    },
+    {
+      "code": 6030,
+      "name": "invalidUserTokenOutAccount",
+      "msg": "Invalid User Token Out Account"
+    },
+    {
+      "code": 6031,
+      "name": "invalidBossTokenInAccount",
+      "msg": "Invalid Boss Token In Account"
+    },
+    {
+      "code": 6032,
+      "name": "invalidTimeRange",
+      "msg": "Invalid Time Range"
+    },
+    {
+      "code": 6033,
+      "name": "zeroValue",
+      "msg": "Zero Value"
+    },
+    {
+      "code": 6034,
+      "name": "duplicateStartTime",
+      "msg": "Duplicate Start Time"
+    },
+    {
+      "code": 6035,
+      "name": "tooManyVectors",
+      "msg": "Too Many Vectors"
+    },
+    {
+      "code": 6036,
+      "name": "invalidApr",
+      "msg": "Invalid A P R"
+    },
+    {
+      "code": 6037,
+      "name": "invalidPriceFixDuration",
+      "msg": "Invalid Price Fix Duration"
+    },
+    {
+      "code": 6038,
+      "name": "invalidVaultAuthority",
+      "msg": "Invalid Vault Authority"
+    },
+    {
+      "code": 6039,
+      "name": "invalidMintAuthority",
+      "msg": "Invalid Mint Authority"
+    },
+    {
+      "code": 6040,
+      "name": "offerNotFound",
+      "msg": "Offer Not Found"
+    },
+    {
+      "code": 6041,
+      "name": "noActiveVector",
+      "msg": "No Active Vector"
+    },
+    {
+      "code": 6042,
+      "name": "overflowError",
+      "msg": "Overflow Error"
+    },
+    {
+      "code": 6043,
+      "name": "approvalRequired",
+      "msg": "Approval Required"
+    },
+    {
+      "code": 6044,
+      "name": "accountFull",
+      "msg": "Account Full"
+    },
+    {
+      "code": 6045,
+      "name": "invalidTokenProgram",
+      "msg": "Invalid Token Program"
+    },
+    {
+      "code": 6046,
+      "name": "invalidOnycMint",
+      "msg": "Invalid Onyc Mint"
+    },
+    {
+      "code": 6047,
+      "name": "invalidMarketStatsOwner",
+      "msg": "Invalid Market Stats Owner"
+    },
+    {
+      "code": 6048,
+      "name": "invalidMarketStatsData",
+      "msg": "Invalid Market Stats Data"
+    },
+    {
+      "code": 6049,
+      "name": "invalidCirculatingSupplyExcludedAccounts",
+      "msg": "Invalid Circulating Supply Excluded Accounts"
+    },
+    {
+      "code": 6050,
+      "name": "invalidCirculatingSupplyExcludedAccountsOwner",
+      "msg": "Invalid Circulating Supply Excluded Accounts Owner"
+    },
+    {
+      "code": 6051,
+      "name": "invalidCirculatingSupplyExcludedAccountsData",
+      "msg": "Invalid Circulating Supply Excluded Accounts Data"
+    },
+    {
+      "code": 6052,
+      "name": "invalidCirculatingSupplyExcludedBalance",
+      "msg": "Invalid Circulating Supply Excluded Balance"
+    },
+    {
+      "code": 6053,
+      "name": "invalidCirculatingSupplyExcludedBalanceOwner",
+      "msg": "Invalid Circulating Supply Excluded Balance Owner"
+    },
+    {
+      "code": 6054,
+      "name": "invalidCirculatingSupplyExcludedBalanceData",
+      "msg": "Invalid Circulating Supply Excluded Balance Data"
+    },
+    {
+      "code": 6055,
+      "name": "missingExcludedTokenAccount",
+      "msg": "Missing Excluded Token Account"
+    },
+    {
+      "code": 6056,
+      "name": "tooManyExcludedTokenAccounts",
+      "msg": "Too Many Excluded Token Accounts"
+    },
+    {
+      "code": 6057,
+      "name": "invalidExcludedTokenAccount",
+      "msg": "Invalid Excluded Token Account"
+    },
+    {
+      "code": 6058,
+      "name": "duplicateExcludedAccountOwner",
+      "msg": "Duplicate Excluded Account Owner"
+    },
+    {
+      "code": 6059,
+      "name": "overflow",
+      "msg": "Overflow"
+    },
+    {
+      "code": 6060,
+      "name": "invalidMainOffer",
+      "msg": "Invalid Main Offer"
+    },
+    {
+      "code": 6061,
+      "name": "divByZero",
+      "msg": "Div By Zero"
+    },
+    {
+      "code": 6062,
+      "name": "invalidVaultAccount",
+      "msg": "Invalid Vault Account"
+    },
+    {
+      "code": 6063,
+      "name": "bossAlreadySet",
+      "msg": "Boss Already Set"
+    },
+    {
+      "code": 6064,
+      "name": "wrongBoss",
+      "msg": "Wrong Boss"
+    },
+    {
+      "code": 6065,
+      "name": "wrongOwner",
+      "msg": "Wrong Owner"
+    },
+    {
+      "code": 6066,
+      "name": "immutableProgram",
+      "msg": "Immutable Program"
+    },
+    {
+      "code": 6067,
+      "name": "wrongProgramData",
+      "msg": "Wrong Program Data"
+    },
+    {
+      "code": 6068,
+      "name": "missingProgramData",
+      "msg": "Missing Program Data"
+    },
+    {
+      "code": 6069,
+      "name": "deserializeProgramDataFailed",
+      "msg": "Deserialize Program Data Failed"
+    },
+    {
+      "code": 6070,
+      "name": "notProgramData",
+      "msg": "Not Program Data"
+    },
+    {
+      "code": 6071,
+      "name": "invalidPermissionlessAccountName",
+      "msg": "Invalid Permissionless Account Name"
+    },
+    {
+      "code": 6072,
+      "name": "bothApproversFilled",
+      "msg": "Both Approvers Filled"
+    },
+    {
+      "code": 6073,
+      "name": "invalidApprover",
+      "msg": "Invalid Approver"
+    },
+    {
+      "code": 6074,
+      "name": "approverAlreadyExists",
+      "msg": "Approver Already Exists"
+    },
+    {
+      "code": 6075,
+      "name": "onlyBossCanDisable",
+      "msg": "Only Boss Can Disable"
+    },
+    {
+      "code": 6076,
+      "name": "unauthorizedToEnable",
+      "msg": "Unauthorized To Enable"
+    },
+    {
+      "code": 6077,
+      "name": "notAnApprover",
+      "msg": "Not An Approver"
+    },
+    {
+      "code": 6078,
+      "name": "invalidStateOwner",
+      "msg": "Invalid State Owner"
+    },
+    {
+      "code": 6079,
+      "name": "invalidStatePda",
+      "msg": "Invalid State Pda"
+    },
+    {
+      "code": 6080,
+      "name": "invalidStateData",
+      "msg": "Invalid State Data"
+    },
+    {
+      "code": 6081,
+      "name": "unauthorizedSigner",
+      "msg": "Unauthorized Signer"
+    },
+    {
+      "code": 6082,
+      "name": "lamportOverflow",
+      "msg": "Lamport Overflow"
+    },
+    {
+      "code": 6083,
+      "name": "noBossProposal",
+      "msg": "No Boss Proposal"
+    },
+    {
+      "code": 6084,
+      "name": "notProposedBoss",
+      "msg": "Not Proposed Boss"
+    },
+    {
+      "code": 6085,
+      "name": "invalidBossAddress",
+      "msg": "Invalid Boss Address"
+    },
+    {
+      "code": 6086,
+      "name": "noChange",
+      "msg": "No Change"
+    },
+    {
+      "code": 6087,
+      "name": "adminAlreadyExists",
+      "msg": "Admin Already Exists"
+    },
+    {
+      "code": 6088,
+      "name": "maxAdminsReached",
+      "msg": "Max Admins Reached"
+    },
+    {
+      "code": 6089,
+      "name": "adminNotFound",
+      "msg": "Admin Not Found"
+    },
+    {
+      "code": 6090,
+      "name": "programNotMintAuthority",
+      "msg": "Program Not Mint Authority"
+    },
+    {
+      "code": 6091,
+      "name": "noMintAuthority",
+      "msg": "No Mint Authority"
+    },
+    {
+      "code": 6092,
+      "name": "bossNotMintAuthority",
+      "msg": "Boss Not Mint Authority"
+    },
+    {
+      "code": 6093,
+      "name": "unauthorized",
+      "msg": "Unauthorized"
+    },
+    {
+      "code": 6094,
+      "name": "zeroBalance",
+      "msg": "Zero Balance"
+    },
+    {
+      "code": 6095,
+      "name": "insufficientBalance",
+      "msg": "Insufficient Balance"
+    },
+    {
+      "code": 6096,
+      "name": "arithmeticOverflow",
+      "msg": "Arithmetic Overflow"
+    },
+    {
+      "code": 6097,
+      "name": "invalidMint",
+      "msg": "Invalid Mint"
+    },
+    {
+      "code": 6098,
+      "name": "invalidRedemptionOffer",
+      "msg": "Invalid Redemption Offer"
+    },
+    {
+      "code": 6099,
+      "name": "arithmeticUnderflow",
+      "msg": "Arithmetic Underflow"
+    },
+    {
+      "code": 6100,
+      "name": "invalidRedeemer",
+      "msg": "Invalid Redeemer"
+    },
+    {
+      "code": 6101,
+      "name": "invalidWorker",
+      "msg": "Invalid Worker"
+    },
+    {
+      "code": 6102,
+      "name": "invalidRedeemerTokenAccount",
+      "msg": "Invalid Redeemer Token Account"
+    },
+    {
+      "code": 6103,
+      "name": "offerMismatch",
+      "msg": "Offer Mismatch"
+    },
+    {
+      "code": 6104,
+      "name": "offerMintMismatch",
+      "msg": "Offer Mint Mismatch"
+    },
+    {
+      "code": 6105,
+      "name": "invalidRedemptionOfferOwner",
+      "msg": "Invalid Redemption Offer Owner"
+    },
+    {
+      "code": 6106,
+      "name": "invalidRedemptionOfferData",
+      "msg": "Invalid Redemption Offer Data"
+    },
+    {
+      "code": 6107,
+      "name": "invalidFeeDestinationTokenInAccount",
+      "msg": "Invalid Fee Destination Token In Account"
+    },
+    {
+      "code": 6108,
+      "name": "invalidOfferVaultOnycAccount",
+      "msg": "Invalid Offer Vault Onyc Account"
+    },
+    {
+      "code": 6109,
+      "name": "invalidVaultTokenInAccount",
+      "msg": "Invalid Vault Token In Account"
+    },
+    {
+      "code": 6110,
+      "name": "invalidVaultTokenOutAccount",
+      "msg": "Invalid Vault Token Out Account"
+    },
+    {
+      "code": 6111,
+      "name": "invalidAmount",
+      "msg": "Invalid Amount"
+    },
+    {
+      "code": 6112,
+      "name": "offerDisabled",
+      "msg": "Offer Disabled"
+    },
+    {
+      "code": 6113,
+      "name": "redemptionOfferDisabled",
+      "msg": "Redemption Offer Disabled"
+    },
+    {
+      "code": 6114,
+      "name": "unauthorizedToDisableOffer",
+      "msg": "Unauthorized To Disable Offer"
+    },
+    {
+      "code": 6115,
+      "name": "onlyBossCanEnableOffer",
+      "msg": "Only Boss Can Enable Offer"
+    },
+    {
+      "code": 6116,
+      "name": "amountExceedsRemaining",
+      "msg": "Amount Exceeds Remaining"
+    },
+    {
+      "code": 6117,
+      "name": "invalidFeeDestination",
+      "msg": "Invalid Fee Destination"
+    },
+    {
+      "code": 6118,
+      "name": "invalidConfigurableVault",
+      "msg": "Invalid Configurable Vault"
+    },
+    {
+      "code": 6119,
+      "name": "invalidConfigurableVaultOwner",
+      "msg": "Invalid Configurable Vault Owner"
+    },
+    {
+      "code": 6120,
+      "name": "invalidConfigurableVaultData",
+      "msg": "Invalid Configurable Vault Data"
+    },
+    {
+      "code": 6121,
+      "name": "invalidConfigurableVaultKind",
+      "msg": "Invalid Configurable Vault Kind"
+    },
+    {
+      "code": 6122,
+      "name": "missingConfigurableVaultDestination",
+      "msg": "Missing Configurable Vault Destination"
+    },
+    {
+      "code": 6123,
+      "name": "invalidConfigurableVaultTokenAccount",
+      "msg": "Invalid Configurable Vault Token Account"
+    },
+    {
+      "code": 6124,
+      "name": "invalidBufferStateAccount",
+      "msg": "Invalid Buffer State Account"
+    },
+    {
+      "code": 6125,
+      "name": "invalidTimestamp",
+      "msg": "Invalid Timestamp"
+    },
+    {
+      "code": 6126,
+      "name": "minimumOutNotMet",
+      "msg": "Minimum Out Not Met"
+    },
+    {
+      "code": 6127,
+      "name": "invalidSwapPair",
+      "msg": "Invalid Swap Pair"
+    },
+    {
+      "code": 6128,
+      "name": "invalidPropAmmPairState",
+      "msg": "Invalid Prop AMM Pair State"
+    },
+    {
+      "code": 6129,
+      "name": "propAmmPairDisabled",
+      "msg": "Prop AMM Pair Disabled"
+    },
+    {
+      "code": 6130,
+      "name": "invalidTargetNav",
+      "msg": "Invalid Target Nav"
+    },
+    {
+      "code": 6131,
+      "name": "invalidAssetAdjustmentAmount",
+      "msg": "Invalid Asset Adjustment Amount"
+    },
+    {
+      "code": 6132,
+      "name": "noBurnNeeded",
+      "msg": "No Burn Needed"
+    },
+    {
+      "code": 6133,
+      "name": "insufficientCacheBalance",
+      "msg": "Insufficient Cache Balance"
+    },
+    {
+      "code": 6134,
+      "name": "insufficientFeeBalance",
+      "msg": "Insufficient Fee Balance"
+    },
+    {
+      "code": 6135,
+      "name": "invalidFeeRecipient",
+      "msg": "Invalid Fee Recipient"
+    },
+    {
+      "code": 6136,
+      "name": "invalidBurnTarget",
+      "msg": "Invalid Burn Target"
     }
   ],
   "types": [
@@ -7432,6 +13703,483 @@ export type Onreapp = {
       }
     },
     {
+      "name": "bufferAccruedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tokenInMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "onycMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "secondsElapsed",
+            "type": "u64"
+          },
+          {
+            "name": "aprDelta",
+            "type": "u64"
+          },
+          {
+            "name": "bufferMintAmount",
+            "type": "u64"
+          },
+          {
+            "name": "reserveMintAmount",
+            "type": "u64"
+          },
+          {
+            "name": "managementFeeMintAmount",
+            "type": "u64"
+          },
+          {
+            "name": "performanceFeeMintAmount",
+            "type": "u64"
+          },
+          {
+            "name": "oldPreviousSupply",
+            "type": "u64"
+          },
+          {
+            "name": "newPreviousSupply",
+            "type": "u64"
+          },
+          {
+            "name": "oldPreviousPerformanceFeeHighWatermark",
+            "type": "u64"
+          },
+          {
+            "name": "newPerformanceFeeHighWatermark",
+            "type": "u64"
+          },
+          {
+            "name": "currentNav",
+            "type": "u64"
+          },
+          {
+            "name": "postAccrualSupply",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bufferBurnedForNavEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "burnAmount",
+            "type": "u64"
+          },
+          {
+            "name": "assetAdjustmentAmount",
+            "type": "u64"
+          },
+          {
+            "name": "totalAssets",
+            "type": "u64"
+          },
+          {
+            "name": "targetNav",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bufferFeeConfigUpdatedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oldManagementFeeBasisPoints",
+            "type": "u16"
+          },
+          {
+            "name": "newManagementFeeBasisPoints",
+            "type": "u16"
+          },
+          {
+            "name": "oldPerformanceFeeBasisPoints",
+            "type": "u16"
+          },
+          {
+            "name": "newPerformanceFeeBasisPoints",
+            "type": "u16"
+          },
+          {
+            "name": "oldPerformanceFeeHighWatermarkEnabled",
+            "type": "bool"
+          },
+          {
+            "name": "newPerformanceFeeHighWatermarkEnabled",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bufferGrossYieldUpdatedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "grossYield",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bufferInitializedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bufferState",
+            "type": "pubkey"
+          },
+          {
+            "name": "onycMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "mainOffer",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bufferState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "onycMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "grossApr",
+            "type": "u64"
+          },
+          {
+            "name": "previousSupply",
+            "type": "u64"
+          },
+          {
+            "name": "managementFeeBasisPoints",
+            "type": "u16"
+          },
+          {
+            "name": "performanceFeeBasisPoints",
+            "type": "u16"
+          },
+          {
+            "name": "performanceFeeHighWatermark",
+            "type": "u64"
+          },
+          {
+            "name": "performanceFeeHighWatermarkEnabled",
+            "type": "bool"
+          },
+          {
+            "name": "lastAccrualTimestamp",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                135
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "circulatingSupplyExcludedAccounts",
+      "docs": [
+        "Boss-managed owner list whose ONyc ATAs are excluded from circulating supply."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owners",
+            "docs": [
+              "Owners whose ONyc ATAs must be included in excluded-balance updates."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                20
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved bytes for forward-compatible layout expansion."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                31
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "circulatingSupplyExcludedAccountsSetEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owners",
+            "type": {
+              "array": [
+                "pubkey",
+                20
+              ]
+            }
+          },
+          {
+            "name": "boss",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "circulatingSupplyExcludedBalance",
+      "docs": [
+        "Cached ONyc balance excluded from circulating supply."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "docs": [
+              "Sum of all configured excluded-owner ONyc ATA balances."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lastUpdatedAt",
+            "docs": [
+              "Unix timestamp of the most recent successful update."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "lastUpdatedSlot",
+            "docs": [
+              "Slot of the most recent successful update."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved bytes for forward-compatible layout expansion."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                31
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "circulatingSupplyExcludedBalanceUpdatedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "updater",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "configurableVault",
+      "docs": [
+        "Program-owned configurable accounting vault authority."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "docs": [
+              "Vault kind as `ConfigurableVaultKind::as_u8()`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "withdrawalDestination",
+            "docs": [
+              "Boss-configured withdrawal destination. Default means unset."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved space for future fields."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                31
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "configurableVaultDestinationUpdatedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "oldDestination",
+            "type": "pubkey"
+          },
+          {
+            "name": "newDestination",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "configurableVaultKind",
+      "docs": [
+        "Configurable accounting vault selector used for deriving shared vault PDAs."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "offerFee"
+          },
+          {
+            "name": "managementFee"
+          },
+          {
+            "name": "performanceFee"
+          },
+          {
+            "name": "propAmmBuyFee"
+          },
+          {
+            "name": "offerProceeds"
+          },
+          {
+            "name": "propAmmProceeds"
+          },
+          {
+            "name": "permissionlessOfferFee"
+          },
+          {
+            "name": "redemptionFee"
+          },
+          {
+            "name": "propAmmSellFee"
+          }
+        ]
+      }
+    },
+    {
+      "name": "configurableVaultWithdrawnEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "getApyEvent",
       "docs": [
         "Event emitted when APY calculation is successfully completed",
@@ -7486,7 +14234,7 @@ export type Onreapp = {
           {
             "name": "circulatingSupply",
             "docs": [
-              "Calculated circulating supply (total_supply - vault_amount) in base units"
+              "Calculated circulating supply (total_supply - excluded balances) in base units"
             ],
             "type": "u64"
           },
@@ -7509,6 +14257,30 @@ export type Onreapp = {
             "docs": [
               "Unix timestamp when the calculation was performed"
             ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "getCirculatingSupplyV2Event",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circulatingSupply",
+            "type": "u64"
+          },
+          {
+            "name": "totalSupply",
+            "type": "u64"
+          },
+          {
+            "name": "excludedAmount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
             "type": "u64"
           }
         ]
@@ -7639,7 +14411,7 @@ export type Onreapp = {
           {
             "name": "tokenSupply",
             "docs": [
-              "Circulating token supply (total_supply - vault_amount) in base units"
+              "Circulating token supply (total_supply - excluded balances) in base units"
             ],
             "type": "u64"
           },
@@ -7681,9 +14453,171 @@ export type Onreapp = {
       }
     },
     {
+      "name": "mainOfferUpdatedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oldMainOffer",
+            "type": "pubkey"
+          },
+          {
+            "name": "newMainOffer",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "marketStats",
+      "docs": [
+        "Global market statistics PDA holding the canonical protocol-wide metrics.",
+        "",
+        "This account is intended to be updated by purchase and refresh instructions so",
+        "off-chain clients can fetch the latest derived market values from one PDA."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "apy",
+            "docs": [
+              "Latest APY scaled with the program's existing market-info precision."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "circulatingSupply",
+            "docs": [
+              "Total circulating ONyc supply at the most recent refresh."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "nav",
+            "docs": [
+              "Latest NAV value using the market-info precision."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "navAdjustment",
+            "docs": [
+              "Latest signed NAV adjustment value using the market-info precision."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "tvl",
+            "docs": [
+              "Latest TVL computed as circulating ONyc supply multiplied by NAV, divided by the price scale."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lastUpdatedAt",
+            "docs": [
+              "Unix timestamp of the most recent successful recomputation."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "lastUpdatedSlot",
+            "docs": [
+              "Slot of the most recent successful recomputation."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed for account derivation."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved bytes for forward-compatible layout expansion."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                95
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "marketStatsRefreshedEvent",
+      "docs": [
+        "Event emitted when the canonical market-stats PDA is refreshed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketStatsPda",
+            "docs": [
+              "Canonical market-stats PDA."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "offerPda",
+            "docs": [
+              "Offer PDA used for recomputation."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Unix timestamp of the successful refresh."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "Slot of the successful refresh."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "maxMintAmountConfiguredEvent",
+      "docs": [
+        "Event emitted when the per-mint amount cap is configured."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oldMaxMintAmount",
+            "docs": [
+              "The previous per-mint cap (0 = no cap)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "newMaxMintAmount",
+            "docs": [
+              "The new per-mint cap (0 = no cap)"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "maxSupplyConfiguredEvent",
       "docs": [
-        "Event emitted when the ONyc maximum supply is successfully configured",
+        "Event emitted when the maximum supply cap is successfully configured",
         "",
         "Provides transparency for tracking max supply configuration changes."
       ],
@@ -7851,7 +14785,7 @@ export type Onreapp = {
           {
             "name": "feeBasisPoints",
             "docs": [
-              "Fee in basis points (10000 = 100%) charged when taking the offer"
+              "Fee in basis points, capped at 1000 bps (10%), charged when taking the offer."
             ],
             "type": "u16"
           },
@@ -7865,7 +14799,7 @@ export type Onreapp = {
           {
             "name": "needsApproval",
             "docs": [
-              "Whether the offer requires boss approval for taking (0 = false, 1 = true)"
+              "Whether taking the offer requires a signature from state.approver1 or state.approver2."
             ],
             "type": "u8"
           },
@@ -7877,6 +14811,20 @@ export type Onreapp = {
             "type": "u8"
           },
           {
+            "name": "disabled",
+            "docs": [
+              "Whether the offer is disabled by emergency controls (0 = false, 1 = true)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "feeBasisPointsPermissionless",
+            "docs": [
+              "Fee in basis points charged by permissionless offer execution."
+            ],
+            "type": "u16"
+          },
+          {
             "name": "reserved",
             "docs": [
               "Reserved space for future fields"
@@ -7884,9 +14832,29 @@ export type Onreapp = {
             "type": {
               "array": [
                 "u8",
-                131
+                128
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "offerDisabledSetEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offerPda",
+            "type": "pubkey"
+          },
+          {
+            "name": "disabled",
+            "type": "bool"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
           }
         ]
       }
@@ -7911,14 +14879,14 @@ export type Onreapp = {
           {
             "name": "oldFeeBasisPoints",
             "docs": [
-              "Previous fee in basis points (10000 = 100%)"
+              "Previous fee in basis points (1000 = 10%)"
             ],
             "type": "u16"
           },
           {
             "name": "newFeeBasisPoints",
             "docs": [
-              "New fee in basis points (10000 = 100%)"
+              "New fee in basis points (1000 = 10%)"
             ],
             "type": "u16"
           },
@@ -7966,7 +14934,7 @@ export type Onreapp = {
           {
             "name": "feeBasisPoints",
             "docs": [
-              "Fee in basis points (10000 = 100%) charged when taking the offer"
+              "Fee in basis points, capped at 1000 bps (10%), charged when taking the offer."
             ],
             "type": "u16"
           },
@@ -7980,7 +14948,7 @@ export type Onreapp = {
           {
             "name": "needsApproval",
             "docs": [
-              "Whether the offer requires boss approval for taking"
+              "Whether taking the offer requires a signature from state.approver1 or state.approver2"
             ],
             "type": "bool"
           },
@@ -7990,6 +14958,45 @@ export type Onreapp = {
               "Whether the offer allows permissionless operations"
             ],
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "offerPermissionlessFeeUpdatedEvent",
+      "docs": [
+        "Event emitted when an offer's permissionless fee is updated."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offerPda",
+            "docs": [
+              "The PDA address of the offer whose permissionless fee was updated."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "oldFeeBasisPointsPermissionless",
+            "docs": [
+              "Previous permissionless fee in basis points (1000 = 10%)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "newFeeBasisPointsPermissionless",
+            "docs": [
+              "New permissionless fee in basis points (1000 = 10%)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "boss",
+            "docs": [
+              "The boss account that authorized the fee update."
+            ],
+            "type": "pubkey"
           }
         ]
       }
@@ -8115,9 +15122,9 @@ export type Onreapp = {
             "type": "u64"
           },
           {
-            "name": "boss",
+            "name": "depositor",
             "docs": [
-              "The boss account that made the deposit"
+              "The depositor account that made the deposit"
             ],
             "type": "pubkey"
           }
@@ -8177,14 +15184,14 @@ export type Onreapp = {
           {
             "name": "startTime",
             "docs": [
-              "Calculated activation time: max(base_time, current_time) when vector was added"
+              "Activation time. If omitted during insertion, defaults to max(base_time, current_time)."
             ],
             "type": "u64"
           },
           {
             "name": "baseTime",
             "docs": [
-              "Original requested activation time before current_time adjustment"
+              "Base timestamp used for elapsed-time price growth."
             ],
             "type": "u64"
           },
@@ -8198,10 +15205,10 @@ export type Onreapp = {
           {
             "name": "apr",
             "docs": [
-              "Annual Percentage Rate scaled by 1_000_000 (1_000_000 = 1% APR)",
+              "Annual Percentage Rate scaled by 1_000_000 (1_000_000 = 100% APR; 10_000 = 1%)",
               "",
               "Determines compound interest rate for price growth over time.",
-              "Scale=6 where 1_000_000 = 1% annual rate."
+              "Scale=6 where 10_000 = 1% annual rate and 1_000_000 = 100%."
             ],
             "type": "u64"
           },
@@ -8235,14 +15242,14 @@ export type Onreapp = {
           {
             "name": "startTime",
             "docs": [
-              "Calculated start time when the vector becomes active (max(base_time, current_time))"
+              "Start time when the vector becomes active."
             ],
             "type": "u64"
           },
           {
             "name": "baseTime",
             "docs": [
-              "Original base time specified for the vector"
+              "Base timestamp used for elapsed-time price growth."
             ],
             "type": "u64"
           },
@@ -8256,7 +15263,7 @@ export type Onreapp = {
           {
             "name": "apr",
             "docs": [
-              "Annual Percentage Rate scaled by 1,000,000 (1_000_000 = 1% APR)"
+              "Annual Percentage Rate with scale=6 (10_000 = 1%, 1_000_000 = 100%)"
             ],
             "type": "u64"
           },
@@ -8385,28 +15392,173 @@ export type Onreapp = {
       }
     },
     {
-      "name": "redemptionAdminUpdatedEvent",
-      "docs": [
-        "Event emitted when the redemption admin is successfully updated",
-        "",
-        "Provides transparency for tracking redemption admin configuration changes."
-      ],
+      "name": "propAmmConfiguredEvent",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "oldRedemptionAdmin",
-            "docs": [
-              "The previous redemption admin public key before the update"
-            ],
+            "name": "offer",
             "type": "pubkey"
           },
           {
-            "name": "newRedemptionAdmin",
-            "docs": [
-              "The new redemption admin public key after the update"
-            ],
+            "name": "assetMint",
             "type": "pubkey"
+          },
+          {
+            "name": "onycMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "oldEnabled",
+            "type": "bool"
+          },
+          {
+            "name": "newEnabled",
+            "type": "bool"
+          },
+          {
+            "name": "oldCurvePegHaircutBps",
+            "type": "u16"
+          },
+          {
+            "name": "newCurvePegHaircutBps",
+            "type": "u16"
+          },
+          {
+            "name": "oldCurveExponentScaled",
+            "type": "u32"
+          },
+          {
+            "name": "newCurveExponentScaled",
+            "type": "u32"
+          },
+          {
+            "name": "oldCadenceThreshold",
+            "type": "u32"
+          },
+          {
+            "name": "newCadenceThreshold",
+            "type": "u32"
+          },
+          {
+            "name": "oldCadenceWaveScaled",
+            "type": "u32"
+          },
+          {
+            "name": "newCadenceWaveScaled",
+            "type": "u32"
+          },
+          {
+            "name": "oldEpochDurationSeconds",
+            "type": "i64"
+          },
+          {
+            "name": "newEpochDurationSeconds",
+            "type": "i64"
+          },
+          {
+            "name": "oldWallSensitivityScaled",
+            "type": "u32"
+          },
+          {
+            "name": "newWallSensitivityScaled",
+            "type": "u32"
+          },
+          {
+            "name": "oldMinimumSellHaircutOnyc",
+            "type": "u64"
+          },
+          {
+            "name": "newMinimumSellHaircutOnyc",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "propAmmPairState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "onycMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "enabled",
+            "type": "bool"
+          },
+          {
+            "name": "curvePegHaircutBps",
+            "type": "u16"
+          },
+          {
+            "name": "curveExponentScaled",
+            "type": "u32"
+          },
+          {
+            "name": "cadenceThreshold",
+            "type": "u32"
+          },
+          {
+            "name": "cadenceWaveScaled",
+            "docs": [
+              "Maximum cadence-wave `y`, scaled by [`CADENCE_WAVE_SCALE`]."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "epochDurationSeconds",
+            "type": "i64"
+          },
+          {
+            "name": "wallSensitivityScaled",
+            "type": "u32"
+          },
+          {
+            "name": "minimumSellHaircutOnyc",
+            "type": "u64"
+          },
+          {
+            "name": "currSellValueStable",
+            "type": "u64"
+          },
+          {
+            "name": "currBuyValueStable",
+            "type": "u64"
+          },
+          {
+            "name": "prevNetSellValueStable",
+            "type": "u64"
+          },
+          {
+            "name": "currSellTradeCount",
+            "type": "u32"
+          },
+          {
+            "name": "epochStart",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                284
+              ]
+            }
           }
         ]
       }
@@ -8414,11 +15566,11 @@ export type Onreapp = {
     {
       "name": "redemptionOffer",
       "docs": [
-        "Redemption offer for converting ONyc tokens back to stable tokens",
+        "Redemption offer for converting ONyc tokens back to a paired output asset.",
         "",
         "Manages the redemption process where users can exchange ONyc (in-token)",
-        "for stable tokens like USDC (out-token) at the current NAV price.",
-        "This is the inverse of the standard Offer which exchanges stable tokens for ONyc."
+        "for the original offer's input asset (out-token) at the current NAV price.",
+        "This is the inverse of the standard Offer which exchanges that asset for ONyc."
       ],
       "type": {
         "kind": "struct",
@@ -8449,8 +15601,10 @@ export type Onreapp = {
             "docs": [
               "Cumulative total of all executed redemptions over the contract's lifetime",
               "",
-              "This tracks the total amount of ONyc that has been redeemed and burned.",
-              "Uses u128 because cumulative redemptions can exceed the current total supply."
+              "This tracks the cumulative gross token_in amount fulfilled across redemption",
+              "requests, before fee deduction. Net token_in may be burned or transferred",
+              "to proceeds depending on mint authority.",
+              "Uses u128 for aggregate accounting across requests."
             ],
             "type": "u128"
           },
@@ -8460,14 +15614,14 @@ export type Onreapp = {
               "Total amount of pending redemption requests",
               "",
               "This tracks ONyc tokens that are locked in pending redemption requests.",
-              "Uses u64 because pending redemptions cannot exceed the token's total supply."
+              "Uses u128 for aggregate accounting across requests."
             ],
             "type": "u128"
           },
           {
             "name": "feeBasisPoints",
             "docs": [
-              "Fee in basis points (1000 = 10%) charged when fulfilling redemption requests"
+              "Fee in basis points (1000 = 10%) charged when the worker fulfills requests"
             ],
             "type": "u16"
           },
@@ -8487,6 +15641,30 @@ export type Onreapp = {
             "type": "u8"
           },
           {
+            "name": "vaultTargetBps",
+            "docs": [
+              "Target token-out balance for the redemption vault as basis points of TVL.",
+              "",
+              "A value of 0 disables automatic inflow into the redemption vault; net inflow",
+              "goes to the configured proceeds vault instead."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "disabled",
+            "docs": [
+              "Whether the redemption offer is disabled by targeted emergency controls (0 = false, 1 = true)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "feeBasisPointsPropAmmSell",
+            "docs": [
+              "Fee in basis points (1000 = 10%) charged when Prop AMM sell fulfills redemptions"
+            ],
+            "type": "u16"
+          },
+          {
             "name": "reserved",
             "docs": [
               "Reserved space for future fields"
@@ -8494,7 +15672,7 @@ export type Onreapp = {
             "type": {
               "array": [
                 "u8",
-                109
+                104
               ]
             }
           }
@@ -8542,9 +15720,43 @@ export type Onreapp = {
           {
             "name": "feeBasisPoints",
             "docs": [
-              "Fee in basis points (10000 = 100%) charged when fulfilling redemption requests"
+              "Fee in basis points, capped at 1000 bps (10%), charged when fulfilling redemption requests."
             ],
             "type": "u16"
+          },
+          {
+            "name": "feeBasisPointsPropAmmSell",
+            "docs": [
+              "Fee in basis points, capped at 1000 bps (10%), charged when Prop AMM sell fulfills redemptions."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "vaultTargetBps",
+            "docs": [
+              "Target token-out vault balance as basis points of TVL."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "redemptionOfferDisabledSetEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "redemptionOfferPda",
+            "type": "pubkey"
+          },
+          {
+            "name": "disabled",
+            "type": "bool"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
           }
         ]
       }
@@ -8569,14 +15781,14 @@ export type Onreapp = {
           {
             "name": "oldFeeBasisPoints",
             "docs": [
-              "Previous fee in basis points (10000 = 100%)"
+              "Previous fee in basis points."
             ],
             "type": "u16"
           },
           {
             "name": "newFeeBasisPoints",
             "docs": [
-              "New fee in basis points (10000 = 100%)"
+              "New fee in basis points, capped at 1000 bps (10%)."
             ],
             "type": "u16"
           },
@@ -8585,6 +15797,54 @@ export type Onreapp = {
             "docs": [
               "The boss account that authorized the fee update"
             ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "redemptionOfferPropAmmSellFeeUpdatedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "redemptionOfferPda",
+            "type": "pubkey"
+          },
+          {
+            "name": "oldFeeBasisPointsPropAmmSell",
+            "type": "u16"
+          },
+          {
+            "name": "newFeeBasisPointsPropAmmSell",
+            "type": "u16"
+          },
+          {
+            "name": "boss",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "redemptionOfferVaultTargetUpdatedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "redemptionOfferPda",
+            "type": "pubkey"
+          },
+          {
+            "name": "oldVaultTargetBps",
+            "type": "u16"
+          },
+          {
+            "name": "newVaultTargetBps",
+            "type": "u16"
+          },
+          {
+            "name": "boss",
             "type": "pubkey"
           }
         ]
@@ -8631,6 +15891,17 @@ export type Onreapp = {
             "type": "u8"
           },
           {
+            "name": "fulfilledAmount",
+            "docs": [
+              "Amount of token_in tokens that have already been fulfilled (partial fulfillment tracking)",
+              "",
+              "Starts at 0. Incremented by each partial or full fulfillment call.",
+              "When fulfilled_amount == amount the request is fully settled and the account is closed.",
+              "remaining = amount - fulfilled_amount is still locked in the redemption vault."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "docs": [
               "Reserved space for future fields"
@@ -8638,7 +15909,7 @@ export type Onreapp = {
             "type": {
               "array": [
                 "u8",
-                127
+                119
               ]
             }
           }
@@ -8677,9 +15948,17 @@ export type Onreapp = {
             "type": "pubkey"
           },
           {
-            "name": "amount",
+            "name": "originalAmount",
             "docs": [
-              "Amount of token_in tokens that was requested for redemption"
+              "Original total amount of token_in tokens in the request"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "returnedAmount",
+            "docs": [
+              "Amount of token_in tokens returned to the redeemer",
+              "(original_amount - fulfilled_amount; may be less than original_amount for partially fulfilled requests)"
             ],
             "type": "u64"
           },
@@ -8744,7 +16023,7 @@ export type Onreapp = {
     {
       "name": "redemptionRequestFulfilledEvent",
       "docs": [
-        "Event emitted when a redemption request is successfully fulfilled",
+        "Event emitted when a redemption request is fulfilled (fully or partially)",
         "",
         "Provides transparency for tracking redemption fulfillment and token exchange details."
       ],
@@ -8775,21 +16054,21 @@ export type Onreapp = {
           {
             "name": "tokenInNetAmount",
             "docs": [
-              "Net amount of token_in tokens burned/transferred (after fees)"
+              "Net amount of token_in tokens burned/transferred in this fulfillment call (after fees)"
             ],
             "type": "u64"
           },
           {
             "name": "tokenInFeeAmount",
             "docs": [
-              "Fee amount deducted from token_in"
+              "Fee amount deducted from token_in in this fulfillment call"
             ],
             "type": "u64"
           },
           {
             "name": "tokenOutAmount",
             "docs": [
-              "Amount of token_out tokens received by the user"
+              "Amount of token_out tokens received by the user in this fulfillment call"
             ],
             "type": "u64"
           },
@@ -8799,6 +16078,27 @@ export type Onreapp = {
               "Current price used for the redemption"
             ],
             "type": "u64"
+          },
+          {
+            "name": "fulfilledAmount",
+            "docs": [
+              "Amount of token_in fulfilled in this call (before fee deduction)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "totalFulfilledAmount",
+            "docs": [
+              "Cumulative token_in amount fulfilled across all calls for this request"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "isFullyFulfilled",
+            "docs": [
+              "Whether the request is now fully settled (account closed)"
+            ],
+            "type": "bool"
           }
         ]
       }
@@ -8828,9 +16128,9 @@ export type Onreapp = {
             "type": "u64"
           },
           {
-            "name": "boss",
+            "name": "depositor",
             "docs": [
-              "The boss account that made the deposit"
+              "The depositor account that made the deposit"
             ],
             "type": "pubkey"
           }
@@ -8872,6 +16172,46 @@ export type Onreapp = {
       }
     },
     {
+      "name": "reserveVaultDepositedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "depositor",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "reserveVaultWithdrawnEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "boss",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
       "name": "state",
       "docs": [
         "Global program state containing governance and configuration settings",
@@ -8899,7 +16239,7 @@ export type Onreapp = {
           {
             "name": "isKilled",
             "docs": [
-              "Emergency kill switch to halt critical operations when activated"
+              "Emergency kill switch to halt guarded value-moving operations when activated"
             ],
             "type": "bool"
           },
@@ -8946,14 +16286,29 @@ export type Onreapp = {
           {
             "name": "maxSupply",
             "docs": [
-              "Optional maximum supply cap for ONyc token minting (0 = no cap)"
+              "Optional supply cap for program-controlled minting paths (0 = no cap)"
             ],
             "type": "u64"
           },
           {
-            "name": "redemptionAdmin",
+            "name": "worker",
             "docs": [
-              "Admin account authorized to manage ONr token mints and redemptions"
+              "Worker authorized to fulfill or cancel redemptions and settle BUFFER"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "maxMintAmount",
+            "docs": [
+              "Optional maximum amount allowed in one logical program mint operation (0 = no cap).",
+              "BUFFER accrual applies this to the total gross accrual before fee splitting."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "mainOffer",
+            "docs": [
+              "Main offer account used for market operations and price discovery"
             ],
             "type": "pubkey"
           },
@@ -8965,7 +16320,7 @@ export type Onreapp = {
             "type": {
               "array": [
                 "u8",
-                96
+                56
               ]
             }
           }
@@ -8993,6 +16348,31 @@ export type Onreapp = {
             "name": "boss",
             "docs": [
               "The boss account that initiated the closure and received the rent"
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "workerUpdatedEvent",
+      "docs": [
+        "Event emitted when the protocol worker is updated."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oldWorker",
+            "docs": [
+              "Previous worker public key."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "newWorker",
+            "docs": [
+              "New worker public key."
             ],
             "type": "pubkey"
           }

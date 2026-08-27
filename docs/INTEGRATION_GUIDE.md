@@ -8,7 +8,17 @@ Simple guide for integrating NAV and APY queries into your application.
 
 The Onre program provides **read-only view instructions** to query market data. Use the program IDL and standard Anchor client libraries to make these calls.
 
-**Program ID (Mainnet):** `[INSERT_PROGRAM_ID_HERE]`
+For BUFFER integrations, keep in mind that BUFFER accrual does not accept a caller-provided current yield. Instead, `current_yield` is derived from the active APR on `state.main_offer`, even when the surrounding trade or redemption is priced by another offer.
+
+**Program ID (Mainnet):** `onreuGhHHgVzMWSkj2oQDLDtvvGvoepBPkqyaubFcwe`
+
+---
+
+## Operational Kill Switch
+
+Integrations should treat `state.is_killed == true` as an emergency stop for guarded value-moving paths. While active, the program rejects offer takes, Prop AMM quotes/execution, redemption request create/fulfill/cancel, vault deposits/withdrawals, reserve vault deposits/withdrawals, configurable-vault withdrawals, direct `mint_to`, `burn_for_nav_increase`, and BUFFER config updates that would settle accrual.
+
+Read-only market views such as `get_nav`, `get_apy`, `get_tvl_v2`, and `get_circulating_supply_v2` are not kill-switch guarded. Governance and configuration-only instructions also remain callable according to their normal access control.
 
 ---
 
@@ -109,46 +119,39 @@ console.log(`APY: ${apyPercent.toFixed(2)}%`); // e.g., 10.50%
 
 ### 3. Get TVL (Total Value Locked)
 
-**Instruction:** `get_tvl`
+**Recommended instruction:** `get_tvl_v2`
 
-**Returns:** Total tokens locked in vault (raw amount with token decimals)
+**Returns:** `circulating_supply * current_price / 10^9`
 
 **Accounts:**
 ```typescript
 {
-  offer: PublicKey,               // PDA: ["offer", tokenInMint, tokenOutMint]
+  offer: PublicKey,          // PDA: ["offer", tokenInMint, tokenOutMint]
   tokenInMint: PublicKey,
-  tokenOutMint: PublicKey,
-  vaultTokenOutAccount: PublicKey, // ATA: (tokenOutMint, vaultAuthority)
-  tokenOutProgram: PublicKey       // Usually TOKEN_PROGRAM_ID
+  tokenOutMint: PublicKey,   // must be the configured ONyc mint
+  state: PublicKey,          // PDA: ["state"]
+  circulatingSupplyExcludedBalance: PublicKey // PDA: ["circ_supply_excl_balance"]
 }
 ```
 
 **Example:**
 ```typescript
-import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-
-// Derive vault authority PDA
-const [vaultAuthority] = PublicKey.findProgramAddressSync(
-  [Buffer.from("offer_vault_authority")],
+const [circulatingSupplyExcludedBalance] = PublicKey.findProgramAddressSync(
+  [Buffer.from("circ_supply_excl_balance")],
+  program.programId
+);
+const [statePda] = PublicKey.findProgramAddressSync(
+  [Buffer.from("state")],
   program.programId
 );
 
-// Derive vault token account
-const vaultTokenOutAccount = getAssociatedTokenAddressSync(
-  tokenOutMint,
-  vaultAuthority,
-  true,
-  TOKEN_PROGRAM_ID
-);
-
 const tvl = await program.methods
-  .getTvl()
+  .getTvlV2()
   .accounts({
     tokenInMint,
     tokenOutMint,
-    vaultTokenOutAccount,
-    tokenOutProgram: TOKEN_PROGRAM_ID
+    state: statePda,
+    circulatingSupplyExcludedBalance
   })
   .view();
 
@@ -159,7 +162,7 @@ console.log(`TVL: ${tvl.toString()}`);
 
 ### 4. Get Circulating Supply
 
-**Instruction:** `get_circulating_supply`
+**Recommended instruction:** `get_circulating_supply_v2`
 
 **Returns:** Current circulating supply of ONyc
 
@@ -168,8 +171,7 @@ console.log(`TVL: ${tvl.toString()}`);
 {
   state: PublicKey,           // PDA: ["state"]
   onycMint: PublicKey,        // From state.onyc_mint
-  onycVaultAccount: PublicKey, // ATA: (onycMint, vaultAuthority)
-  tokenProgram: PublicKey      // Usually TOKEN_PROGRAM_ID
+  circulatingSupplyExcludedBalance: PublicKey  // PDA: ["circ_supply_excl_balance"]
 }
 ```
 
@@ -185,30 +187,28 @@ const [statePda] = PublicKey.findProgramAddressSync(
 const state = await program.account.state.fetch(statePda);
 const onycMint = state.onycMint;
 
-// Derive vault authority
-const [vaultAuthority] = PublicKey.findProgramAddressSync(
-  [Buffer.from("offer_vault_authority")],
+const [circulatingSupplyExcludedBalance] = PublicKey.findProgramAddressSync(
+  [Buffer.from("circ_supply_excl_balance")],
   program.programId
 );
 
-// Derive ONyc vault account
-const onycVaultAccount = getAssociatedTokenAddressSync(
-  onycMint,
-  vaultAuthority,
-  true,
-  TOKEN_PROGRAM_ID
-);
-
 const supply = await program.methods
-  .getCirculatingSupply()
+  .getCirculatingSupplyV2()
   .accounts({
-    onycVaultAccount,
-    tokenProgram: TOKEN_PROGRAM_ID
+    state: statePda,
+    onycMint,
+    circulatingSupplyExcludedBalance
   })
   .view();
 
 console.log(`Circulating Supply: ${supply.toString()}`);
 ```
+
+`get_tvl` retains its pre-V5 account layout and remains a pair-specific legacy
+view that subtracts the offer-vault ATA directly. `get_circulating_supply`
+remains the legacy ONyc supply view. The V2 views use the cached ONyc
+excluded-balance PDA, which is also what `refresh_market_stats` and the Prop AMM
+paths use.
 
 ---
 
@@ -243,6 +243,34 @@ const [vaultAuthority] = PublicKey.findProgramAddressSync(
   programId
 );
 ```
+
+---
+
+## BUFFER Integration Notes
+
+If your integration touches BUFFER:
+
+- `initialize_buffer` must be given an offer account, and that offer's `token_out_mint` must be the ONyc mint
+- `set_main_offer` changes the canonical offer used by every BUFFER accrual and ONYC market-stat refresh path
+- `set_buffer_gross_apr` accepts values from 0 through `1_000_000` (0% through 100%), first settles pending BUFFER accrual and refreshes market stats, then updates `gross_apr`
+- BUFFER accrual reads `current_yield` and current NAV from the active vector on `state.main_offer`; a separate traded offer only determines user execution pricing
+- `set_buffer_gross_apr`, `set_buffer_fee_config`, and `burn_for_nav_increase` require the boss signer to be writable because it pays for lazy `MarketStats` initialization; callers may run permissionless `refresh_market_stats` first or let the first of these boss instructions create the PDA
+
+### Recommended BUFFER Rollout
+
+Recommended rollout sequence for enabling BUFFER on an already-running deployment:
+
+1. upgrade the program
+2. let integrators/backend switch to the BUFFER-aware instruction account sets
+3. stop using clients built against the legacy fulfillment account set
+4. upgrade the program again to remove or disable the legacy paths
+5. initialize BUFFER
+
+Operational note:
+
+- `fulfill_redemption_request` is designed to work before BUFFER is initialized
+- before BUFFER initialization, the BUFFER-aware path behaves as a no-accrual redemption flow
+- after BUFFER is initialized, set `gross_apr` deliberately as part of activation so accrual starts only when you intend it to
 
 ### Vault Token Accounts (ATAs)
 ```typescript
@@ -333,4 +361,4 @@ getMarketData();
 
 Check the full IDL for all available instructions and account structures.
 
-**Reference Scripts:** `scripts/market_info/get-nav.ts`, `scripts/market_info/get-apy.ts`
+For operational examples, use the CLI under `scripts/cli/` or the mainnet browser UI under `scripts/ui/`.

@@ -1,19 +1,13 @@
 use crate::constants::{seeds, PRICE_DECIMALS};
-use crate::instructions::{calculate_current_step_price, find_active_vector_at, Offer};
-use crate::utils::{burn_tokens, calculate_fees, mint_tokens, program_controls_mint, transfer_tokens};
+use crate::instructions::market_info::offer_valuation_utils::compute_offer_current_price;
+use crate::instructions::Offer;
+use crate::utils::{
+    burn_tokens, calculate_fees, has_transfer_fee, program_controls_mint, transfer_tokens,
+};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
-/// Common error codes for redemption processing operations
-#[error_code]
-pub enum RedemptionCoreError {
-    /// No pricing vector is currently active for the given time
-    #[msg("No active vector")]
-    NoActiveVector,
-    /// Arithmetic overflow occurred during calculations
-    #[msg("Overflow error")]
-    OverflowError,
-}
+// Common error codes for redemption processing operations.
 
 /// Result structure containing redemption processing calculations
 pub struct RedemptionProcessResult {
@@ -39,16 +33,19 @@ pub struct RedemptionProcessResult {
 /// * `token_in_amount` - Amount of token_in being redeemed by the user
 /// * `token_in_mint` - The token_in mint for decimal information (what user is redeeming)
 /// * `token_out_mint` - The token_out mint for decimal information (what user receives)
-/// * `redemption_fee_basis_points` - Fee in basis points (10000 = 100%)
+/// * `redemption_fee_basis_points` - Fee in basis points.
+/// * `minimum_token_in_fee_amount` - Minimum token-in fee amount; Prop AMM sells pass
+///   `minimum_sell_haircut_onyc` here.
 ///
 /// # Returns
 /// * `Ok(RedemptionProcessResult)` - Containing price, fees, and token_out amount
-/// * `Err(_)` - If validation fails or no active vector exists
+/// * `Err(_)` - If validation fails, no active vector exists, or the payout rounds to zero
 ///
 /// # Price Calculation
 /// Uses the formula: `token_out = (token_in_net * price * 10^token_out_decimals) / (10^token_in_decimals * 10^9)`
 /// Price has 9 decimal places, so we divide by 10^9 to account for this.
-/// Fees are calculated as: `fee = token_in_amount * fee_basis_points / 10000`
+/// Fees are calculated with ceiling division, then floored by the configured minimum:
+/// `fee = max(ceil(token_in_amount * fee_basis_points / 10000), minimum_token_in_fee_amount)`.
 ///
 /// # Example
 /// - Offer price: 2.0 USDC per ONyc (2_000_000_000 with 9 decimals)
@@ -62,22 +59,24 @@ pub fn process_redemption_core(
     token_in_mint: &InterfaceAccount<Mint>,
     token_out_mint: &InterfaceAccount<Mint>,
     redemption_fee_basis_points: u16,
+    minimum_token_in_fee_amount: u64,
 ) -> Result<RedemptionProcessResult> {
     let current_time = Clock::get()?.unix_timestamp as u64;
 
-    // Find the currently active pricing vector
-    let active_vector = find_active_vector_at(offer, current_time)?;
-
-    // Calculate current price with 9 decimals
-    let current_price = calculate_current_step_price(
-        active_vector.apr,
-        active_vector.base_price,
-        active_vector.base_time,
-        active_vector.price_fix_duration,
-    )?;
+    let current_price = compute_offer_current_price(offer, current_time)?;
 
     // Calculate fees
-    let fee_amounts = calculate_fees(token_in_amount, redemption_fee_basis_points)?;
+    let mut fee_amounts = calculate_fees(token_in_amount, redemption_fee_basis_points)?;
+    if minimum_token_in_fee_amount > fee_amounts.token_in_fee_amount {
+        require!(
+            token_in_amount >= minimum_token_in_fee_amount,
+            crate::OnreError::InvalidAmount
+        );
+        fee_amounts.token_in_fee_amount = minimum_token_in_fee_amount;
+        fee_amounts.token_in_net_amount = token_in_amount
+            .checked_sub(minimum_token_in_fee_amount)
+            .ok_or(crate::OnreError::MathOverflow)?;
+    }
 
     // Calculate token_out using direct multiplication with price (after fee deduction)
     // token_out_amount = (token_in_net_amount * price * 10^token_out_decimals) / (10^(token_in_decimals + 9))
@@ -87,18 +86,20 @@ pub fn process_redemption_core(
 
     let numerator = token_in_net_amount_u128
         .checked_mul(price_u128)
-        .ok_or(RedemptionCoreError::OverflowError)?
+        .ok_or(crate::OnreError::OverflowError)?
         .checked_mul(10_u128.pow(token_out_mint.decimals as u32))
-        .ok_or(RedemptionCoreError::OverflowError)?;
+        .ok_or(crate::OnreError::OverflowError)?;
 
-    let denominator = 10_u128.pow(token_in_mint.decimals as u32)
+    let denominator = 10_u128
+        .pow(token_in_mint.decimals as u32)
         .checked_mul(10_u128.pow(PRICE_DECIMALS as u32))
-        .ok_or(RedemptionCoreError::OverflowError)?;
+        .ok_or(crate::OnreError::OverflowError)?;
 
     let result = numerator / denominator;
 
     // Validate result fits in u64 before casting
-    require!(result <= u64::MAX as u128, RedemptionCoreError::OverflowError);
+    require!(result <= u64::MAX as u128, crate::OnreError::OverflowError);
+    require!(result > 0, crate::OnreError::InvalidAmount);
 
     let token_out_amount = result as u64;
 
@@ -114,7 +115,7 @@ pub fn process_redemption_core(
 ///
 /// This structure contains all the accounts and parameters needed to execute
 /// a complete redemption token exchange, handling token_in burning/transfer
-/// and token_out minting/transfer based on mint authority.
+/// and token_out transfer from the redemption vault.
 pub struct ExecuteRedemptionOpsParams<'a, 'info> {
     /// SPL Token program for token_in operations
     pub token_in_program: &'a Interface<'info, TokenInterface>,
@@ -126,12 +127,14 @@ pub struct ExecuteRedemptionOpsParams<'a, 'info> {
     pub token_in_mint: &'a InterfaceAccount<'info, Mint>,
     /// Amount of token_in to process (net amount after fee)
     pub token_in_net_amount: u64,
-    /// Fee amount to transfer to boss
+    /// Fee amount to transfer to the fee destination
     pub token_in_fee_amount: u64,
     /// Vault account containing locked token_in
     pub vault_token_in_account: &'a InterfaceAccount<'info, TokenAccount>,
-    /// Boss's account for receiving token_in when program lacks mint authority (or fees)
-    pub boss_token_in_account: &'a InterfaceAccount<'info, TokenAccount>,
+    /// Account for receiving token_in net amount when program lacks mint authority
+    pub token_in_destination_account: &'a InterfaceAccount<'info, TokenAccount>,
+    /// Account that receives the fee portion of token_in
+    pub fee_destination_token_in_account: &'a InterfaceAccount<'info, TokenAccount>,
     /// Authority for vault operations
     pub redemption_vault_authority: &'a AccountInfo<'info>,
     /// Bump seed for vault authority
@@ -148,14 +151,64 @@ pub struct ExecuteRedemptionOpsParams<'a, 'info> {
     pub user_token_out_account: &'a InterfaceAccount<'info, TokenAccount>,
 
     // Mint authority params
-    /// PDA for mint authority operations
+    /// PDA for detecting whether token_in should be burned.
     pub mint_authority_pda: &'a AccountInfo<'info>,
-    /// Bump seed for mint authority PDA
-    pub mint_authority_bump: u8,
+}
 
-    // State params
-    /// Maximum supply cap for token_out minting (0 = no cap)
-    pub token_out_max_supply: u64,
+#[allow(clippy::items_after_test_module)]
+#[cfg(test)]
+mod tests {
+    use crate::utils::calculate_fees;
+
+    #[test]
+    fn test_zero_fee_basis_points() {
+        let result = calculate_fees(1_000_000_000, 0).unwrap();
+        assert_eq!(result.token_in_fee_amount, 0);
+        assert_eq!(result.token_in_net_amount, 1_000_000_000);
+    }
+
+    #[test]
+    fn test_100_bps_fee() {
+        // 1% on 1_000_000_000 → fee = ceil(1_000_000_000 * 100 / 10_000) = 10_000_000
+        let result = calculate_fees(1_000_000_000, 100).unwrap();
+        assert_eq!(result.token_in_fee_amount, 10_000_000);
+        assert_eq!(result.token_in_net_amount, 990_000_000);
+    }
+
+    #[test]
+    fn test_max_fee_basis_points_1000() {
+        // 10% on 1_000_000_000 → fee = ceil(1_000_000_000 * 1000 / 10_000) = 100_000_000
+        let result = calculate_fees(1_000_000_000, 1000).unwrap();
+        assert_eq!(result.token_in_fee_amount, 100_000_000);
+        assert_eq!(result.token_in_net_amount, 900_000_000);
+    }
+
+    #[test]
+    fn test_fee_rounding_ceiling() {
+        // 1 token at 100 bps: ceil(1 * 100 / 10_000) = ceil(0.01) = 1
+        let result = calculate_fees(1, 100).unwrap();
+        assert_eq!(result.token_in_fee_amount, 1);
+        assert_eq!(result.token_in_net_amount, 0);
+    }
+
+    #[test]
+    fn test_fee_plus_net_equals_total() {
+        // Invariant: fee + net == amount for any bps value
+        let amounts = [1u64, 100, 999, 1_000_000, 1_000_000_000];
+        let bps_values = [0u16, 1, 50, 100, 500, 1000];
+        for &amount in &amounts {
+            for &bps in &bps_values {
+                let result = calculate_fees(amount, bps).unwrap();
+                assert_eq!(
+                    result.token_in_fee_amount + result.token_in_net_amount,
+                    amount,
+                    "fee + net != total for amount={}, bps={}",
+                    amount,
+                    bps
+                );
+            }
+        }
+    }
 }
 
 /// Executes token operations for redemption
@@ -166,13 +219,13 @@ pub struct ExecuteRedemptionOpsParams<'a, 'info> {
 /// # Token In Processing (already locked in vault)
 /// - If program has mint authority:
 ///   1. Burn net amount from vault
-///   2. Transfer fee amount to boss (if fee > 0)
+///   2. Transfer fee amount to configured fee destination (if fee > 0)
 /// - If program lacks mint authority:
-///   - Transfer full amount (net + fee) from vault to boss
+///   - Transfer net amount to configured proceeds destination and fee to fee destination
 ///
 /// # Token Out Processing
-/// - If program has mint authority: mint directly to user
-/// - If program lacks mint authority: transfer from vault to user
+/// - Transfer token_out from the redemption vault to the user. Redemption payout
+///   assets are pre-funded vault liquidity, not program-minted supply.
 ///
 /// # Arguments
 /// * `params` - Complete parameter structure containing all required accounts and amounts
@@ -181,16 +234,23 @@ pub struct ExecuteRedemptionOpsParams<'a, 'info> {
 /// * `Ok(())` - If all token operations complete successfully
 /// * `Err(_)` - If any transfer, mint, or burn operation fails
 pub fn execute_redemption_operations(params: ExecuteRedemptionOpsParams) -> Result<()> {
+    require!(
+        !has_transfer_fee(params.token_in_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
+    require!(
+        !has_transfer_fee(params.token_out_mint)?,
+        crate::OnreError::TransferFeeNotSupported
+    );
+
     let vault_authority_signer_seeds: &[&[&[u8]]] = &[&[
         seeds::REDEMPTION_OFFER_VAULT_AUTHORITY,
         &[params.redemption_vault_authority_bump],
     ]];
 
-    // Step 1: Handle token_in (burn or transfer to boss)
-    let has_token_in_mint_authority = program_controls_mint(
-        params.token_in_mint,
-        params.mint_authority_pda,
-    );
+    // Step 1a: Handle token_in (burn or transfer to proceeds)
+    let has_token_in_mint_authority =
+        program_controls_mint(params.token_in_mint, params.mint_authority_pda);
 
     if has_token_in_mint_authority {
         // Burn net amount from vault
@@ -202,73 +262,42 @@ pub fn execute_redemption_operations(params: ExecuteRedemptionOpsParams) -> Resu
             vault_authority_signer_seeds,
             params.token_in_net_amount,
         )?;
-
-        // Transfer fee amount to boss if there is a fee
-        if params.token_in_fee_amount > 0 {
-            msg!("Transferring fee amount to boss account");
-            transfer_tokens(
-                params.token_in_mint,
-                params.token_in_program,
-                params.vault_token_in_account,
-                params.boss_token_in_account,
-                params.redemption_vault_authority,
-                Some(vault_authority_signer_seeds),
-                params.token_in_fee_amount,
-            )?;
-        }
     } else {
-        // When program lacks mint authority: transfer full amount (net + fee) to boss
-        // Use checked_add to prevent overflow
-        let total_amount = params
-            .token_in_net_amount
-            .checked_add(params.token_in_fee_amount)
-            .ok_or(RedemptionCoreError::OverflowError)?;
-
+        // When program lacks mint authority: transfer net amount to proceeds, fee to fee destination
         transfer_tokens(
             params.token_in_mint,
             params.token_in_program,
             params.vault_token_in_account,
-            params.boss_token_in_account,
+            params.token_in_destination_account,
             params.redemption_vault_authority,
             Some(vault_authority_signer_seeds),
-            total_amount,
+            params.token_in_net_amount,
         )?;
     }
 
-    // Step 2: Distribute token_out to user
-    let has_token_out_mint_authority = program_controls_mint(
-        params.token_out_mint,
-        params.mint_authority_pda,
-    );
-
-    if has_token_out_mint_authority {
-        // Mint token_out directly to user
-        let mint_authority_signer_seeds: &[&[&[u8]]] = &[&[
-            seeds::MINT_AUTHORITY,
-            &[params.mint_authority_bump],
-        ]];
-
-        mint_tokens(
-            params.token_out_program,
-            params.token_out_mint,
-            params.user_token_out_account,
-            params.mint_authority_pda,
-            mint_authority_signer_seeds,
-            params.token_out_amount,
-            params.token_out_max_supply,
-        )?;
-    } else {
-        // Transfer token_out from vault to user
+    // Step 1b: Transfer fee amount to fee destination if there is a fee
+    if params.token_in_fee_amount > 0 {
         transfer_tokens(
-            params.token_out_mint,
-            params.token_out_program,
-            params.vault_token_out_account,
-            params.user_token_out_account,
+            params.token_in_mint,
+            params.token_in_program,
+            params.vault_token_in_account,
+            params.fee_destination_token_in_account,
             params.redemption_vault_authority,
             Some(vault_authority_signer_seeds),
-            params.token_out_amount,
+            params.token_in_fee_amount,
         )?;
     }
+
+    // Step 2: Distribute token_out from pre-funded redemption vault liquidity.
+    transfer_tokens(
+        params.token_out_mint,
+        params.token_out_program,
+        params.vault_token_out_account,
+        params.user_token_out_account,
+        params.redemption_vault_authority,
+        Some(vault_authority_signer_seeds),
+        params.token_out_amount,
+    )?;
 
     Ok(())
 }

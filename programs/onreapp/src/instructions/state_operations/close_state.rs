@@ -15,8 +15,8 @@ pub struct StateClosedEvent {
 
 /// Account structure for closing the program state account
 ///
-/// This struct defines the accounts required to permanently close the program's
-/// main state account and transfer its rent balance back to the boss.
+/// This struct defines the accounts required to close the current program state
+/// account and transfer its rent balance back to the boss.
 /// Only the boss can close the state account.
 ///
 /// Note: The state account is NOT deserialized to allow closing accounts with
@@ -43,14 +43,14 @@ pub struct CloseState<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Permanently closes the program's state account and reclaims its rent balance
+/// Closes the current program state account and reclaims its rent balance
 ///
-/// This instruction removes the program's main state account and transfers its rent
-/// balance back to the boss. The state account is permanently deleted and cannot
-/// be recovered. All program configuration and governance settings are lost.
+/// This instruction removes the current program state account and transfers its rent
+/// balance back to the boss. The closed account data cannot be recovered. All program
+/// configuration and governance settings stored in that account are lost.
 ///
-/// This operation effectively disables the program, as most instructions require
-/// the state account to function. Use with extreme caution.
+/// Most instructions require an initialized state account. The state PDA can be
+/// initialized again later, but it starts from fresh configuration. Use with extreme caution.
 ///
 /// The state account is NOT deserialized, allowing this instruction to work even
 /// when the on-chain State structure doesn't match the current program's State definition.
@@ -66,9 +66,9 @@ pub struct CloseState<'info> {
 /// - Boss account must match the one stored in program state
 ///
 /// # Effects
-/// - State account is permanently deleted
+/// - Current state account data is deleted
 /// - Rent balance is transferred to the boss
-/// - Program becomes effectively non-functional
+/// - Instructions requiring state stop working until state is initialized again
 ///
 /// # Events
 /// * `StateClosedEvent` - Emitted with state PDA and boss details
@@ -76,18 +76,14 @@ pub fn close_state(ctx: Context<CloseState>) -> Result<()> {
     let state = &ctx.accounts.state;
 
     // 0) Sanity: we must own the account to mutate lamports/metadata directly
-    require_keys_eq!(
-        *state.owner,
-        crate::ID,
-        CloseStateErrorCode::InvalidStateOwner
-    );
+    require_keys_eq!(*state.owner, crate::ID, crate::OnreError::InvalidStateOwner);
 
     // 1) Validate PDA address from seeds
     let (expected_state_pda, _bump) = Pubkey::find_program_address(&[seeds::STATE], &crate::ID);
     require_keys_eq!(
         state.key(),
         expected_state_pda,
-        CloseStateErrorCode::InvalidStatePda
+        crate::OnreError::InvalidStatePda
     );
 
     // 2) Read the stored boss pubkey from raw bytes (no deserialize),
@@ -95,12 +91,12 @@ pub fn close_state(ctx: Context<CloseState>) -> Result<()> {
     //    Layout: [8-byte discriminator][32-byte boss][...]
     let stored_boss = {
         let data = state.try_borrow_data()?;
-        require!(data.len() >= 40, CloseStateErrorCode::InvalidStateData);
+        require!(data.len() >= 40, crate::OnreError::InvalidStateData);
 
         // bytes 8..40 -> boss pubkey
         let arr: [u8; 32] = data[8..40]
             .try_into()
-            .map_err(|_| error!(CloseStateErrorCode::InvalidStateData))?;
+            .map_err(|_| error!(crate::OnreError::InvalidStateData))?;
         Pubkey::new_from_array(arr)
     };
 
@@ -110,7 +106,7 @@ pub fn close_state(ctx: Context<CloseState>) -> Result<()> {
     require_keys_eq!(
         boss.key(),
         stored_boss,
-        CloseStateErrorCode::UnauthorizedSigner
+        crate::OnreError::UnauthorizedSigner
     );
 
     // 4) Drain lamports safely (checked math), then zero the source.
@@ -120,7 +116,7 @@ pub fn close_state(ctx: Context<CloseState>) -> Result<()> {
     let boss_lamports_before = boss.lamports();
     let boss_lamport_after = boss_lamports_before
         .checked_add(state_lamports)
-        .ok_or_else(|| error!(CloseStateErrorCode::LamportOverflow))?;
+        .ok_or_else(|| error!(crate::OnreError::LamportOverflow))?;
     **boss.try_borrow_mut_lamports()? = boss_lamport_after;
     **state.try_borrow_mut_lamports()? = 0;
 
@@ -135,24 +131,4 @@ pub fn close_state(ctx: Context<CloseState>) -> Result<()> {
     });
 
     Ok(())
-}
-
-/// Error codes for close state operations
-#[error_code]
-pub enum CloseStateErrorCode {
-    /// State account is not owned by this program
-    #[msg("State account must be owned by this program")]
-    InvalidStateOwner,
-    /// State account is not the expected PDA
-    #[msg("Invalid state PDA")]
-    InvalidStatePda,
-    /// State account data is invalid or too short
-    #[msg("Invalid state account data")]
-    InvalidStateData,
-    /// Signer is not the boss stored in state
-    #[msg("Only the boss can close the state")]
-    UnauthorizedSigner,
-    /// Lamport arithmetic overflow
-    #[msg("Lamport overflow")]
-    LamportOverflow,
 }

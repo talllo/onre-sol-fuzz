@@ -8,12 +8,16 @@ import {
     executeStateClose,
     executeStateGet,
     executeStateKillSwitch,
+    executeStateMaxMintAmount,
     executeStateMaxSupply,
     executeStateProposeBoss,
     executeStateRemoveAdmin,
     executeStateRemoveApprover,
+    executeStateSetExcludedOwners,
+    executeStateSetMainOffer,
     executeStateSetOnycMint,
-    executeStateSetRedemptionAdmin,
+    executeStateSetWorker,
+    executeStateUpdateExcludedBalance,
 } from "../implementations";
 
 /**
@@ -120,14 +124,54 @@ export function registerStateCommands(program: Command): void {
             await executeStateMaxSupply(opts);
         });
 
-    // state set-redemption-admin
+    // state max-mint-amount
     program
-        .command("set-redemption-admin")
-        .description("Set the redemption admin who can fulfill redemption requests")
-        .option("--admin <address>", "Redemption admin public key")
+        .command("max-mint-amount")
+        .description("Configure maximum ONyc mint amount per instruction")
+        .option("--amount <value>", "Maximum mint amount (raw)")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
-            await executeStateSetRedemptionAdmin(opts);
+            await executeStateMaxMintAmount(opts);
+        });
+
+    // state set-main-offer
+    program
+        .command("set-main-offer")
+        .description("Set the main offer used for market stats and BUFFER accrual")
+        .option("--offer <address>", "Main offer PDA")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeStateSetMainOffer(opts);
+        });
+
+    // state set-excluded-owners
+    program
+        .command("set-excluded-owners")
+        .description("Configure circulating supply excluded owners")
+        .option("--owners <addresses>", "Comma-separated owner public keys")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeStateSetExcludedOwners(opts);
+        });
+
+    // state update-excluded-balance
+    program
+        .command("update-excluded-balance")
+        .description("Recompute circulating supply excluded balance")
+        .option("--onyc-mint <address>", "ONyc mint public key")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeStateUpdateExcludedBalance(opts);
+        });
+
+    // state set-worker
+    program
+        .command("set-worker")
+        .description("Set the worker who can fulfill/cancel redemptions and settle BUFFER")
+        .option("--worker <address>", "Worker public key")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeStateSetWorker(opts);
         });
 
     // state clear-admins

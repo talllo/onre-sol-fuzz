@@ -26,7 +26,7 @@ export async function executeInitProgram(opts: GlobalOptions & Record<string, an
         }
 
         // Confirm action (skip in dry-run mode)
-        if (!opts.dryRun) {
+        if (!opts.dryRun && !opts.yes) {
             const confirmed = await confirmDangerousOperation(chalk.yellow("This will initialize the program state. Continue?"));
 
             if (!confirmed) {

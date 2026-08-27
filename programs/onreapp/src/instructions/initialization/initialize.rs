@@ -7,35 +7,6 @@ use anchor_lang::solana_program::bpf_loader_upgradeable::{
 use anchor_lang::Accounts;
 use anchor_spl::token_interface::Mint;
 
-/// Error codes for the initialize instruction
-#[error_code]
-pub enum InitializeErrorCode {
-    /// Triggered when attempting to re-initialize a state that already has a boss set
-    #[msg("Boss is already set, state has been initialized")]
-    BossAlreadySet,
-
-    #[msg("Signer does not match the program's upgrade authority")]
-    WrongBoss,
-
-    #[msg("Wrong owner")]
-    WrongOwner,
-
-    #[msg("Program has no upgrade authority")]
-    ImmutableProgram,
-
-    #[msg("Wrong program data")]
-    WrongProgramData,
-
-    #[msg("Program data account not provided")]
-    MissingProgramData,
-
-    #[msg("Failed to deserialize program data")]
-    DeserializeProgramDataFailed,
-
-    #[msg("Account is not ProgramData")]
-    NotProgramData,
-}
-
 /// Account structure for initializing the program state
 ///
 /// This struct defines the accounts required to set up the program's global state,
@@ -135,7 +106,7 @@ pub struct Initialize<'info> {
 /// - `is_killed`: Set to false (normal operations enabled)
 /// - `onyc_mint`: Set to the provided mint account
 /// - `admins`: Array of default pubkeys (no admins initially)
-/// - `approver`: Default pubkey (must be set separately via set_approver)
+/// - `approvers`: Default pubkeys (must be set separately via add_approver)
 /// - `bump`: PDA bump seed for account validation
 /// - `reserved`: Zero-filled bytes for future use
 ///
@@ -144,7 +115,7 @@ pub struct Initialize<'info> {
 ///
 /// # Returns
 /// * `Ok(())` - If initialization completes successfully
-/// * `Err(InitializeErrorCode::BossAlreadySet)` - If the state has already been initialized
+/// * `Err(crate::OnreError::BossAlreadySet)` - If the state has already been initialized
 ///
 /// # Security
 /// - Only allows initialization if boss is currently unset (default pubkey)
@@ -154,12 +125,12 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         ctx.accounts.program_data.as_ref().map(|v| v.as_ref()),
     )?;
 
-    if upgrade_authority.is_some() {
+    if let Some(upgrade_authority) = upgrade_authority {
         // Check that the boss is the upgrade authority
         require_keys_eq!(
             ctx.accounts.boss.key(),
-            upgrade_authority.unwrap(),
-            InitializeErrorCode::WrongOwner
+            upgrade_authority,
+            crate::OnreError::WrongOwner
         );
     }
 
@@ -167,7 +138,7 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
 
     // Ensure this is the first initialization
     if state.boss != Pubkey::default() {
-        return err!(InitializeErrorCode::BossAlreadySet);
+        return err!(crate::OnreError::BossAlreadySet);
     }
 
     // Set core state fields
@@ -187,12 +158,13 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
 
     // Initialize max supply as 0 (no cap by default)
     state.max_supply = 0;
+    state.max_mint_amount = 0;
 
     // Initialize proposed_boss as unset
     state.proposed_boss = Pubkey::default();
 
-    // Initialize redemption_admin as unset
-    state.redemption_admin = Pubkey::default();
+    // Initialize worker as unset
+    state.worker = Pubkey::default();
 
     msg!(
         "Program state initialized: boss={}, onyc_mint={}, bump={}",
@@ -217,10 +189,10 @@ pub fn get_upgrade_authority(
 
     if owner == &bpf_loader_upgradeable::id() {
         let program_data =
-            program_data.ok_or_else(|| error!(InitializeErrorCode::MissingProgramData))?;
+            program_data.ok_or_else(|| error!(crate::OnreError::MissingProgramData))?;
         require!(
             program_data.owner == &bpf_loader_upgradeable::id(),
-            InitializeErrorCode::WrongOwner
+            crate::OnreError::WrongOwner
         );
 
         // Ensure the ProgramData really belongs to this program
@@ -228,15 +200,16 @@ pub fn get_upgrade_authority(
         require_keys_eq!(
             expected_pd,
             *program_data.key,
-            InitializeErrorCode::WrongProgramData
+            crate::OnreError::WrongProgramData
         );
 
         // Read ProgramData and extract the authority
         let data = program_data
             .try_borrow_data()
-            .map_err(|_| error!(InitializeErrorCode::DeserializeProgramDataFailed))?;
-        // Newer Solana crates provide `deserialize`; if not, switch to bincode.
-        let state = bincode::deserialize(&data).map_err(|_| ProgramError::InvalidAccountData)?;
+            .map_err(|_| error!(crate::OnreError::DeserializeProgramDataFailed))?;
+        let mut data_slice: &[u8] = &data;
+        let state = UpgradeableLoaderState::try_deserialize_unchecked(&mut data_slice)
+            .map_err(|_| ProgramError::InvalidAccountData)?;
 
         if let UpgradeableLoaderState::ProgramData {
             upgrade_authority_address,
@@ -245,9 +218,9 @@ pub fn get_upgrade_authority(
         {
             Ok(upgrade_authority_address) // Some(pubkey) or None
         } else {
-            err!(InitializeErrorCode::NotProgramData)
+            err!(crate::OnreError::NotProgramData)
         }
     } else {
-        err!(InitializeErrorCode::WrongOwner)
+        err!(crate::OnreError::WrongOwner)
     }
 }

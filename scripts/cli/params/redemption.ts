@@ -20,7 +20,7 @@ const redemptionTokenPairParams: ParamDefinition[] = [
     {
         name: "tokenOut",
         type: "mint",
-        description: "Token out mint (USDC for redemptions)",
+        description: "Token out mint (USDC or USDT for redemptions)",
         required: true,
         flag: "--token-out",
         shortFlag: "-o",
@@ -39,6 +39,14 @@ export const redemptionOfferParams: ParamDefinition[] = [
         required: false,
         flag: "--fee",
         shortFlag: "-f",
+        default: 0,
+    },
+    {
+        name: "propAmmSellFee",
+        type: "basisPoints",
+        description: "Prop AMM sell redemption fee in basis points",
+        required: false,
+        flag: "--prop-amm-sell-fee",
         default: 0,
     },
 ];
@@ -67,6 +75,18 @@ export const requestParams: ParamDefinition[] = [
     },
 ];
 
+export const fulfillRequestParams: ParamDefinition[] = [
+    ...requestParams,
+    {
+        name: "amount",
+        type: "amount",
+        description: "Amount of token_in to fulfill in this call (leave empty to fulfill all remaining)",
+        required: false,
+        flag: "--amount",
+        shortFlag: "-a",
+    },
+];
+
 export const updateRedemptionFeeParams: ParamDefinition[] = [
     ...redemptionTokenPairParams,
     {
@@ -76,6 +96,29 @@ export const updateRedemptionFeeParams: ParamDefinition[] = [
         required: true,
         flag: "--fee",
         shortFlag: "-f",
+    },
+];
+
+export const setRedemptionDisabledParams: ParamDefinition[] = [
+    ...redemptionTokenPairParams,
+    {
+        name: "disabled",
+        type: "boolean",
+        description: "Whether the redemption offer should be disabled",
+        required: true,
+        flag: "--disabled",
+    },
+];
+
+export const updateRedemptionVaultTargetParams: ParamDefinition[] = [
+    ...redemptionTokenPairParams,
+    {
+        name: "vaultTargetBps",
+        type: "string",
+        description: "New redemption vault target in basis points",
+        required: true,
+        flag: "--target-bps",
+        transform: (value: any) => parseInt(value, 10),
     },
 ];
 

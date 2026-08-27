@@ -7,6 +7,7 @@ import { config } from "../../utils/script-helper";
  *
  * Each token must have explicitly defined decimals:
  * - USDC: 6 decimals
+ * - USDT: 6 decimals
  * - USDG: 6 decimals
  * - ONyc: 9 decimals
  *
@@ -19,6 +20,9 @@ export function getTokenDecimals(tokenMint: PublicKey): number {
 
     switch (mintAddress) {
         case config.mints.usdc.toBase58():
+            return 6;
+
+        case config.mints.usdt?.toBase58():
             return 6;
 
         case config.mints.usdg.toBase58():
@@ -37,6 +41,7 @@ export function getTokenDecimals(tokenMint: PublicKey): number {
  *
  * Token program mapping:
  * - USDC: Standard Token Program (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA)
+ * - USDT: Standard Token Program (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA)
  * - ONyc: Standard Token Program (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA)
  * - USDG: Token-2022 Program (TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb)
  *
@@ -49,6 +54,9 @@ export function getTokenProgramId(tokenMint: PublicKey): PublicKey {
 
     switch (mintAddress) {
         case config.mints.usdc.toBase58():
+            return TOKEN_PROGRAM_ID;
+
+        case config.mints.usdt?.toBase58():
             return TOKEN_PROGRAM_ID;
 
         case config.mints.usdg.toBase58():

@@ -17,28 +17,28 @@ pub struct KillSwitchToggledEvent {
 /// Account structure for controlling the program kill switch
 ///
 /// This struct defines the accounts required to enable or disable the emergency
-/// kill switch that can halt critical program operations.
+/// kill switch that can halt guarded value-moving program operations.
 #[derive(Accounts)]
 pub struct SetKillSwitch<'info> {
     /// Program state account containing the kill switch flag
     ///
     /// Must be mutable to allow kill switch state modifications.
-    /// The kill switch prevents offer operations when enabled.
+    /// The kill switch prevents guarded execution paths when enabled.
     #[account(
         mut,
         seeds = [seeds::STATE],
         bump = state.bump,
     )]
     pub state: Box<Account<'info, State>>,
-    
+
     /// The account attempting to modify the kill switch (boss or admin)
     pub signer: Signer<'info>,
 }
 
-/// Controls the emergency kill switch for critical program operations
+/// Controls the emergency kill switch for guarded value-moving operations
 ///
 /// This instruction manages the program's emergency kill switch which can halt
-/// offer operations when activated. The kill switch has asymmetric access control:
+/// guarded execution paths when activated. The kill switch has asymmetric access control:
 /// both boss and admins can enable it, but only the boss can disable it.
 ///
 /// # Arguments
@@ -47,8 +47,8 @@ pub struct SetKillSwitch<'info> {
 ///
 /// # Returns
 /// * `Ok(())` - If the kill switch state is successfully updated
-/// * `Err(ErrorCode::UnauthorizedToEnable)` - If non-authorized user tries to enable
-/// * `Err(ErrorCode::OnlyBossCanDisable)` - If non-boss user tries to disable
+/// * `Err(crate::OnreError::UnauthorizedToEnable)` - If non-authorized user tries to enable
+/// * `Err(crate::OnreError::OnlyBossCanDisable)` - If non-boss user tries to disable
 ///
 /// # Access Control
 /// - Enable: Boss or any admin can activate the kill switch
@@ -56,7 +56,12 @@ pub struct SetKillSwitch<'info> {
 ///
 /// # Effects
 /// - Updates the program state's is_killed field
-/// - When enabled, prevents offer execution operations
+/// - When enabled, prevents guarded execution paths, including offer execution,
+///   Prop AMM quotes/swaps, redemption request create/fulfill/cancel, vault
+///   deposits/withdrawals, direct mint/burn paths, and BUFFER config updates
+///   that can settle accrual
+/// - Governance and configuration-only instructions remain callable under their
+///   normal access control
 /// - Provides emergency halt capability for security incidents
 pub fn set_kill_switch(ctx: Context<SetKillSwitch>, enable: bool) -> Result<()> {
     let state = &mut ctx.accounts.state;
@@ -66,10 +71,13 @@ pub fn set_kill_switch(ctx: Context<SetKillSwitch>, enable: bool) -> Result<()> 
     let admin_signed = state.admins.contains(signer.key) && signer.is_signer;
 
     if enable {
-        require!(boss_signed || admin_signed, ErrorCode::UnauthorizedToEnable);
+        require!(
+            boss_signed || admin_signed,
+            crate::OnreError::UnauthorizedToEnable
+        );
         state.is_killed = true;
     } else {
-        require!(boss_signed, ErrorCode::OnlyBossCanDisable);
+        require!(boss_signed, crate::OnreError::OnlyBossCanDisable);
         state.is_killed = false;
     }
 
@@ -79,15 +87,4 @@ pub fn set_kill_switch(ctx: Context<SetKillSwitch>, enable: bool) -> Result<()> 
     });
 
     Ok(())
-}
-
-/// Error codes for kill switch operations
-#[error_code]
-pub enum ErrorCode {
-    /// Only the boss has authority to disable the kill switch
-    #[msg("Only boss can disable the kill switch")]
-    OnlyBossCanDisable,
-    /// Signer is neither boss nor admin and cannot enable the kill switch
-    #[msg("Unauthorized to enable the kill switch")]
-    UnauthorizedToEnable,
 }

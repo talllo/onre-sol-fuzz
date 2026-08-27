@@ -19,19 +19,23 @@ pub struct RedemptionOfferCreatedEvent {
     pub token_in_mint: Pubkey,
     /// The output token mint for redemptions (e.g., USDC)
     pub token_out_mint: Pubkey,
-    /// Fee in basis points (10000 = 100%) charged when fulfilling redemption requests
+    /// Fee in basis points, capped at 1000 bps (10%), charged when fulfilling redemption requests.
     pub fee_basis_points: u16,
+    /// Fee in basis points, capped at 1000 bps (10%), charged when Prop AMM sell fulfills redemptions.
+    pub fee_basis_points_prop_amm_sell: u16,
+    /// Target token-out vault balance as basis points of TVL.
+    pub vault_target_bps: u16,
 }
 
 /// Account structure for creating a redemption offer
 ///
 /// This struct defines the accounts required to initialize a redemption offer
-/// where users can redeem ONyc tokens for stable tokens at the current NAV price.
+/// where users can redeem ONyc tokens for the paired output asset at the current NAV price.
 /// The redemption offer is the inverse of the standard Offer.
 #[derive(Accounts)]
 pub struct MakeRedemptionOffer<'info> {
-    /// Program state account containing boss and redemption_admin authorization
-    #[account(seeds = [seeds::STATE], bump = state.bump)]
+    /// Program state account containing boss authorization.
+    #[account(seeds = [seeds::STATE], bump = state.bump, has_one = boss)]
     pub state: Box<Account<'info, State>>,
 
     /// The original offer that this redemption offer is associated with
@@ -59,9 +63,19 @@ pub struct MakeRedemptionOffer<'info> {
     /// The input token mint for redemptions (token_in_mint)
     ///
     /// This corresponds to the token_out_mint from the original offer.
+    #[account(
+        constraint = token_in_mint.key() == state.onyc_mint
+            @ crate::OnreError::InvalidOnycMint,
+        constraint = *token_in_mint.to_account_info().owner == anchor_spl::token::ID
+            @ crate::OnreError::InvalidTokenProgram
+    )]
     pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// Token program interface for the input token
+    #[account(
+        constraint = token_in_program.key() == anchor_spl::token::ID
+            @ crate::OnreError::InvalidTokenProgram
+    )]
     pub token_in_program: Interface<'info, TokenInterface>,
 
     /// Vault account for storing input tokens during redemption operations
@@ -69,7 +83,7 @@ pub struct MakeRedemptionOffer<'info> {
     /// Created automatically if needed. Used for holding ONyc tokens before burning.
     #[account(
         init_if_needed,
-        payer = signer,
+        payer = boss,
         associated_token::mint = token_in_mint,
         associated_token::authority = redemption_vault_authority,
         associated_token::token_program = token_in_program
@@ -86,10 +100,10 @@ pub struct MakeRedemptionOffer<'info> {
 
     /// Vault account for storing output tokens (e.g., USDC) for redemption payouts
     ///
-    /// Created automatically if needed. Used for distributing stable tokens to redeemers.
+    /// Created automatically if needed. Used for distributing output tokens to redeemers.
     #[account(
         init_if_needed,
-        payer = signer,
+        payer = boss,
         associated_token::mint = token_out_mint,
         associated_token::authority = redemption_vault_authority,
         associated_token::token_program = token_out_program
@@ -102,7 +116,7 @@ pub struct MakeRedemptionOffer<'info> {
     /// but with the tokens reversed (token_in from Offer becomes token_out here).
     #[account(
         init,
-        payer = signer,
+        payer = boss,
         space = 8 + RedemptionOffer::INIT_SPACE,
         seeds = [
             seeds::REDEMPTION_OFFER,
@@ -113,13 +127,9 @@ pub struct MakeRedemptionOffer<'info> {
     )]
     pub redemption_offer: Account<'info, RedemptionOffer>,
 
-    /// The account creating the redemption offer (must be boss or redemption_admin)
-    #[account(
-        mut,
-        constraint = signer.key() == state.boss || signer.key() == state.redemption_admin
-            @ MakeRedemptionOfferErrorCode::Unauthorized
-    )]
-    pub signer: Signer<'info>,
+    /// Boss creating and funding the redemption offer.
+    #[account(mut)]
+    pub boss: Signer<'info>,
 
     /// Associated Token Program for automatic token account creation
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -128,7 +138,7 @@ pub struct MakeRedemptionOffer<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Creates a redemption offer for converting ONyc back to stable tokens
+/// Creates a redemption offer for converting ONyc back to the paired output asset.
 ///
 /// This instruction initializes a new redemption offer that allows users to redeem
 /// input tokens for output tokens (e.g., USDC) at the current NAV price. The redemption
@@ -137,15 +147,16 @@ pub struct MakeRedemptionOffer<'info> {
 ///
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
-/// * `fee_basis_points` - Fee in basis points (10000 = 100%) charged when fulfilling redemption requests
+/// * `fee_basis_points` - Fee in basis points charged when fulfilling redemption requests
+/// * `fee_basis_points_prop_amm_sell` - Fee in basis points charged when Prop AMM sell fulfills redemptions
 ///
 /// # Returns
 /// * `Ok(())` - If the redemption offer is successfully created
-/// * `Err(MakeRedemptionOfferErrorCode::Unauthorized)` - If caller is neither boss nor redemption_admin (validated in accounts)
-/// * `Err(MakeRedemptionOfferErrorCode::InvalidFee)` - If fee_basis_points exceeds 10000
+/// * `Err(crate::OnreError::Unauthorized)` - If caller is not the boss (validated in accounts)
+/// * `Err(crate::OnreError::InvalidFee)` - If either fee exceeds 1000 basis points (10%)
 ///
 /// # Access Control
-/// - Only the boss or redemption_admin can call this instruction
+/// - Only the boss can call this instruction
 ///
 /// # Effects
 /// - Creates new redemption offer account with reference to the original offer and fee configuration
@@ -157,11 +168,16 @@ pub struct MakeRedemptionOffer<'info> {
 pub fn make_redemption_offer(
     ctx: Context<MakeRedemptionOffer>,
     fee_basis_points: u16,
+    fee_basis_points_prop_amm_sell: u16,
 ) -> Result<()> {
     // Validate fee is within valid range (0-1000 basis points = 0-10%)
     require!(
         fee_basis_points <= MAX_ALLOWED_FEE_BPS,
-        MakeRedemptionOfferErrorCode::InvalidFee
+        crate::OnreError::InvalidFee
+    );
+    require!(
+        fee_basis_points_prop_amm_sell <= MAX_ALLOWED_FEE_BPS,
+        crate::OnreError::InvalidFee
     );
 
     // Initialize the redemption offer
@@ -170,15 +186,19 @@ pub fn make_redemption_offer(
     redemption_offer.token_in_mint = ctx.accounts.token_in_mint.key();
     redemption_offer.token_out_mint = ctx.accounts.token_out_mint.key();
     redemption_offer.fee_basis_points = fee_basis_points;
+    redemption_offer.fee_basis_points_prop_amm_sell = fee_basis_points_prop_amm_sell;
+    redemption_offer.vault_target_bps = 0;
     redemption_offer.executed_redemptions = 0;
     redemption_offer.requested_redemptions = 0;
     redemption_offer.request_counter = 0;
+    redemption_offer.set_disabled(false);
     redemption_offer.bump = ctx.bumps.redemption_offer;
 
     msg!(
-        "Redemption offer created at: {}, fee: {}",
+        "Redemption offer created at: {}, fee: {}, prop AMM sell fee: {}",
         ctx.accounts.redemption_offer.key(),
-        fee_basis_points
+        fee_basis_points,
+        fee_basis_points_prop_amm_sell
     );
 
     emit!(RedemptionOfferCreatedEvent {
@@ -187,19 +207,9 @@ pub fn make_redemption_offer(
         token_in_mint: ctx.accounts.token_in_mint.key(),
         token_out_mint: ctx.accounts.token_out_mint.key(),
         fee_basis_points,
+        fee_basis_points_prop_amm_sell,
+        vault_target_bps: 0,
     });
 
     Ok(())
-}
-
-/// Error codes for redemption offer creation operations
-#[error_code]
-pub enum MakeRedemptionOfferErrorCode {
-    /// Caller is not authorized (must be boss or redemption_admin)
-    #[msg("Unauthorized: only boss or redemption_admin can create redemption offers")]
-    Unauthorized,
-
-    /// Fee basis points exceeds maximum allowed value of 1000 (10%)
-    #[msg("Invalid fee: fee_basis_points must be <= 1000")]
-    InvalidFee,
 }

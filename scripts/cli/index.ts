@@ -22,19 +22,24 @@ async function main() {
         registerMintAuthorityCommands,
         registerRedemptionCommands,
         registerInitCommands,
+        registerProgramCommands,
+        registerBufferCommands,
+        registerPropAmmCommands,
     } = await import("./commands/index.js");
 
     // Create the main program
     const program = new Command();
 
     program
-        .name("npm run cli --")
+        .name("pnpm cli")
         .description("CLI tool for managing OnRE tokenized (re)insurance pool")
         .version("1.0.0")
         .option("-n, --network <network>", "Network to use (mainnet-prod, mainnet-test, mainnet-dev, devnet-test, devnet-dev)")
+        .option("-w, --wallet <path>", "Wallet keypair path or ~/.config/solana/<name>.json")
         .option("--json", "Output in JSON format")
         .option("--dry-run", "Generate transaction without execution prompt")
-        .option("--no-interactive", "Disable interactive prompts (require all params as flags)");
+        .option("--no-interactive", "Disable interactive prompts (require all params as flags)")
+        .option("--yes", "Sign and send locally without confirmation prompts");
 
     // Register command groups
     const stateCmd = program.command("state").description("Manage program state (boss, admins, approvers, kill switch)");
@@ -58,25 +63,34 @@ async function main() {
     const initCmd = program.command("init").description("Initialize program and authorities");
     registerInitCommands(initCmd);
 
+    const bufferCmd = program.command("buffer").description("BUFFER pool operations");
+    registerBufferCommands(bufferCmd);
+
+    const propAmmCmd = program.command("prop-amm").description("Prop AMM configuration, quotes, and swaps");
+    registerPropAmmCommands(propAmmCmd);
+
+    const programCmd = program.command("program").description("Program management (extend data account)");
+    registerProgramCommands(programCmd);
+
     // Add help examples
     program.addHelpText(
         "after",
         `
 ${chalk.bold("Examples:")}
   ${chalk.gray("# Get program state")}
-  $ npm run cli -- state get
+  $ pnpm cli state get
 
   ${chalk.gray("# Get NAV with JSON output")}
-  $ npm run cli -- market nav --json
+  $ pnpm cli market nav --json
 
   ${chalk.gray("# Create an offer on testnet")}
-  $ npm run cli -- -n mainnet-test offer make
+  $ pnpm cli -n mainnet-test offer make
 
   ${chalk.gray("# Add a pricing vector")}
-  $ npm run cli -- offer add-vector --token-in usdc --token-out onyc
+  $ pnpm cli offer add-vector --token-in usdc --token-out onyc
 
   ${chalk.gray("# Fetch offer details")}
-  $ npm run cli -- offer fetch -i usdc -o onyc
+  $ pnpm cli offer fetch -i usdc -o onyc
 
 ${chalk.bold("Networks:")}
   mainnet-prod   Production mainnet with real tokens (default)

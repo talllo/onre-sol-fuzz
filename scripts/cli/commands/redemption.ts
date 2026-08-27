@@ -5,16 +5,30 @@ import {
     executeRedemptionCreateRequest,
     executeRedemptionFetchOffer,
     executeRedemptionFetchRequest,
+    executeRedemptionFetchVaults,
     executeRedemptionFulfill,
+    executeRedemptionListOffers,
     executeRedemptionListRequests,
     executeRedemptionMakeOffer,
+    executeRedemptionSetDisabled,
     executeRedemptionUpdateFee,
+    executeRedemptionUpdatePropAmmSellFee,
+    executeRedemptionUpdateVaultTarget,
 } from "../implementations";
 
 /**
  * Register redemption subcommands
  */
 export function registerRedemptionCommands(program: Command): void {
+    // redemption list-offers
+    program
+        .command("list-offers")
+        .description("List all redemption offers on-chain")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeRedemptionListOffers(opts);
+        });
+
     // redemption make-offer
     program
         .command("make-offer")
@@ -22,6 +36,7 @@ export function registerRedemptionCommands(program: Command): void {
         .option("-i, --token-in <mint>", "Token in mint (ONyc)")
         .option("-o, --token-out <mint>", "Token out mint (USDC)")
         .option("-f, --fee <bps>", "Fee in basis points")
+        .option("--prop-amm-sell-fee <bps>", "Prop AMM sell redemption fee in basis points")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeRedemptionMakeOffer(opts);
@@ -41,13 +56,49 @@ export function registerRedemptionCommands(program: Command): void {
     // redemption update-fee
     program
         .command("update-fee")
-        .description("Update redemption offer fee")
+        .description("Update worker fulfillment fee")
         .option("-i, --token-in <mint>", "Token in mint (ONyc)")
         .option("-o, --token-out <mint>", "Token out mint (USDC)")
         .option("-f, --fee <bps>", "New fee in basis points")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeRedemptionUpdateFee(opts);
+        });
+
+    // redemption update-prop-amm-sell-fee
+    program
+        .command("update-prop-amm-sell-fee")
+        .description("Update redemption fee used by Prop AMM sells")
+        .option("-i, --token-in <mint>", "Token in mint (ONyc)")
+        .option("-o, --token-out <mint>", "Token out mint (USDC)")
+        .option("-f, --fee <bps>", "New fee in basis points")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeRedemptionUpdatePropAmmSellFee(opts);
+        });
+
+    // redemption update-vault-target
+    program
+        .command("update-vault-target")
+        .description("Update redemption offer vault target")
+        .option("-i, --token-in <mint>", "Token in mint (ONyc)")
+        .option("-o, --token-out <mint>", "Token out mint (USDC)")
+        .option("--target-bps <bps>", "New vault target in basis points")
+        .action(async (options, cmd) => {
+            const opts = { ...options, vaultTargetBps: options.targetBps, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeRedemptionUpdateVaultTarget(opts);
+        });
+
+    // redemption set-disabled
+    program
+        .command("set-disabled")
+        .description("Enable or disable a redemption offer")
+        .option("-i, --token-in <mint>", "Token in mint (ONyc)")
+        .option("-o, --token-out <mint>", "Token out mint (USDC)")
+        .option("--disabled <boolean>", "Disabled state (true/false)")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeRedemptionSetDisabled(opts);
         });
 
     // redemption create-request
@@ -77,10 +128,11 @@ export function registerRedemptionCommands(program: Command): void {
     // redemption fulfill
     program
         .command("fulfill")
-        .description("Fulfill a pending redemption request (redemption admin only)")
+        .description("Fulfill a pending redemption request (worker only)")
         .option("-i, --token-in <mint>", "Token in mint (ONyc)")
         .option("-o, --token-out <mint>", "Token out mint (USDC)")
         .option("--request-id <number>", "Request ID")
+        .option("-a, --amount <amount>", "Amount to fulfill (omit for full remaining)")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeRedemptionFulfill(opts);
@@ -98,12 +150,22 @@ export function registerRedemptionCommands(program: Command): void {
             await executeRedemptionCancel(opts);
         });
 
+    // redemption fetch-vaults
+    program
+        .command("fetch-vaults")
+        .description("Fetch and display all redemption vault balances")
+        .action(async (options, cmd) => {
+            const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
+            await executeRedemptionFetchVaults(opts);
+        });
+
     // redemption list-requests
     program
         .command("list-requests")
         .description("List all redemption requests for an offer")
         .option("-i, --token-in <mint>", "Token in mint (ONyc)")
         .option("-o, --token-out <mint>", "Token out mint (USDC)")
+        .option("-r, --redeemer <address>", "Filter by redeemer address (optional)")
         .action(async (options, cmd) => {
             const opts = { ...options, ...cmd.optsWithGlobals() } as GlobalOptions & Record<string, any>;
             await executeRedemptionListRequests(opts);

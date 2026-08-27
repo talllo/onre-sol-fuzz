@@ -16,11 +16,11 @@ pub struct OfferMadeEvent {
     pub token_in_mint: Pubkey,
     /// The output token mint for the offer
     pub token_out_mint: Pubkey,
-    /// Fee in basis points (10000 = 100%) charged when taking the offer
+    /// Fee in basis points, capped at 1000 bps (10%), charged when taking the offer.
     pub fee_basis_points: u16,
     /// The boss account that created and owns the offer
     pub boss: Pubkey,
-    /// Whether the offer requires boss approval for taking
+    /// Whether taking the offer requires a signature from state.approver1 or state.approver2
     pub needs_approval: bool,
     /// Whether the offer allows permissionless operations
     pub allow_permissionless: bool,
@@ -29,7 +29,7 @@ pub struct OfferMadeEvent {
 /// Account structure for creating an offer
 ///
 /// This struct defines the accounts required to initialize a token exchange offer
-/// where the boss provides token_in in exchange for token_out. Pricing is configured
+/// where users provide token_in in exchange for token_out. Pricing is configured
 /// separately using pricing vectors after offer creation.
 #[derive(Accounts)]
 pub struct MakeOffer<'info> {
@@ -42,7 +42,7 @@ pub struct MakeOffer<'info> {
     pub vault_authority: UncheckedAccount<'info>,
 
     /// The input token mint for the offer
-    pub token_in_mint: InterfaceAccount<'info, Mint>,
+    pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// Token program interface for the input token
     pub token_in_program: Interface<'info, TokenInterface>,
@@ -58,10 +58,10 @@ pub struct MakeOffer<'info> {
         associated_token::authority = vault_authority,
         associated_token::token_program = token_in_program
     )]
-    pub vault_token_in_account: InterfaceAccount<'info, TokenAccount>,
+    pub vault_token_in_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The output token mint for the offer
-    pub token_out_mint: InterfaceAccount<'info, Mint>,
+    pub token_out_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// The offer account storing exchange configuration and pricing vectors
     ///
@@ -83,7 +83,7 @@ pub struct MakeOffer<'info> {
 
     /// Program state account containing boss authorization
     #[account(seeds = [seeds::STATE], bump = state.bump, has_one = boss)]
-    pub state: Account<'info, State>,
+    pub state: Box<Account<'info, State>>,
 
     /// The boss account authorized to create offers and pay for account creation
     #[account(mut)]
@@ -98,7 +98,7 @@ pub struct MakeOffer<'info> {
 
 /// Creates a token exchange offer
 ///
-/// This instruction initializes a new offer where the boss provides token_in in exchange
+/// This instruction initializes a new offer where users provide token_in in exchange
 /// for token_out. The offer is created with basic configuration parameters, and pricing
 /// is configured separately using add_offer_vector instructions for dynamic pricing.
 ///
@@ -107,13 +107,13 @@ pub struct MakeOffer<'info> {
 ///
 /// # Arguments
 /// * `ctx` - The instruction context containing validated accounts
-/// * `fee_basis_points` - Fee in basis points (10000 = 100%) charged when taking the offer
-/// * `needs_approval` - Whether the offer requires boss approval for taking
+/// * `fee_basis_points` - Fee in basis points charged when taking the offer
+/// * `needs_approval` - Whether taking the offer requires a configured approver signature
 /// * `allow_permissionless` - Whether the offer allows permissionless operations
 ///
 /// # Returns
 /// * `Ok(())` - If the offer is successfully created
-/// * `Err(MakeOfferErrorCode::InvalidFee)` - If fee_basis_points exceeds 10000
+/// * `Err(crate::OnreError::InvalidFee)` - If fee_basis_points exceeds 1000 basis points (10%)
 ///
 /// # Access Control
 /// - Only the boss can call this instruction
@@ -132,10 +132,10 @@ pub fn make_offer(
     needs_approval: bool,
     allow_permissionless: bool,
 ) -> Result<()> {
-    // Validate fee is within valid range (0-10000 basis points = 0-100%)
+    // Validate fee is within valid range (0-1000 basis points = 0-10%)
     require!(
         fee_basis_points <= MAX_ALLOWED_FEE_BPS,
-        MakeOfferErrorCode::InvalidFee
+        crate::OnreError::InvalidFee
     );
 
     // Create the offer
@@ -145,6 +145,7 @@ pub fn make_offer(
     offer.fee_basis_points = fee_basis_points;
     offer.set_approval(needs_approval);
     offer.set_permissionless(allow_permissionless);
+    offer.set_disabled(false);
     offer.bump = ctx.bumps.offer;
 
     msg!("Offer created at: {}", ctx.accounts.offer.key());
@@ -160,20 +161,4 @@ pub fn make_offer(
     });
 
     Ok(())
-}
-
-/// Error codes for offer creation operations
-#[error_code]
-pub enum MakeOfferErrorCode {
-    /// The offer account is full and cannot accommodate more offers
-    #[msg("Offer account is full, cannot create more offers")]
-    AccountFull,
-
-    /// Fee basis points exceeds maximum allowed value of 10000 (100%)
-    #[msg("Invalid fee: fee_basis_points must be <= 10000")]
-    InvalidFee,
-
-    /// Invalid token program interface provided
-    #[msg("Invalid token program")]
-    InvalidTokenProgram,
 }
